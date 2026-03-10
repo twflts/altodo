@@ -1,5 +1,9 @@
 # altodo - TODO text file format, and Emacs Major Mode Package
 
+[English README.md](README_en.md)
+
+-----
+
 ![メイン画像](static/main_ja.png)
 
 このレポジトリは、__altodo__ フォーマットの仕様、および altodo を便利に管理する Emacs Major Mode 用のパッケージ __altodo.el__ を配布する。
@@ -151,6 +155,7 @@ altodo-mode は markdown-mode を継承しているため、markdown-mode のキ
 - `C-c C-f 1`: 優先度 1 に設定
 - `C-c C-f 2`: 優先度 2 に設定
 - `C-c C-f 3`: 優先度 3 に設定
+- `C-c C-i`: ID タグを挿入（`#id:value` 形式）
 
 
 #### インデント（ネスト）操作
@@ -164,6 +169,18 @@ altodo-mode は markdown-mode を継承しているため、markdown-mode のキ
 
 - `S-TAB`: アウトラインサイクル
 - `C-c C-t d`: done タスクを done ファイルに移動
+- `C-c C-j`: 依存タスクにジャンプ（`#dep:xxx` → `#id:xxx`）
+- `M-x altodo-sidebar-show`: サイドバーを表示
+- `M-x altodo-sidebar-hide`: サイドバーを非表示
+- `M-x altodo-sidebar-toggle`: サイドバーをトグル
+
+#### サイドバー操作（サイドバー内）
+
+- `C-SPC`: フィルタを選択/解除
+- `C-c C-a`: AND モードに切り替え
+- `C-c C-o`: OR モードに切り替え
+- `C-c C-t`: AND/OR をトグル
+- `Ctrl+マウス左ボタン`: マウスでフィルタを選択/解除
 
 
 ### done タスク移動機能
@@ -258,6 +275,46 @@ M-x altodo-stop-auto-move-timer
 | `altodo-insert-id-format`         | #id: タグの ID 形式                    | `'tiny-random` |
 
 
+##### `altodo-date-format`
+
+日付表示フォーマット。`nil` の場合は ISO 8601 形式（`YYYY-MM-DD`）。
+
+**例**:
+```elisp
+(setq altodo-date-format "%Y/%m/%d")      ;; 2026/01/15
+(setq altodo-date-format "%Y年%m月%d日")  ;; 2026年01月15日
+(setq altodo-date-format nil)             ;; 2026-01-15 (ISO 8601)
+```
+
+##### `altodo-done-tag-datetime-format`
+
+`#done:TIMESTAMP` タグのタイムスタンプ形式。`nil` の場合は ISO 8601 形式（`YYYY-MM-DDTHH:MM:SS+HH:MM`）。
+
+**例**:
+```elisp
+(setq altodo-done-tag-datetime-format "%Y-%m-%d %H:%M:%S")  ;; 2026-01-15 14:30:00
+(setq altodo-done-tag-datetime-format nil)                  ;; 2026-01-15T14:30:00+09:00
+```
+
+##### `altodo-insert-id-format`
+
+`C-c C-i` で挿入する ID タグの形式。
+
+**オプション**:
+- `'tiny-random`: ランダム 8 文字（デフォルト）
+- `'tiny-sortable`: タイムスタンプベース 8 文字（ソート可能）
+- `'short-random`: ランダム 16 文字
+- `'short-sortable`: タイムスタンプベース 16 文字
+- `'uuidv7`: UUID v7 形式
+
+**例**:
+```elisp
+(setq altodo-insert-id-format 'tiny-random)      ;; a1b2c3d4
+(setq altodo-insert-id-format 'tiny-sortable)    ;; 20260115a1b2
+(setq altodo-insert-id-format 'uuidv7)           ;; 7d444840-9dc0-11d1-b245-5ffdce74fad2
+```
+
+
 #### タスク移動設定
 
 | 変数名                                      | 説明                             | デフォルト値 |
@@ -305,7 +362,29 @@ M-x altodo-stop-auto-move-timer
                        (and (altodo--due-date-matches-p 'overdue)
                             (not (or (altodo--line-state-p altodo-state-done)
                                      (altodo--line-state-p altodo-state-cancelled)))))
+            :count-format t :nest 1
+            :face-rules ((>= 1 error)))
+    (:title "Open and Due Today - %n"
+            :type search-lambda
+            :pattern (lambda ()
+                       (and (altodo--due-date-matches-p 'today)
+                            (not (or (altodo--line-state-p altodo-state-done)
+                                     (altodo--line-state-p altodo-state-cancelled)))))
+            :count-format t :nest 1
+            :face-rules ((>= 1 error)))
+    (:title "Open and Due This Week - %n"
+            :type search-lambda
+            :pattern (lambda ()
+                       (and (altodo--due-date-matches-p 'this-week)
+                            (not (altodo--due-date-matches-p 'today))
+                            (not (or (altodo--line-state-p altodo-state-done)
+                                     (altodo--line-state-p altodo-state-cancelled)))))
             :count-format t :nest 1)
+    (:title "Tags" :type group-header :nest 0)
+    (:title "#%s - %n" :type dynamic :dynamic-type "tag" :count-format t :limit 5 :nest 1
+            :exclude-tag ("id" "dep" "done") :tag-mode "name-only")
+    (:title "People" :type group-header :nest 0)
+    (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1)
     (:title "Section" :type separator :pattern "─" :nest 0)
     (:title "[Clear Filter]" :type command :nest 0 :command altodo-filter-clear)))
 ```
