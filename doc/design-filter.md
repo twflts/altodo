@@ -610,11 +610,22 @@ Layer 5: Non-clickable（コメント行など）
 | プロパティ           | 必須/オプション | 説明                                            |
 |----------------------|-----------------|-------------------------------------------------|
 | `:dynamic-type`      | 必須            | 収集対象（`person`, `tag`, `due`, `start`）     |
+| `:tag-mode`          | オプション      | タグ抽出モード（`"all"`, `"name-only"`, `"with-value"`） |
 | `:exclude-person`    | オプション      | 除外する `@person` リスト                       |
 | `:exclude-tag`       | オプション      | 除外する `#tag` リスト                          |
 | `:exclude-tag-value` | オプション      | 除外する `#tag:value` リスト                    |
 | `:sort`              | オプション      | ソート方法（`alpha`, `count`, `reverse-count`） |
 | `:limit`             | オプション      | 表示数制限（デフォルト: nil = 無制限）          |
+
+**`:tag-mode` の説明**:
+
+| モード | 説明 | 例 |
+|--------|------|-----|
+| `"all"` | 値なし・値ありタグを全て抽出 | `#java`, `#priority:high` → `["java", "priority:high"]` |
+| `"name-only"` | タグ名のみ（デフォルト） | `#java`, `#priority:high` → `["java", "priority"]` |
+| `"with-value"` | 値ありタグのみ抽出 | `#priority:high` → `["priority:high"]` |
+
+**注**: `:tag-ignore-value` は非推奨。`:tag-mode` を使用してください。
 
 
 #### `"search-simple"`（シンプル検索）

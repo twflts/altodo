@@ -610,11 +610,22 @@ Auto-collect values on display
 | Property             | Required/Optional | Description                                         |
 |----------------------|-------------------|-----------------------------------------------------|
 | `:dynamic-type`      | Required          | Collection target (`person`, `tag`, `due`, `start`) |
+| `:tag-mode`          | Optional          | Tag extraction mode (`"all"`, `"name-only"`, `"with-value"`) |
 | `:exclude-person`    | Optional          | List of `@person` to exclude                        |
 | `:exclude-tag`       | Optional          | List of `#tag` to exclude                           |
 | `:exclude-tag-value` | Optional          | List of `#tag:value` to exclude                     |
 | `:sort`              | Optional          | Sort method (`alpha`, `count`, `reverse-count`)     |
 | `:limit`             | Optional          | Display limit (default: nil = unlimited)            |
+
+**`:tag-mode` Description**:
+
+| Mode | Description | Example |
+|------|-------------|---------|
+| `"all"` | Extract both tags without values and tags with values | `#java`, `#priority:high` → `["java", "priority:high"]` |
+| `"name-only"` | Extract tag names only (default) | `#java`, `#priority:high` → `["java", "priority"]` |
+| `"with-value"` | Extract only tags with values | `#priority:high` → `["priority:high"]` |
+
+**Note**: `:tag-ignore-value` is deprecated. Use `:tag-mode` instead.
 
 
 #### `"search-simple"` (Simple Search)
