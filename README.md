@@ -1,5 +1,7 @@
 # altodo - TODO text file format, and Emacs Major Mode Package
 
+![メイン画像](static/main_ja.png)
+
 このレポジトリは、__altodo__ フォーマットの仕様、および altodo を便利に管理する Emacs Major Mode 用のパッケージ __altodo.el__ を配布する。
 
 - __altodo__ フォーマット: Markdown (CommonMark) ファイル上に埋め込み可能な TODO フォーマット

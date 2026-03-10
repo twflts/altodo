@@ -4189,8 +4189,8 @@ Can be overridden by .altodo-locals.el."
             :count-format t :nest 1)
     
     (:title "Tags" :type group-header :nest 0)
-    (:title "%s - %n" :type dynamic :dynamic-type "tag" :count-format t :limit 5 :nest 1
-            :exclude-tag ("id" "dep" "done"))
+    (:title "#%s - %n" :type dynamic :dynamic-type "tag" :count-format t :limit 5 :nest 1
+            :exclude-tag ("id" "dep" "done") :tag-mode "name-only")
     
     (:title "People" :type group-header :nest 0)
     (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1)
@@ -4827,11 +4827,56 @@ Returns plain text without any face properties."
             ;; Return plain text without face properties
             (substring-no-properties person)))))))
 
-(defun altodo--collect-dynamic-values (dynamic-type source-buffer &optional ignore-value)
+(defun altodo--line-extract-all-tags (tag-mode)
+  "Extract all tags from current line based on TAG-MODE.
+TAG-MODE: \"all\" (both), \"name-only\" (names only), \"with-value\" (value tags only).
+Returns list of tag strings (without #).
+Uses `altodo-tag-with-value-regex' and `altodo-tag-without-value-regex'."
+  (let ((tags nil)
+        (with-value-names nil))
+    (save-excursion
+      (beginning-of-line)
+      ;; 値付きタグを抽出
+      (while (re-search-forward altodo-tag-with-value-regex (line-end-position) t)
+        (let ((name (substring (substring-no-properties (match-string 1)) 1))
+              (value (substring-no-properties (match-string 2))))
+          (when (and (string-prefix-p "\"" value) (string-suffix-p "\"" value))
+            (setq value (substring value 1 -1)))
+          (push name with-value-names)
+          (cond
+           ((equal tag-mode "name-only")
+            (push name tags))
+           ((member tag-mode '("all" "with-value"))
+            (push (concat name ":" value) tags)))))
+      ;; 値なしタグを抽出（with-value モード以外）
+      (unless (equal tag-mode "with-value")
+        (beginning-of-line)
+        (while (re-search-forward altodo-tag-without-value-regex (line-end-position) t)
+          (let ((name (substring (substring-no-properties (match-string 1)) 1)))
+            (unless (member name with-value-names)
+              (push name tags))))))
+    (nreverse tags)))
+
+(defun altodo--line-extract-all-persons ()
+  "Extract all @person tags from current line's task body.
+Returns list of person name strings (without @)."
+  (let ((body (altodo--line-task-body))
+        (persons nil))
+    (when body
+      (let ((start 0))
+        (while (string-match "@\\([^[:space:]]+\\)" body start)
+          (let ((person (match-string 1 body)))
+            (unless (or (string-match "^\\]" person)
+                        (string-match "^\\[" person))
+              (push (substring-no-properties person) persons)))
+          (setq start (match-end 0)))))
+    (nreverse persons)))
+
+(defun altodo--collect-dynamic-values (dynamic-type source-buffer &optional tag-mode)
   "Collect values of DYNAMIC-TYPE from SOURCE-BUFFER.
-If IGNORE-VALUE is t and DYNAMIC-TYPE is \"tag\", collect tag names only.
+TAG-MODE: \"all\", \"name-only\" (default), \"with-value\".
 Returns alist of (value . count)."
-  (altodo--collect-dynamic-values-with-exclude dynamic-type source-buffer ignore-value nil nil nil))
+  (altodo--collect-dynamic-values-with-exclude dynamic-type source-buffer tag-mode nil nil nil))
 
 (defun altodo--should-exclude-value (value dynamic-type exclude-person exclude-tag exclude-tag-value)
   "Check if VALUE should be excluded based on DYNAMIC-TYPE and exclusion lists.
@@ -4851,28 +4896,25 @@ Returns t if value should be excluded, nil otherwise."
           (throw 'excluded t))))
     nil))
 
-(defun altodo--extract-dynamic-value (dynamic-type ignore-value)
-  "Extract value of DYNAMIC-TYPE from current line.
-If IGNORE-VALUE is t and DYNAMIC-TYPE is \"tag\", extract tag name only.
-Returns value string or nil if not found."
+(defun altodo--extract-dynamic-values (dynamic-type &optional tag-mode)
+  "Extract values of DYNAMIC-TYPE from current line.
+TAG-MODE: \"all\", \"name-only\" (default), \"with-value\".
+Returns list of value strings."
   (cond
    ((equal dynamic-type "person")
-    (altodo--line-extract-person-value))
+    (altodo--line-extract-all-persons))
    ((equal dynamic-type "tag")
-    (save-excursion
-      (beginning-of-line)
-      (when (re-search-forward "#\\([a-zA-Z0-9_-]+\\):\\([a-zA-Z0-9_-]+\\)" (line-end-position) t)
-        (if ignore-value
-            (match-string 1)
-          (concat (match-string 1) ":" (match-string 2))))))
+    (altodo--line-extract-all-tags (or tag-mode "name-only")))
    ((equal dynamic-type "due")
-    (altodo--line-extract-tag-value "due"))
+    (let ((v (altodo--line-extract-tag-value "due")))
+      (when v (list v))))
    ((equal dynamic-type "start")
-    (altodo--line-extract-tag-value "start"))))
+    (let ((v (altodo--line-extract-tag-value "start")))
+      (when v (list v))))))
 
-(defun altodo--collect-dynamic-values-with-exclude (dynamic-type source-buffer &optional ignore-value exclude-person exclude-tag exclude-tag-value predicate)
+(defun altodo--collect-dynamic-values-with-exclude (dynamic-type source-buffer &optional tag-mode exclude-person exclude-tag exclude-tag-value predicate)
   "Collect values of DYNAMIC-TYPE from SOURCE-BUFFER with exclusions.
-If IGNORE-VALUE is t and DYNAMIC-TYPE is \"tag\", collect tag names only.
+TAG-MODE: \"all\", \"name-only\" (default), \"with-value\".
 EXCLUDE-PERSON, EXCLUDE-TAG, EXCLUDE-TAG-VALUE are lists of patterns to exclude.
 PREDICATE is an optional predicate function to filter lines (called at line beginning).
 Returns alist of (value . count)."
@@ -4883,10 +4925,9 @@ Returns alist of (value . count)."
         (while (not (eobp))
           (when (and (altodo--task-p)
                      (or (not predicate) (funcall predicate)))
-            (let ((value (altodo--extract-dynamic-value dynamic-type ignore-value)))
-              (when (and value
-                         (not (altodo--should-exclude-value value dynamic-type
-                                                           exclude-person exclude-tag exclude-tag-value)))
+            (dolist (value (altodo--extract-dynamic-values dynamic-type tag-mode))
+              (when (not (altodo--should-exclude-value value dynamic-type
+                                                      exclude-person exclude-tag exclude-tag-value))
                 (puthash value (1+ (gethash value values 0)) values))))
           (forward-line 1)))
       (let ((result nil))
@@ -4922,7 +4963,9 @@ Returns plain text without any face properties."
   "Expand dynamic filter ENTRY to actual filter entries using SOURCE-BUFFER.
 If COMBINED-PREDICATE is provided, filter values based on combined predicate."
   (let* ((dynamic-type (plist-get entry :dynamic-type))
-         (tag-ignore-value (plist-get entry :tag-ignore-value))
+         (tag-mode (or (plist-get entry :tag-mode)
+                       (when (plist-get entry :tag-ignore-value) "name-only")
+                       "name-only"))
          (sort-by (or (plist-get entry :sort-by) "alpha"))
          (limit (plist-get entry :limit))
          (count-format (if (plist-member entry :count-format)
@@ -4937,7 +4980,7 @@ If COMBINED-PREDICATE is provided, filter values based on combined predicate."
          (exclude-tag-value (plist-get entry :exclude-tag-value))
          ;; 複合フィルタ下での値収集
          (alist (altodo--collect-dynamic-values-with-exclude 
-                 dynamic-type source-buffer tag-ignore-value 
+                 dynamic-type source-buffer tag-mode
                  exclude-person exclude-tag exclude-tag-value combined-predicate))
          (sorted (if (member dynamic-type '("person" "tag"))
                      (altodo--sort-dynamic-values alist sort-by)
