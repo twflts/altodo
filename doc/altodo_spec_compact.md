@@ -1,6 +1,6 @@
 # altodo Format Specification (Compact)
 
-altodo: TODO format embeddable in Markdown/CommonMark. Extension: `.altodo`.
+altodo: TODO format embeddable in Markdown/CommonMark. Extension: `.altodo`. MIT licensed (altodo format extensions only; Markdown/CommonMark parts follow their respective specifications).
 
 ## Line Grammar
 
