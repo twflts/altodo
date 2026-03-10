@@ -585,6 +585,70 @@ Returns t if in multiline comment, nil otherwise."
 - `:type` option: Specify filter type (nil, "comment", "group-header", "dynamic")
 
 
+## 6. Markdown Integration and Code Block Handling
+
+### 6.0 markdown-pre Countermeasures and Code Block Support
+
+**Problem 1**: markdown-mode recognizes indented lines (4+ spaces) as "indented code blocks" and applies the `markdown-pre` text property. This causes altodo task lines and comment lines to be displayed with `markdown-pre-face` (light blue color).
+
+**Solution 1**: Use `font-lock-remove-keywords` to exclude `markdown-match-pre-blocks` from font-lock-keywords.
+
+**Implementation Location**: Inside `define-derived-mode altodo-mode` body
+
+```elisp
+;; Disable markdown-mode's indented code block highlighting
+(font-lock-remove-keywords nil '((markdown-match-pre-blocks (0 'markdown-pre-face))))
+```
+
+**Impact Range**:
+- `markdown-pre-face` is no longer applied within altodo-mode buffers
+- No impact on altodo files since indented code blocks (Markdown spec) are not used
+- Does not modify `syntax-propertize-function`, respecting Emacs design principles
+
+---
+
+**Problem 2**: altodo-mode faces are applied inside Markdown fenced code blocks (` ``` ` / `~~~`).
+
+**Solution 2**: Use `altodo--restore-code-block-faces` to overwrite altodo faces with markdown faces inside fenced code blocks.
+
+**Implementation Location**: Inside `define-derived-mode altodo-mode` body
+
+```elisp
+;; Restore markdown faces in fenced code blocks
+(let ((orig-fn font-lock-fontify-region-function))
+  (setq-local font-lock-fontify-region-function
+              (lambda (beg end &optional loudly)
+                (funcall orig-fn beg end loudly)
+                (altodo--restore-code-block-faces beg end))))
+```
+
+**Helper Function**:
+
+```elisp
+(defun altodo--restore-code-block-faces (beg end)
+  "Restore markdown faces in fenced code blocks between BEG and END.
+Overwrites altodo faces with markdown-pre-face and markdown-code-face.
+Only targets fenced code blocks (``` or ~~~), not indented code blocks."
+  (save-excursion
+    (goto-char beg)
+    (while (< (point) end)
+      (when (or (get-text-property (point) 'markdown-gfm-code)
+                (get-text-property (point) 'markdown-fenced-code))
+        (put-text-property (line-beginning-position) (line-end-position)
+                           'face '(markdown-pre-face markdown-code-face)))
+      (forward-line 1))))
+```
+
+**Text Property Types**:
+- `markdown-gfm-code`: Backtick fenced blocks (` ``` `)
+- `markdown-fenced-code`: Tilde fenced blocks (`~~~`)
+
+**Impact Range**:
+- altodo faces inside fenced code blocks are overwritten with markdown faces
+- Indented comment lines (multi-line comments) are not affected (no text property)
+
+---
+
 ## 6. Font-lock Design
 
 ### 6.1 Processing Order (Layer Structure)
@@ -623,7 +687,7 @@ Layer 5: Priority (entire comments, strikethrough)
 ```
 
 
-### 6.2 Override Flag Strategy
+### 6.3 Override Flag Strategy
 
 | Layer | Element                  | Override Flag | Reason                                                     |
 |-------|--------------------------|---------------|------------------------------------------------------------|
@@ -638,7 +702,7 @@ Layer 5: Priority (entire comments, strikethrough)
 | 5     | Strikethrough            | `t`           | Finalize strikethrough face                                |
 
 
-### 6.3 seq-tasks Implementation
+### 6.4 seq-tasks Implementation
 
 #### seq-tasks blocked State Detection
 
@@ -656,7 +720,7 @@ Layer 5: Priority (entire comments, strikethrough)
 - `altodo--is-seq-tasks-child-blocked-p()`: Check if current line is seq-tasks child blocked
 
 
-## 7. Function Reference
+## 7. Font-lock Design
 
 ### 7.1 Utility Functions
 
@@ -808,7 +872,7 @@ Layer 5: Priority (entire comments, strikethrough)
 - Description: Font-lock matcher for multi-line comment processing
 
 
-## 8. References
+## 9. References
 
 - `doc/altodo_spec.md` - altodo format specification (Japanese)
 - `doc/altodo_spec_en.md` - altodo format specification (English)

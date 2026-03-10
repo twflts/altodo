@@ -587,11 +587,11 @@ Returns t if in multiline comment, nil otherwise."
 
 ## 6. Font-lock 設計
 
-### 6.0 markdown-pre 対策
+### 6.0 markdown-pre 対策とコードブロック対応
 
-**問題**: markdown-mode は 4 スペース以上のインデント行を「インデント済みコードブロック」として認識し、`markdown-pre` text property を設定する。これにより、altodo のタスク行・コメント行に `markdown-pre-face`（水色）が適用される。
+**問題 1**: markdown-mode は 4 スペース以上のインデント行を「インデント済みコードブロック」として認識し、`markdown-pre` text property を設定する。これにより、altodo のタスク行・コメント行に `markdown-pre-face`（水色）が適用される。
 
-**解決方法**: `font-lock-remove-keywords` で `markdown-match-pre-blocks` を font-lock-keywords から除外する。
+**解決方法 1**: `font-lock-remove-keywords` で `markdown-match-pre-blocks` を font-lock-keywords から除外する。
 
 **実装場所**: `define-derived-mode altodo-mode` の body 内
 
@@ -604,6 +604,48 @@ Returns t if in multiline comment, nil otherwise."
 - altodo-mode バッファ内で `markdown-pre-face` が適用されなくなる
 - altodo ファイルではインデント済みコードブロック（Markdown 仕様）は使用しないため、影響なし
 - `syntax-propertize-function` には手を加えないため、Emacs の設計原則に反しない
+
+---
+
+**問題 2**: Markdown のフェンスドコードブロック（` ``` ` / `~~~`）内でも altodo-mode の face が適用される。
+
+**解決方法 2**: `altodo--restore-code-block-faces` で フェンスドコードブロック内の altodo face を markdown face で上書きする。
+
+**実装場所**: `define-derived-mode altodo-mode` の body 内
+
+```elisp
+;; Restore markdown faces in fenced code blocks
+(let ((orig-fn font-lock-fontify-region-function))
+  (setq-local font-lock-fontify-region-function
+              (lambda (beg end &optional loudly)
+                (funcall orig-fn beg end loudly)
+                (altodo--restore-code-block-faces beg end))))
+```
+
+**ヘルパー関数**:
+
+```elisp
+(defun altodo--restore-code-block-faces (beg end)
+  "Restore markdown faces in fenced code blocks between BEG and END.
+Overwrites altodo faces with markdown-pre-face and markdown-code-face.
+Only targets fenced code blocks (``` or ~~~), not indented code blocks."
+  (save-excursion
+    (goto-char beg)
+    (while (< (point) end)
+      (when (or (get-text-property (point) 'markdown-gfm-code)
+                (get-text-property (point) 'markdown-fenced-code))
+        (put-text-property (line-beginning-position) (line-end-position)
+                           'face '(markdown-pre-face markdown-code-face)))
+      (forward-line 1))))
+```
+
+**text property の種類**:
+- `markdown-gfm-code`: バッククォートフェンス（` ``` `）
+- `markdown-fenced-code`: チルダフェンス（`~~~`）
+
+**影響範囲**:
+- フェンスドコードブロック内の altodo face が markdown face で上書きされる
+- インデント済みコメント行（複数行コメント）は対象外（text property がないため）
 
 ### 6.1 処理順序（Layer 構造）
 
@@ -643,7 +685,7 @@ Layer 5: 最優先（コメント全体、斜線）
 
 ### 6.2 Override フラグ戦略
 
-**注**: markdown-pre 対策により、altodo-mode バッファ内で `markdown-match-pre-blocks` が font-lock-keywords から除外される。そのため `markdown-pre-face` は適用されない。
+**注**: markdown-pre 対策により、altodo-mode バッファ内で `markdown-match-pre-blocks` が font-lock-keywords から除外される。そのため `markdown-pre-face` は適用されない。また、フェンスドコードブロック内の altodo face は `altodo--restore-code-block-faces` で markdown face に上書きされる。
 
 | Layer | 要素                     | Override フラグ | 理由                                                       |
 |-------|--------------------------|-----------------|-----------------------------------------------------------|

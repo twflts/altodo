@@ -1177,12 +1177,14 @@ Skips @ in URLs (where markdown-url-face or markdown-plain-url-face is applied).
 ;;; ============================================================================
 
 (defun altodo--restore-code-block-faces (beg end)
-  "Restore markdown faces in code blocks between BEG and END.
-Overwrites altodo faces with markdown-pre-face and markdown-code-face."
+  "Restore markdown faces in fenced code blocks between BEG and END.
+Overwrites altodo faces with markdown-pre-face and markdown-code-face.
+Only targets fenced code blocks (``` or ~~~), not indented code blocks."
   (save-excursion
     (goto-char beg)
     (while (< (point) end)
-      (when (markdown-code-block-at-point-p)
+      (when (or (get-text-property (point) 'markdown-gfm-code)
+                (get-text-property (point) 'markdown-fenced-code))
         (put-text-property (line-beginning-position) (line-end-position)
                            'face '(markdown-pre-face markdown-code-face)))
       (forward-line 1))))
@@ -1658,7 +1660,7 @@ Recursively checks through empty lines and multiline comments."
 Excludes markdown list items."
   (catch 'found
     (while (and (< (point) limit) (not (eobp)))
-      (if (and (looking-at "^[ \t]+[^ \t\n[]")
+      (if (and (looking-at "^[ \t]+\\($\\|[^ \t\n[]\\)")
                (not (looking-at altodo-task-regex))
                (not (looking-at altodo-comment-regex))
                (not (looking-at "^[ \t]*[-*+][ \t]"))      ; markdown unordered list
@@ -1685,7 +1687,7 @@ Returns t if current line is a multiline comment, nil otherwise."
     (and (not (markdown-code-block-at-point-p))
          (not (looking-at altodo-task-regex))
          (not (looking-at altodo-comment-regex))
-         (looking-at "^[ \t]+")
+         (looking-at "^[ \t]+\\($\\|[^ \t\n[]\\)")  ; empty line or non-bracket indented line
          (not (looking-at "^[ \t]*[-*+][ \t]"))      ; exclude markdown list
          (not (looking-at "^[ \t]*[0-9]+\\.[ \t]"))  ; exclude markdown list
          (altodo--has-task-or-comment-above))))
@@ -4185,6 +4187,14 @@ Can be overridden by .altodo-locals.el."
                             (not (or (altodo--line-state-p altodo-state-done)
                                      (altodo--line-state-p altodo-state-cancelled)))))
             :count-format t :nest 1)
+    
+    (:title "Tags" :type group-header :nest 0)
+    (:title "%s - %n" :type dynamic :dynamic-type "tag" :count-format t :limit 5 :nest 1
+            :exclude-tag ("id" "dep" "done"))
+    
+    (:title "People" :type group-header :nest 0)
+    (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1)
+    
     (:title "Section" :type separator :pattern "─" :nest 0)
     (:title "[Clear Filter]" :type command :nest 0 :command altodo-filter-clear)
     )
