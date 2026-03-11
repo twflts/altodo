@@ -872,10 +872,11 @@ Layer 5: Priority (entire comments, strikethrough)
 - Description: Font-lock matcher for multi-line comment processing
 
 
-## 9. References
+## 8. References
 
 - `doc/altodo_spec.md` - altodo format specification (Japanese)
 - `doc/altodo_spec_en.md` - altodo format specification (English)
+- `doc/design-filter.md` - Filter design document (includes DSL specification)
 - `doc/design.md.backup_*` - Detailed design (pre-deletion versions)
 - `doc/tmp_design.md` - Implementation details section (for detailed design)
 - `.kiro/memo/` - Development notes

@@ -578,8 +578,66 @@ Each filter entry is defined as plist (property list):
 | `:count-format`         | Optional   | `t` to replace `%n` with count (default: `t`)               |
 | `:face`                 | Optional   | Face to apply                                               |
 | `:face-count`           | Optional   | Face to apply to count part `%n`                            |
-| `:display-context`      | Optional   | Display context (`'all`: all, `'heading-only`: headings only, `'none`: match lines only) |
-| `:count-exclude-others` | Optional   | `t` to count only task lines (default: `nil`)               |
+| `:display-context`      | Optional   | Display context (see 13.3.1)                                |
+| `:count-exclude-others` | Optional   | Count target (see 13.3.2, default: `t`)                     |
+
+
+#### 13.3.1 `:display-context` - Display Context
+
+Controls the range of lines to display when filter matches.
+
+| Value | Description |
+|-------|-------------|
+| `'all` | Display matched lines and surrounding headings (default) |
+| `'heading-only` | Display headings only |
+| `'none` | Display matched lines only |
+
+**Examples**:
+
+```elisp
+;; Display matched lines and headings
+(:title "Open - %n" :type search-simple :pattern "open" :display-context 'all)
+
+;; Display headings only
+(:title "Sections - %n" :type search-simple :pattern "heading" :display-context 'heading-only)
+
+;; Display matched lines only
+(:title "Tasks - %n" :type search-simple :pattern "open" :display-context 'none)
+```
+
+
+#### 13.3.2 `:count-exclude-others` - Count Target
+
+Controls which types of lines to include when counting. When both task lines and comment lines exist, specify which should be counted.
+
+| Value | Description | Use Case |
+|-------|-------------|----------|
+| `t`   | Count only task lines (exclude comment lines) (default) | Normal filtering. Multi-line comment lines are excluded |
+| `nil` | Count all lines (both task lines and comment lines) | When you want to include comment lines in the count |
+
+**Concrete Example**:
+
+Given the following file:
+
+```
+[ ] Task 1
+    /// Comment for Task 1
+[ ] Task 2
+    /// Comment for Task 2
+```
+
+- With `:count-exclude-others t`: Match count is **2** (task lines only)
+- With `:count-exclude-others nil`: Match count is **4** (task lines + comment lines)
+
+**Configuration Examples**:
+
+```elisp
+;; Count only task lines (default)
+(:title "Open Tasks - %n" :type search-simple :pattern "open" :count-exclude-others t)
+
+;; Count all lines
+(:title "All Matches - %n" :type search-simple :pattern "open" :count-exclude-others nil)
+```
 
 
 ### 13.4 Entry Types (`:type`)
@@ -823,56 +881,72 @@ If no match in face-rules, fallback to face specified by `:face`. If `:face` is 
 (
  (altodo-filter-patterns .
   (
-   ;; Group header
+   ;; Status group
    (:title "Status" :type group-header :nest 0)
+   (:title "Open [ ] - %n" :type search-simple :pattern "open" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
+   (:title "In Progress [@] - %n" :type search-simple :pattern "progress" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
+   (:title "Waiting [w] - %n" :type search-simple :pattern "waiting" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
+   (:title "Done [x] - %n" :type search-simple :pattern "done" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
+   (:title "Cancelled [~] - %n" :type search-simple :pattern "cancelled" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
    
-   ;; Normal filters
-   (:title "Open [ ] - %n" :type search-simple :pattern "open" :count-format t :nest 1)
-   (:title "Done [x] - %n" :type search-simple :pattern "done" :count-format t :nest 1)
+   ;; Flags group
+   (:title "Flags" :type group-header :nest 0)
+   (:title "Priority (!) - %n" :type search-simple :pattern "priority" :count-format t :nest 1
+           :count-exclude-others t :face-rules ((>= 5 error) (>= 1 warning)))
+   (:title "Star (+) - %n" :type search-simple :pattern "star" :count-format t :nest 1
+           :count-exclude-others t)
    
-   ;; Dynamic filters
-   (:title "@Person - %n" :type dynamic :dynamic-type person :count-format t :nest 1)
-   (:title "#Tag - %n" :type dynamic :dynamic-type tag :count-format t :nest 1)
+   ;; Due date group
+   (:title "Due" :type group-header :nest 0)
+   (:title "Overdue - %n"
+           :type search-lambda
+           :pattern (lambda ()
+                      (and (altodo--due-date-matches-p 'overdue)
+                           (not (or (altodo--line-state-p altodo-state-done)
+                                    (altodo--line-state-p altodo-state-cancelled)))))
+           :count-format t :nest 1
+           :count-exclude-others t
+           :face-rules ((>= 1 error)))
+   (:title "Due Today - %n"
+           :type search-lambda
+           :pattern (lambda ()
+                      (and (altodo--due-date-matches-p 'today)
+                           (not (or (altodo--line-state-p altodo-state-done)
+                                    (altodo--line-state-p altodo-state-cancelled)))))
+           :count-format t :nest 1
+           :count-exclude-others t
+           :face-rules ((>= 1 error)))
    
-   ;; With face-rules
-   (:title "Priority - %n" :type search-simple :pattern "priority" :count-format t :nest 1
-    :face-rules ((>= 5 error)
-                 (>= 1 warning)))
+   ;; Tags group
+   (:title "Tags" :type group-header :nest 0)
+   (:title "#%s - %n" :type dynamic :dynamic-type "tag" :count-format t :limit 5 :nest 1
+           :exclude-tag ("id" "dep" "done") :tag-mode "name-only"
+           :count-exclude-others t :display-context 'all)
    
-   ;; Compound condition
+   ;; People group
+   (:title "People" :type group-header :nest 0)
+   (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1
+           :count-exclude-others t :display-context 'all)
+   
+   ;; Compound condition example
    (:title "Open + Priority - %n"
-    :type search-simple
-    :pattern "(and open priority)"
-    :count-format t :nest 1)
+           :type search-simple
+           :pattern "(and open priority)"
+           :count-format t :nest 1
+           :count-exclude-others t
+           :face-rules ((>= 3 warning)))
    
    ;; Separator
-   (:title "" :type separator :nest 0)
+   (:title "" :type separator :pattern "─" :nest 0)
    
    ;; Command
-   (:title "[Clear]" :type command :command altodo-filter-clear :nest 0)
+   (:title "[Clear Filter]" :type command :command altodo-filter-clear :nest 0)
    ))
 )
 ```
 
-
-### 13.8 Default Configuration
-
-```elisp
-altodo--default-filter-patterns = '(
- (:title "Status" :type group-header :nest 0)
- (:title "Open [ ] - %n" :type search-simple :pattern "open" :count-format t :nest 1)
- (:title "In Progress [@] - %n" :type search-simple :pattern "progress" :count-format t :nest 1)
- (:title "Waiting [w] - %n" :type search-simple :pattern "waiting" :count-format t :nest 1)
- (:title "Done [x] - %n" :type search-simple :pattern "done" :count-format t :nest 1)
- (:title "Cancelled [~] - %n" :type search-simple :pattern "cancelled" :count-format t :nest 1)
- (:title "Flags" :type group-header :nest 0)
- (:title "Priority (!) - %n" :type search-simple :pattern "priority" :count-format t :nest 1)
- (:title "Star (+) - %n" :type search-simple :pattern "star" :count-format t :nest 1)
- (:title "[Clear Filter]" :type command :command altodo-filter-clear :nest 0)
-)
-```
-
----
-
-**Last Updated**: 2026-03-07
-**Version**: 2.1.0

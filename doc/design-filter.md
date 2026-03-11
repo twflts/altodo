@@ -561,7 +561,7 @@ Layer 5: Non-clickable（コメント行など）
 
 ### 13.2 エントリ構造
 
-各フィルタエントリは plist（プロパティリスト）で定義する：
+各フィルタエントリは plist（プロパティリスト）で定義する。
 
 ```elisp
 (:title "Display Name" :type TYPE :nest 0 ...)
@@ -570,16 +570,72 @@ Layer 5: Non-clickable（コメント行など）
 
 ### 13.3 共通プロパティ
 
-| プロパティ              | 必須       | 説明                                                        |
-|-------------------------|------------|-------------------------------------------------------------|
-| `:title`                | 必須       | サイドバーに表示するタイトル。`%n` でマッチ数を表示         |
-| `:type`                 | 必須       | エントリタイプ（後述）                                      |
-| `:nest`                 | オプション | インデントレベル（デフォルト: 0）                           |
-| `:count-format`         | オプション | `t` で `%n` をカウントに置換（デフォルト: `t`）             |
-| `:face`                 | オプション | 適用する face                                               |
-| `:face-count`           | オプション | カウント部分 `%n` に適用する face                           |
-| `:display-context`      | オプション | 表示コンテキスト（`'all`: 全て, `'heading-only`: 見出しのみ, `'none`: マッチ行のみ） |
-| `:count-exclude-others` | オプション | `t` でタスク行のみカウント（デフォルト: `nil`）             |
+| プロパティ              | 必須       | 説明                                                |
+|-------------------------|------------|-----------------------------------------------------|
+| `:title`                | 必須       | サイドバーに表示するタイトル。`%n` でマッチ数を表示 |
+| `:type`                 | 必須       | エントリタイプ（後述）                              |
+| `:nest`                 | オプション | インデントレベル（デフォルト: 0）                   |
+| `:count-format`         | オプション | `t` で `%n` をカウントに置換（デフォルト: `t`）     |
+| `:face`                 | オプション | 適用する face                                       |
+| `:face-count`           | オプション | カウント部分 `%n` に適用する face                   |
+| `:display-context`      | オプション | 表示コンテキスト（詳細は 13.3.1 参照）              |
+| `:count-exclude-others` | オプション | カウント対象（詳細は 13.3.2 参照、デフォルト: `t`） |
+
+
+#### 13.3.1 `:display-context` - 表示コンテキスト
+
+フィルタマッチ時に表示する行の範囲を制御する。
+
+| 値              | 説明                                       |
+|-----------------|--------------------------------------------|
+| `'all`          | マッチ行と前後の見出しを表示（デフォルト） |
+| `'heading-only` | 見出しのみ表示                             |
+| `'none`         | マッチ行のみ表示                           |
+
+**例**:
+
+```elisp
+;; マッチ行と見出しを表示
+(:title "Open - %n" :type search-simple :pattern "open" :display-context 'all)
+
+;; 見出しのみ表示
+(:title "Sections - %n" :type search-simple :pattern "heading" :display-context 'heading-only)
+
+;; マッチ行のみ表示
+(:title "Tasks - %n" :type search-simple :pattern "open" :display-context 'none)
+```
+
+
+#### 13.3.2 `:count-exclude-others` - カウント対象
+
+カウント時に含める行の種類を制御する。タスク行とコメント行の両方が存在する場合、どちらをカウント対象にするかを指定。
+
+| 値    | 説明                                                   | 用途                                         |
+|-------|--------------------------------------------------------|----------------------------------------------|
+| `t`   | タスク行のみカウント（コメント行を除外）（デフォルト） | 通常のフィルタリング。複数行コメント行は除外 |
+| `nil` | 全ての行をカウント（タスク行とコメント行の両方）       | コメント行も含めてカウントしたい場合         |
+
+__具体例__
+
+```
+[ ] Task 1
+    /// Comment for Task 1
+[ ] Task 2
+    /// Comment for Task 2
+```
+
+- `:count-exclude-others t` の場合: マッチ数は _2_（タスク行のみ）
+- `:count-exclude-others nil` の場合: マッチ数は _4_（タスク行 + コメント行）
+
+**設定例**:
+
+```elisp
+;; タスク行のみカウント（デフォルト）
+(:title "Open Tasks - %n" :type search-simple :pattern "open" :count-exclude-others t)
+
+;; 全ての行をカウント
+(:title "All Matches - %n" :type search-simple :pattern "open" :count-exclude-others nil)
+```
 
 
 ### 13.4 エントリタイプ（`:type`）
@@ -596,7 +652,7 @@ Layer 5: Non-clickable（コメント行など）
 
 #### `"group-header"`（グループヘッダー）
 
-クリック不可、視覚的な区切り
+クリック不可、視覚的な区切り。
 
 | プロパティ | 必須/オプション | 説明                     |
 |------------|-----------------|--------------------------|
@@ -605,27 +661,27 @@ Layer 5: Non-clickable（コメント行など）
 
 #### `"dynamic"`（動的フィルタ）
 
-表示時に値を自動収集
+表示時に値を自動収集しリスト表示する。
 
-| プロパティ           | 必須/オプション | 説明                                            |
-|----------------------|-----------------|-------------------------------------------------|
-| `:dynamic-type`      | 必須            | 収集対象（`person`, `tag`, `due`, `start`）     |
+| プロパティ           | 必須/オプション | 説明                                                     |
+|----------------------|-----------------|----------------------------------------------------------|
+| `:dynamic-type`      | 必須            | 収集対象（`person`, `tag`, `due`, `start`）              |
 | `:tag-mode`          | オプション      | タグ抽出モード（`"all"`, `"name-only"`, `"with-value"`） |
-| `:exclude-person`    | オプション      | 除外する `@person` リスト                       |
-| `:exclude-tag`       | オプション      | 除外する `#tag` リスト                          |
-| `:exclude-tag-value` | オプション      | 除外する `#tag:value` リスト                    |
-| `:sort`              | オプション      | ソート方法（`alpha`, `count`, `reverse-count`） |
-| `:limit`             | オプション      | 表示数制限（デフォルト: nil = 無制限）          |
+| `:exclude-person`    | オプション      | 除外する `@person` リスト                                |
+| `:exclude-tag`       | オプション      | 除外する `#tag` リスト                                   |
+| `:exclude-tag-value` | オプション      | 除外する `#tag:value` リスト                             |
+| `:sort`              | オプション      | ソート方法（`alpha`, `count`, `reverse-count`）          |
+| `:limit`             | オプション      | 表示数制限（デフォルト: nil = 無制限）                   |
 
-**`:tag-mode` の説明**:
+`:tag-mode` のオプションは以下の通り。
 
-| モード | 説明 | 例 |
-|--------|------|-----|
-| `"all"` | 値なし・値ありタグを全て抽出 | `#java`, `#priority:high` → `["java", "priority:high"]` |
-| `"name-only"` | タグ名のみ（デフォルト） | `#java`, `#priority:high` → `["java", "priority"]` |
-| `"with-value"` | 値ありタグのみ抽出 | `#priority:high` → `["priority:high"]` |
+| モード         | 説明                         | 例                                                       |
+|----------------|------------------------------|----------------------------------------------------------|
+| `"all"`        | 値なし・値ありタグを全て抽出 | `#java`, `#priority:high` → `["java", "priority:high"]` |
+| `"name-only"`  | タグ名のみ（デフォルト）     | `#java`, `#priority:high` → `["java", "priority"]`      |
+| `"with-value"` | 値ありタグのみ抽出           | `#priority:high` → `["priority:high"]`                  |
 
-**注**: `:tag-ignore-value` は非推奨。`:tag-mode` を使用してください。
+**注**: `:tag-ignore-value` と `:tag-mode "name-only"` は同様。
 
 
 #### `"search-simple"`（シンプル検索）
@@ -823,56 +879,72 @@ face-rules 内でマッチしない場合、`:face` で指定した face にフ�
 (
  (altodo-filter-patterns .
   (
-   ;; グループヘッダー
+   ;; ステータスグループ
    (:title "Status" :type group-header :nest 0)
+   (:title "Open [ ] - %n" :type search-simple :pattern "open" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
+   (:title "In Progress [@] - %n" :type search-simple :pattern "progress" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
+   (:title "Waiting [w] - %n" :type search-simple :pattern "waiting" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
+   (:title "Done [x] - %n" :type search-simple :pattern "done" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
+   (:title "Cancelled [~] - %n" :type search-simple :pattern "cancelled" :count-format t :nest 1
+           :count-exclude-others t :display-context 'all)
    
-   ;; 通常フィルタ
-   (:title "Open [ ] - %n" :type search-simple :pattern "open" :count-format t :nest 1)
-   (:title "Done [x] - %n" :type search-simple :pattern "done" :count-format t :nest 1)
+   ;; フラググループ
+   (:title "Flags" :type group-header :nest 0)
+   (:title "Priority (!) - %n" :type search-simple :pattern "priority" :count-format t :nest 1
+           :count-exclude-others t :face-rules ((>= 5 error) (>= 1 warning)))
+   (:title "Star (+) - %n" :type search-simple :pattern "star" :count-format t :nest 1
+           :count-exclude-others t)
    
-   ;; 動的フィルタ
-   (:title "@Person - %n" :type dynamic :dynamic-type person :count-format t :nest 1)
-   (:title "#Tag - %n" :type dynamic :dynamic-type tag :count-format t :nest 1)
+   ;; 期限グループ
+   (:title "Due" :type group-header :nest 0)
+   (:title "Overdue - %n"
+           :type search-lambda
+           :pattern (lambda ()
+                      (and (altodo--due-date-matches-p 'overdue)
+                           (not (or (altodo--line-state-p altodo-state-done)
+                                    (altodo--line-state-p altodo-state-cancelled)))))
+           :count-format t :nest 1
+           :count-exclude-others t
+           :face-rules ((>= 1 error)))
+   (:title "Due Today - %n"
+           :type search-lambda
+           :pattern (lambda ()
+                      (and (altodo--due-date-matches-p 'today)
+                           (not (or (altodo--line-state-p altodo-state-done)
+                                    (altodo--line-state-p altodo-state-cancelled)))))
+           :count-format t :nest 1
+           :count-exclude-others t
+           :face-rules ((>= 1 error)))
    
-   ;; face-rules 付き
-   (:title "Priority - %n" :type search-simple :pattern "priority" :count-format t :nest 1
-    :face-rules ((>= 5 error)
-                 (>= 1 warning)))
+   ;; タググループ
+   (:title "Tags" :type group-header :nest 0)
+   (:title "#%s - %n" :type dynamic :dynamic-type "tag" :count-format t :limit 5 :nest 1
+           :exclude-tag ("id" "dep" "done") :tag-mode "name-only"
+           :count-exclude-others t :display-context 'all)
    
-   ;; 複合条件
+   ;; 人グループ
+   (:title "People" :type group-header :nest 0)
+   (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1
+           :count-exclude-others t :display-context 'all)
+   
+   ;; 複合条件の例
    (:title "Open + Priority - %n"
-    :type search-simple
-    :pattern "(and open priority)"
-    :count-format t :nest 1)
+           :type search-simple
+           :pattern "(and open priority)"
+           :count-format t :nest 1
+           :count-exclude-others t
+           :face-rules ((>= 3 warning)))
    
    ;; 区切り線
-   (:title "" :type separator :nest 0)
+   (:title "" :type separator :pattern "─" :nest 0)
    
    ;; コマンド
-   (:title "[Clear]" :type command :command altodo-filter-clear :nest 0)
+   (:title "[Clear Filter]" :type command :command altodo-filter-clear :nest 0)
    ))
 )
 ```
 
-
-### 13.8 デフォルト設定
-
-```elisp
-altodo--default-filter-patterns = '(
- (:title "Status" :type group-header :nest 0)
- (:title "Open [ ] - %n" :type search-simple :pattern "open" :count-format t :nest 1)
- (:title "In Progress [@] - %n" :type search-simple :pattern "progress" :count-format t :nest 1)
- (:title "Waiting [w] - %n" :type search-simple :pattern "waiting" :count-format t :nest 1)
- (:title "Done [x] - %n" :type search-simple :pattern "done" :count-format t :nest 1)
- (:title "Cancelled [~] - %n" :type search-simple :pattern "cancelled" :count-format t :nest 1)
- (:title "Flags" :type group-header :nest 0)
- (:title "Priority (!) - %n" :type search-simple :pattern "priority" :count-format t :nest 1)
- (:title "Star (+) - %n" :type search-simple :pattern "star" :count-format t :nest 1)
- (:title "[Clear Filter]" :type command :command altodo-filter-clear :nest 0)
-)
-```
-
----
-
-**最終更新**: 2026-03-07
-**バージョン**: 2.1.0

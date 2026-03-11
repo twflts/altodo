@@ -874,6 +874,7 @@ Layer 5: 最優先（コメント全体、斜線）
 
 - `doc/altodo_spec.md` - altodo フォーマット仕様書
 - `doc/altodo_spec_en.md` - altodo フォーマット仕様書（英語版）
+- `doc/design-filter.md` - フィルタリング機能設計書（DSL 仕様含む）
 - `doc/design.md.backup_*` - 詳細設計（削除前のバージョン）
 - `doc/tmp_design.md` - 実装詳細セクション（詳細設計用）
 - `.kiro/memo/` - 開発メモ
