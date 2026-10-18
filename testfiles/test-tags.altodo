@@ -1,0 +1,90 @@
+# Tags Test
+
+Tests various tag formats: simple tags, key-value tags, and special tags.
+
+
+## Simple Tags
+
+[ ] Task with single tag #work
+[ ] Task with multiple tags #home #personal #urgent
+[ ] Task with tag at end of line #end-tag
+[ ] Task with #tag-in-middle of text
+
+
+## Key-Value Tags
+
+[ ] Task assigned to person #person:john
+[ ] Task with clock time #clock:9AM
+[ ] Task with location #location:office
+[ ] Multiple key-value tags #project:alpha #priority:high #status:active
+
+
+## Tags in Headings
+
+### Project Alpha #project:alpha
+
+[ ] Task under project alpha heading
+
+
+### Sprint 2026-Q1 #sprint:2026-Q1 #team:backend
+
+[ ] Backend development task
+
+
+## Invalid Tag Examples (should be treated as normal text)
+
+[ ] Tag without space before#invalid
+[ ] Tag without space after #invalid#another
+[ ] Tag with invalid chars #invalid@char
+[ ] Tag with space #invalid tag
+
+
+## Tags with Comments
+
+[ ] Task with tags #work #urgent
+    /// Comment: This task needs immediate attention
+[ ] Another task #home
+    Multi-line comment with tags mentioned.
+    But tags in comments are just text: #not-a-real-tag
+
+
+## Key-Value Tags with Values (Phase 5-9)
+
+### String Values
+
+[ ] Task with priority #priority:high
+[ ] Task with priority #priority:low
+[ ] Task with priority #priority:medium
+[ ] Task with owner #owner:john
+[ ] Task with owner #owner:alice
+[ ] Task with quoted owner #owner:"john doe"
+[ ] Task with quoted description #description:"important task"
+[ ] Task with status #status:active
+[ ] Task with status #status:inactive
+
+
+### Numeric Values
+
+[ ] Task with estimate #estimate:5
+[ ] Task with estimate #estimate:10
+[ ] Task with estimate #estimate:3
+[ ] Task with estimate #estimate:9.5
+[ ] Task with count #count:100
+[ ] Task with level #level:1
+[ ] Task with level #level:2
+[ ] Task with level #level:3
+
+
+### Multiple Key-Value Tags
+
+[ ] Task with multiple values #priority:high #estimate:10 #owner:john
+[ ] Task with mixed quoted #owner:"jane doe" #priority:high #estimate:5.5
+[ ] Complex task #project:alpha #priority:urgent #estimate:8 #owner:"team lead"
+
+
+### Edge Cases
+
+[ ] Task with empty value #status:
+[ ] Task with special chars in value #id:task-123 #code:v1_0_0
+[ ] Task with numeric string #code:123 #version:2
+[ ] Task at end of line #priority:high

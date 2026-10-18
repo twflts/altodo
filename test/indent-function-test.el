@@ -1,7 +1,7 @@
 ;;; indent-function-test.el --- Tests for indent functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest test-normalize-irregular-indent ()
   (should (= (altodo--normalize-irregular-indent 3 4) 0)))
@@ -17,24 +17,6 @@
 (ert-deftest test-initial-indent ()
   (let ((result (altodo--initial-indent 0)))
     (should (numberp result))))
-
-(ert-deftest test-indent-multiline-comment ()
-  (let ((buf (get-buffer-create "*test*")))
-    (with-current-buffer buf
-      (erase-buffer)
-      (insert "=== Comment ===\n")
-      (altodo-mode)
-      (altodo--indent-multiline-comment 4)
-      (should t))))
-
-(ert-deftest test-indent-task-or-comment ()
-  (let ((buf (get-buffer-create "*test*")))
-    (with-current-buffer buf
-      (erase-buffer)
-      (insert "[ ] Task\n")
-      (altodo-mode)
-      (altodo--indent-task-or-comment "[ ] Task" 4)
-      (should t))))
 
 (ert-deftest test-get-previous-task-indent ()
   (let ((buf (get-buffer-create "*test*")))

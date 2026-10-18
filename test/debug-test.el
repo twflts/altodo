@@ -1,7 +1,8 @@
 ;;; debug-test.el --- Tests for debug functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require (quote altodo))
+(require (quote debug-helper))
 
 (defvar test-buffer nil)
 

@@ -46,11 +46,40 @@ Emacs の major mode（`altodo.el`）と、altodo フォーマット（Markdown 
 ## 構文チェックとテスト
 
 - 構文チェック: `emacs --batch -L . --eval '(progn (find-file "altodo.el") (check-parens))'`
-- ローカル CI: `scripts/ci.sh`（lint とテスト。別の Emacs は `EMACS=emacs-30 scripts/ci.sh`）
-    - テスト: `scripts/run-tests.sh [test/NAME.el]`。ベースライン（`scripts/test-baseline.txt`、66 件の失敗）との差分で、新しい失敗を報告する
+- ローカル CI: `scripts/ci.sh`（lint、テスト、ドキュメントの名前の確認。別の Emacs は `EMACS=emacs-30 scripts/ci.sh`）
+    - テスト: `scripts/run-tests.sh [test/NAME.el]`。ベースライン（`scripts/test-baseline.txt`。現在は失敗 0 件）との差分で、新しい失敗を報告する
     - lint: `scripts/lint.sh`。バイトコンパイル、checkdoc、package-lint の件数が、ベースライン（`scripts/lint-baseline.txt`）より増えないことを確認する
     - 失敗や警告を減らしたら、`--update-baseline` でベースラインを更新する
-- 失敗の原因の多くはテスト側（旧パス、モック、日付の固定）。内訳は `.claude/memo/examine/code-reading-20261018/bug-list.md`
+    - ドキュメントの名前: `scripts/check-doc-symbols.sh`。バッククォートで書かれた `altodo-*`、`sidebar-*` が `altodo.el` に定義されているか確認する。意図的に未定義の名前は `scripts/doc-symbols-ignore.txt` に書く
+    - 性能: `scripts/bench-filter.sh [--sizes "5000 10000"] [--repeat N] [--max SECONDS]`。フィルタの処理時間を測定する。CI には含めない。処理速度は速いほどよい（5000 行で 1 秒は設計時の目安であり、上限ではない）
+- テストの一覧: `test/INDEX.md`（`scripts/gen-test-map.py` が生成。テストを探す・追加する前に読む。`scripts/ci.sh` が最新かを確認する）
+- テストの書き方
+    - 共通の道具は `test/altodo-test-helper.el`（バッファ、一時ディレクトリ、サンプルの設定ファイル、今日の日付の固定）
+    - 日付に依存するテストは `altodo-test-with-today` で日付を固定する。サンプルは一時ディレクトリに作り、プロジェクトのファイルを変更しない
+    - 実装と仕様の差は、`:expected-result :failed` を付けて記録する。`(should t)` のような意味のないアサーションを書かない
+    - 調査用のスクリプトは `test/archive/` に置き、`test/*.el` に置かない
+- 手動確認用のサンプル: `testfiles/`（`testfiles/README.md`）。`scripts/gen-testfiles.sh` が、今日を基準にした日付のファイルと大きなファイルを生成する。`test/testfiles-test.el` が、サンプルの妥当性を確認する
+
+
+## 開発支援スクリプトの提案
+
+Emacs Lisp の作成・修正・改善で、繰り返す作業や間違えやすい確認を見つけたら、それを自動化するスクリプトを、ユーザに提案する。手作業や使い捨てのコマンドで済ませ続けない。
+
+- 提案する場面
+    - 同じ確認を 2 回以上行った、またはこれから繰り返す（再現、性能測定、プロファイル、比較、整合性の確認）
+    - 手順が長い、または間違えやすい
+    - 例: 大きなバッファでの性能測定、ドキュメントに書かれた関数・変数が `altodo.el` に実在するかの確認、日本語版と英語版の見出しの対応の確認、lint の指摘の差分の表示
+- 提案に含める内容
+    - 目的と、防げる問題
+    - 使い方（引数、環境変数、終了コード）、置き場所（`scripts/`）、おおよその作成工数
+    - 既存の `scripts/ci.sh` に組み込むか、単独で実行するか
+    - 実行確認を省く設定（`.claude/settings.json`）の要否。読み取りだけを行うスクリプトに限る
+- 作成の手順
+    - 提案し、ユーザの了承を得てから作成する。依頼された作業そのものに必要な場合は、先に作成してよい
+    - 既存のスクリプト（`ls scripts/`）で足りないかを、先に確認する
+    - bash のスクリプトは、グローバルの bash コーディングルールに従う。100 行を超える、または制御が複雑な場合は、Python での作成を提案する
+    - 作成したら、`project.altodo` に記録し、「構成」の節の `scripts/` の説明に追記する
+- 使い捨ての確認用コードは、`scripts/` に置かない。メモのディレクトリ（`.claude/memo/issue/タスクID_内容/`）に置き、再利用する価値が出たら、スクリプト化を提案する
 
 
 ## TODO

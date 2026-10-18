@@ -2,12 +2,14 @@
 
 (require 'ert)
 (require 'altodo)
+(add-to-list 'load-path
+             (file-name-directory (or load-file-name buffer-file-name)))
+(require 'altodo-test-helper)
 
 (ert-deftest test-face-rules-comprehensive-debug ()
   "Comprehensive debug test for face-rules."
-  (with-temp-buffer
-    (setq buffer-file-name "testfiles/test-flags.altodo")
-    (insert-file-contents "testfiles/test-flags.altodo")
+  (altodo-test-with-locals
+    (insert-file-contents (altodo-test-file "testfiles/test-flags.altodo"))
     (altodo-mode)
     
     (let ((config (altodo-sidebar-make-config (current-buffer))))

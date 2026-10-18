@@ -2,12 +2,15 @@
 
 (require 'ert)
 (require 'altodo)
+(add-to-list 'load-path
+             (file-name-directory (or load-file-name buffer-file-name)))
+(require 'altodo-test-helper)
 
 ;;; Test: Verify dolist is executed in sidebar--render
 
 (ert-deftest altodo-test-phase2-1-mcp-dolist-execution ()
   "Test that dolist is executed in sidebar--render."
-  (let ((test-file "/work/emacs/altodo/testfiles/test-sample-project.altodo"))
+  (let ((test-file (altodo-test-file "testfiles/test-sample-project.altodo")))
     (should (file-exists-p test-file))
     
     (let ((buffer (find-file-noselect test-file)))
@@ -28,11 +31,13 @@
                   (should (> (buffer-size) 0))
                   
                   ;; Count buttons in sidebar
-                  (let ((button-count 0))
-                    (goto-char (point-min))
-                    (while (button-at (point))
+                  (let ((button-count 0)
+                        (button (next-button (point-min))))
+                    ;; The first entry is a group header (not a button), so
+                    ;; walk from button to button.
+                    (while button
                       (setq button-count (1+ button-count))
-                      (forward-button 1 nil t))
+                      (setq button (next-button (button-end button))))
                     
                     ;; Should have at least some buttons
                     (should (> button-count 0))

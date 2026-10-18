@@ -1,7 +1,7 @@
 ;; Test for Setext heading syntax
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest setext-heading-level-test ()
   "Test Setext heading level detection"

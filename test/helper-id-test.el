@@ -1,11 +1,10 @@
 ;;; helper-id-test.el --- Tests for ID helper functions
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: altodo--generate-id
-(defun test-generate-id ()
+(ert-deftest helper-id-test-generate-id ()
   "Test altodo--generate-id."
   ;; Test 1: returns string
   (let ((result (altodo--generate-id)))
@@ -26,7 +25,7 @@
   (message "test-generate-id: PASS"))
 
 ;; Test: altodo--find-task-by-id
-(defun test-find-task-by-id ()
+(ert-deftest helper-id-test-find-task-by-id ()
   "Test altodo--find-task-by-id."
   (with-temp-buffer
     (altodo-mode)
@@ -52,7 +51,7 @@
     (message "test-find-task-by-id: PASS")))
 
 ;; Test: altodo--get-task-id
-(defun test-get-task-id ()
+(ert-deftest helper-id-test-get-task-id ()
   "Test altodo--get-task-id."
   (with-temp-buffer
     (altodo-mode)
@@ -74,7 +73,7 @@
     (message "test-get-task-id: PASS")))
 
 ;; Test: altodo--get-task-deps
-(defun test-get-task-deps ()
+(ert-deftest helper-id-test-get-task-deps ()
   "Test altodo--get-task-deps."
   (with-temp-buffer
     (altodo-mode)
@@ -95,13 +94,5 @@
     
     (message "test-get-task-deps: PASS")))
 
-(defun run-all-tests ()
-  "Run all ID helper tests."
-  (message "=== Running ID helper tests ===")
-  (test-generate-id)
-  (test-find-task-by-id)
-  (test-get-task-id)
-  (test-get-task-deps)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'helper-id-test)
+;;; helper-id-test.el ends here

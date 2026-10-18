@@ -1,7 +1,7 @@
 ;;; matcher-advanced-test.el --- Tests for advanced matcher functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 

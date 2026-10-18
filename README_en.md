@@ -97,7 +97,7 @@ Below is an example of altodo format tasks.
 #### Flags
 
 - `!`, `!!`, `!!!`: Priority (typically 3 levels, more `!` = higher priority)
-- `+`: Star flag
+- `+`: Star flag. It can be used with a priority (`+ !! Task`, `!! + Task`)
 - Flags can also be added to single-line comments (`/// ! note`)
 
 
@@ -134,7 +134,7 @@ See doc/design.md for details.
 - Sidebar with dynamic filter matching and count display
     - Sidebar content is fully customizable
 
-Key features: Tested for managing thousands of TODOs flexibly and quickly, Emacs-friendly with comfortable and fast operation, flexible sidebar customization. Provides DSL for filtering and rich predicate functions.
+Key features: Emphasis on speed, so that thousands of TODOs can be managed and displayed flexibly and quickly (the filter processing time is measured with `scripts/bench-filter.sh`), Emacs-friendly operation, flexible sidebar customization. Provides DSL for filtering and rich predicate functions.
 
 
 ### Keybindings
@@ -314,9 +314,9 @@ Date display format. `nil` uses ISO 8601 format (`YYYY-MM-DD`).
 ID tag format for `C-c C-i` insertion.
 
 **Options**:
-- `'tiny-random`: 10 characters, random part first (default)
+- `'tiny-random`: up to 10 characters, random part first (default; leading zeros are dropped, so 8 to 10 characters)
 - `'tiny`: 10 characters, timestamp part first (sortable by time)
-- `'short-random`: 15 characters, random part first
+- `'short-random`: up to 16 characters, random part first (14 to 16 characters)
 - `'short`: 15 characters, timestamp part first (sortable by time)
 - `'base62`: 21 characters, UUID v7 written in Base62
 - `'uuid`: 36 characters, UUID v7 format

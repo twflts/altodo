@@ -1,7 +1,7 @@
 ;; Test for heading newline feature
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest heading-newline-test-all-context ()
   "Test heading newline with 'all' display context"

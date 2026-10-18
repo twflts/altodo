@@ -1,7 +1,7 @@
 ;;; filter-core-test.el --- Tests for filter core functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 

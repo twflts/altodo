@@ -6,7 +6,7 @@
 ;;; Code:
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 
@@ -82,9 +82,15 @@
     (altodo-mode)
     (goto-char (point-min))
     (end-of-line)
-    (insert " @person")
+    (insert " #person")
     (beginning-of-line)
-    (should (altodo--line-has-tag-p "person")))
+    (should (altodo--line-has-tag-p "person"))
+    ;; A "@person" is a person tag, not a "#tag".
+    (end-of-line)
+    (insert " @bob")
+    (beginning-of-line)
+    (should (altodo--line-has-person-p "bob"))
+    (should-not (altodo--line-has-tag-p "bob")))
   (cleanup-test-buffer))
 
 (ert-deftest test-line-has-tag-p-without-tag ()

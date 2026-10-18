@@ -6,7 +6,7 @@
 ;;; Code:
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 (defvar done-file nil)

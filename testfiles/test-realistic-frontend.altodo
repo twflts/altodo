@@ -1,0 +1,76 @@
+# Java Frontend Development
+
+Realistic Java frontend project using JavaFX or React.
+
+
+## Project Setup
+
+[ ] Choose frontend framework #id:frontend-choice
+    /// Options: JavaFX, React, Angular, Vue
+    [ ] Evaluate JavaFX for desktop app
+    [ ] Evaluate React for web app
+    [x] Decision: Use React #done:2026-02-12
+[ ] Initialize React project #dep:frontend-choice
+[ ] Setup TypeScript configuration
+[ ] Configure ESLint and Prettier
+
+
+## Component Development #group-start:2026-03-01 #group-due:2026-04-30
+
+[ ] + Create Login component #id:comp-login
+    [ ] Design login form
+    [ ] Add form validation
+    [ ] Integrate with authentication API
+[ ] Create Dashboard component #dep:comp-login
+[ ] Create UserList component
+    [ ] Add pagination
+    [ ] Add search functionality
+    [ ] Add sorting
+[ ] Create ProductList component
+[ ] Create OrderList component
+
+
+## State Management
+
+[ ] ! Setup Redux store -> 2026-03-15
+    [ ] Create store configuration
+    [ ] Define root reducer
+    [ ] Setup Redux DevTools
+[ ] ! Create user slice -> 2026-03-20
+[ ] ! Create product slice -> 2026-03-20
+[ ] ! Create order slice -> 2026-03-25
+
+
+## API Integration
+
+[@] Implement API client @john
+    Using axios for HTTP requests.
+    Need to add error handling.
+    [ ] Create axios instance
+    [ ] Add request interceptors
+    [ ] Add response interceptors
+[ ] Implement user API calls
+[ ] Implement product API calls
+[ ] Implement order API calls
+
+
+## Styling
+
+[ ] Setup Tailwind CSS
+[ ] Create theme configuration
+[ ] Design responsive layouts
+[w] Waiting for design mockups @designer
+
+
+## Testing
+
+[ ] Write component tests (Jest + React Testing Library)
+[ ] Write integration tests
+[ ] Write E2E tests (Cypress)
+
+
+## Build and Deployment
+
+[ ] Configure production build
+[ ] Optimize bundle size
+[ ] Deploy to Netlify or Vercel

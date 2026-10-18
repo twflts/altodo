@@ -6,13 +6,13 @@ altodo: TODO format embeddable in Markdown/CommonMark. Extension: `.altodo`. MIT
 ## Line Grammar
 
 ```
-TASK_LINE    := INDENT STATE SP [FLAG SP] BODY
-COMMENT_LINE := INDENT "///" SP [FLAG SP] BODY   ; detached note (NOT part of the task); single line only
+TASK_LINE    := INDENT STATE SP {FLAG SP} BODY
+COMMENT_LINE := INDENT "///" SP {FLAG SP} BODY   ; detached note (NOT part of the task); single line only
 MULTILINE    := INDENT BODY            ; INDENT = indent of the task/"///" line above + 4 spaces
 MARKDOWN     := any line not matching above patterns
 
 STATE := "[ ]" | "[@]" | "[w]" | "[x]" | "[~]"
-FLAG  := "+" | "!" | "!!" | "!!!"
+FLAG  := "+" | "!" | "!!" | "!!!"   ; at most one star and one priority, in any order
 SP    := " " (exactly one space)
 INDENT := 0 or more spaces (multiples of 4 for nesting)
 BODY  := text with optional inline elements (tags, dates, @person/place)
@@ -26,7 +26,7 @@ BODY  := text with optional inline elements (tags, dates, @person/place)
 
 ## Flags
 
-`+` star (important). `!`/`!!`/`!!!` priority 1-3 (4+ truncated to 3). Mutually exclusive with each other. Placed immediately after the state mark + space (task lines) or after `///` + space (comment lines).
+`+` star (important). `!`/`!!`/`!!!` priority 1-3 (4+ truncated to 3). A star and a priority can be used together in either order (`+ !! text`, `!! + text`); each kind at most once. Placed immediately after the state mark + space (task lines) or after `///` + space (comment lines).
 
 
 ## Nesting

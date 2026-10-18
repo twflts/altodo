@@ -386,6 +386,13 @@ If the file does not exist, use the following default values:
 - One space is required after the flag
 
 
+#### Using a Star and a Priority Together
+
+- They can be used together, in either order, each at most once on a line
+- The commands (`altodo-set-priority-1` to `3`, `altodo-toggle-star-flag`) write the star first, then the priority, and keep the other flag
+- `altodo--parse-flags` parses them
+
+
 #### Priority Flags
 
 - Flags: `!`, `!!`, `!!!`
@@ -555,6 +562,10 @@ Detection is performed line by line, using regular expressions and the state of 
 - `markdown-pre-face` is no longer applied within altodo-mode buffers
 - No impact on altodo files since indented code blocks (Markdown spec) are not used
 - Does not modify `syntax-propertize-function`, respecting Emacs design principles
+
+---
+
+**Note**: The detection of task lines, single-line comment lines and multi-line comment lines (`altodo--task-p`, `altodo--comment-p`, `altodo--multiline-comment-p`) only checks whether the line is inside a fenced code block (`altodo--in-fenced-code-block-p`). Indented code blocks are not considered, because altodo expresses nesting and multi-line comments with indentation.
 
 ---
 

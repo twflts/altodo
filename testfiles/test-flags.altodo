@@ -1,0 +1,74 @@
+# Flags Test (Star and Priority)
+
+Tests star flag (+) and priority flags (!, !!, !!!).
+
+
+## Star Flag
+
+[ ] + Important task with star flag
+[ ] + Another starred task
+    [ ] + Nested starred task
+
+
+## Priority Flags
+
+[ ] ! Priority level 1 (high)
+[ ] !! Priority level 2 (higher)
+[ ] !!! Priority level 3 (highest)
+[ ] !!!! Priority level 4+ (treated as level 3)
+[ ] !!!!!! Many exclamation marks (treated as level 3)
+
+
+## Combined with Task States
+
+[@] + In-progress starred task
+[x] + Completed starred task
+[w] ! Waiting high-priority task
+[~] !! Cancelled high-priority task
+
+
+## Nested Priority Tasks
+
+[ ] ! Parent high-priority task
+    [ ] !! Child higher-priority task
+        [ ] !!! Grandchild highest-priority task
+
+
+## Invalid Flag Examples (should be treated as normal text)
+
+[ ] +No space after flag - invalid
+[ ] !No space after flag - invalid
+[ ] !!No space - invalid
+
+
+## Mixed Flags and Comments
+
+[ ] + Starred task with comment
+    /// This task is very important
+[ ] !!! Highest priority task
+    This task must be completed first.
+    It has critical dependencies.
+
+
+## Flags on Single-Line Comments
+
+/// + Starred single-line comment
+/// ! Priority 1 single-line comment
+/// !! Priority 2 single-line comment
+/// !!! Priority 3 single-line comment
+[ ] Task with flagged notes
+    /// + A starred note under a task
+    /// !! A high priority note under a task
+/// +No space after the flag - invalid (normal comment text)
+
+
+## Star and Priority Together (either order)
+
+Both flags get their own face. The commands (C-c C-s, C-c C-f 1/2/3) write the star first and keep the other flag.
+
+[ ] + ! Star and priority 1
+[ ] ! + Priority 1 and star (same meaning)
+[ ] + !!! Star and priority 3
+[ ] !!! + Priority 3 and star
+[ ] ++ Not a flag: two stars are plain text
+[ ] + + Only the first star is a flag

@@ -1,11 +1,10 @@
 ;;; fontlock-priority-test.el --- Tests for font-lock priority (override flags)
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: Override flag 't' (complete override)
-(defun test-override-t ()
+(ert-deftest fontlock-priority-test-override-t ()
   "Test override flag 't' (complete override)."
   ;; Test 1: font-lock-keywords contains override flags
   (let ((keywords (altodo-font-lock-keywords)))
@@ -23,7 +22,7 @@
   (message "test-override-t: PASS"))
 
 ;; Test: Override flag 'prepend'
-(defun test-override-prepend ()
+(ert-deftest fontlock-priority-test-override-prepend ()
   "Test override flag 'prepend'."
   ;; Test 1: font-lock-keywords contains prepend flags
   (let ((keywords (altodo-font-lock-keywords)))
@@ -41,7 +40,7 @@
   (message "test-override-prepend: PASS"))
 
 ;; Test: Override flag 'append'
-(defun test-override-append ()
+(ert-deftest fontlock-priority-test-override-append ()
   "Test override flag 'append'."
   ;; Test 1: override flags exist
   (let ((keywords (altodo-font-lock-keywords)))
@@ -51,7 +50,7 @@
   (message "test-override-append: PASS"))
 
 ;; Test: Override flag 'keep'
-(defun test-override-keep ()
+(ert-deftest fontlock-priority-test-override-keep ()
   "Test override flag 'keep'."
   ;; Test 1: override flags exist
   (let ((keywords (altodo-font-lock-keywords)))
@@ -61,7 +60,7 @@
   (message "test-override-keep: PASS"))
 
 ;; Test: Layer priority
-(defun test-layer-priority ()
+(ert-deftest fontlock-priority-test-layer-priority ()
   "Test layer priority (Layer 1 -> Layer 5)."
   ;; Test 1: font-lock-keywords is ordered
   (let ((keywords (altodo-font-lock-keywords)))
@@ -70,14 +69,5 @@
   
   (message "test-layer-priority: PASS"))
 
-(defun run-all-tests ()
-  "Run all priority (override) tests."
-  (message "=== Running font-lock priority tests ===")
-  (test-override-t)
-  (test-override-prepend)
-  (test-override-append)
-  (test-override-keep)
-  (test-layer-priority)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'fontlock-priority-test)
+;;; fontlock-priority-test.el ends here

@@ -1,0 +1,44 @@
+# Edge Cases Test
+
+Tests edge cases and boundary conditions.
+
+
+## Empty Tasks
+
+[ ] 
+[ ] Task with only spaces after marker    
+[ ] Task with tab after marker	
+
+
+## Very Long Lines
+
+[ ] This is a very long task line that contains a lot of text to test how the parser handles long lines with multiple tags and dates and person references and other inline elements #tag1 #tag2 #tag3 #tag4 #tag5 2026-01-01 -> 2026-12-31 @john @mary @alice @bob #project:alpha #priority:high #status:active
+
+
+## Maximum Nesting
+
+[ ] Level 1
+    [ ] Level 2
+        [ ] Level 3
+            [ ] Level 4
+                [ ] Level 5
+                    [ ] Level 6
+                        [ ] Level 7
+                            [ ] Level 8
+                                [ ] Level 9
+                                    [ ] Level 10
+
+
+## Multiple Consecutive Empty Lines
+
+[ ] Task before empty lines
+
+
+[ ] Task after empty lines
+
+
+## Tasks at End of File
+
+[ ] Last task with newline after
+
+[ ] Last task without newline after

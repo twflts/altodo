@@ -228,6 +228,20 @@ __Example__
 ```
 
 
+#### 3.4.3 Using a Star and a Priority Together
+
+A star `+` and a priority `!` can be used together, in either order (`+ !! Task`, `!! + Task`). Each kind can appear at most once on a line. Each flag must be followed by one space.
+When the application writes the flags, it writes the star first, then the priority.
+
+__Example__
+
+```
+[ ] + !! Task with a star and a priority
+[ ] !!! + The order can be swapped
+/// + ! A single-line comment can use both too
+```
+
+
 ### 3.5 Inline Elements
 
 Inline elements specific to the altodo format are described below. For Markdown inline formatting, refer to the Markdown specification.

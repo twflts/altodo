@@ -1,7 +1,7 @@
 ;;; other-test.el --- Tests for other functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 
@@ -21,16 +21,15 @@
   (setup-test-buffer)
   (with-current-buffer test-buffer
     (altodo-mode)
-    (altodo--call-parent-command "C-a")
-    (should t))
+    ;; No binding in the parent keymap: nothing happens and nil is returned.
+    (should-not (altodo--call-parent-command (kbd "C-a"))))
   (cleanup-test-buffer))
 
 (ert-deftest test-debug-log ()
   (setup-test-buffer)
   (with-current-buffer test-buffer
     (altodo-mode)
-    (altodo--debug-log "Test message")
-    (should t))
+    (should-not (altodo--debug-log "Test message")))
   (cleanup-test-buffer))
 
 (ert-deftest test-outline-level ()
@@ -41,14 +40,16 @@
       (should (numberp result))))
   (cleanup-test-buffer))
 
-(ert-deftest test-has-task-or-comment-above ()
-  (setup-test-buffer)
-  (with-current-buffer test-buffer
+(ert-deftest test-multiline-comment-indent-ok-p ()
+  "The lines above decide whether a line of a given indentation is a comment."
+  (with-temp-buffer
+    (insert "[ ] task\n    note\n")
     (altodo-mode)
-    (forward-line 1)
-    (let ((result (altodo--has-task-or-comment-above)))
-      (should (or (null result) (eq result t)))))
-  (cleanup-test-buffer))
+    (goto-char (point-max))
+    (forward-line -1)
+    (should (altodo--multiline-comment-indent-ok-p 4))
+    (should-not (altodo--multiline-comment-indent-ok-p 0))
+    (should-not (altodo--multiline-comment-indent-ok-p 8))))
 
 (ert-deftest test-set-task-state ()
   (setup-test-buffer)

@@ -1,11 +1,10 @@
 ;;; helper-dependency-test.el --- Tests for dependency helper functions
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: altodo--check-circular-dependency
-(defun test-check-circular-dependency ()
+(ert-deftest helper-dependency-test-check-circular-dependency ()
   "Test altodo--check-circular-dependency."
   (with-temp-buffer
     (altodo-mode)
@@ -30,7 +29,7 @@
     (message "test-check-circular-dependency: PASS")))
 
 ;; Test: altodo--check-all-deps-completed
-(defun test-check-all-deps-completed ()
+(ert-deftest helper-dependency-test-check-all-deps-completed ()
   "Test altodo--check-all-deps-completed."
   (with-temp-buffer
     (altodo-mode)
@@ -61,11 +60,5 @@
     
     (message "test-check-all-deps-completed: PASS")))
 
-(defun run-all-tests ()
-  "Run all dependency helper tests."
-  (message "=== Running dependency helper tests ===")
-  (test-check-circular-dependency)
-  (test-check-all-deps-completed)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'helper-dependency-test)
+;;; helper-dependency-test.el ends here

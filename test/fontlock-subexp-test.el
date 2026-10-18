@@ -1,11 +1,10 @@
 ;;; fontlock-subexp-test.el --- Tests for font-lock subexp-highlighter
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: Single subexp
-(defun test-single-subexp ()
+(ert-deftest fontlock-subexp-test-single-subexp ()
   "Test single subexp highlighting."
   ;; Test 1: font-lock-keywords is a list
   (let ((keywords (altodo-font-lock-keywords)))
@@ -20,7 +19,7 @@
   (message "test-single-subexp: PASS"))
 
 ;; Test: Multiple subexp
-(defun test-multiple-subexp ()
+(ert-deftest fontlock-subexp-test-multiple-subexp ()
   "Test multiple subexp highlighting."
   ;; Test 1: some keywords have multiple subexp
   (let ((keywords (altodo-font-lock-keywords)))
@@ -36,7 +35,7 @@
   (message "test-multiple-subexp: PASS"))
 
 ;; Test: Subexp with override flag
-(defun test-subexp-override ()
+(ert-deftest fontlock-subexp-test-subexp-override ()
   "Test subexp with override flag."
   ;; Test 1: some keywords have override flags
   (let ((keywords (altodo-font-lock-keywords)))
@@ -54,12 +53,5 @@
   
   (message "test-subexp-override: PASS"))
 
-(defun run-all-tests ()
-  "Run all subexp-highlighter tests."
-  (message "=== Running font-lock subexp-highlighter tests ===")
-  (test-single-subexp)
-  (test-multiple-subexp)
-  (test-subexp-override)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'fontlock-subexp-test)
+;;; fontlock-subexp-test.el ends here

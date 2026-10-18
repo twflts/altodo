@@ -1,7 +1,7 @@
 ;;; display-context-test.el --- Tests for :display-context option
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest test-compute-display-lines-none ()
   "Test :display-context none - show only matched lines"
@@ -40,12 +40,12 @@
   (with-temp-buffer
     (insert "# Heading 1\n")           ; line 1
     (insert "[ ] Task 1\n")            ; line 2
-    (insert "  Comment line 1\n")      ; line 3 (multiline comment)
-    (insert "  Comment line 2\n")      ; line 4 (multiline comment)
+    (insert "    Comment line 1\n")      ; line 3 (multiline comment)
+    (insert "    Comment line 2\n")      ; line 4 (multiline comment)
     (insert "\n")                      ; line 5
     (insert "# Heading 2\n")           ; line 6
     (insert "[x] Task 2\n")            ; line 7
-    (insert "  Comment line 3\n")      ; line 8 (multiline comment)
+    (insert "    Comment line 3\n")      ; line 8 (multiline comment)
     
     ;; Initialize heading ranges
     (altodo--compute-all-heading-ranges)

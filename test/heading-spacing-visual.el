@@ -1,7 +1,7 @@
 ;; Visual test for heading spacing
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest heading-spacing-visual-test ()
   "Visual test showing display lines"

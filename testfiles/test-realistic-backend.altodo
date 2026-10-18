@@ -1,0 +1,104 @@
+# Java Backend API Development
+
+Realistic Java Spring Boot REST API project.
+
+
+## Project Setup
+
+[ ] Initialize Spring Boot project #id:setup-001
+    [ ] Add dependencies (Spring Web, JPA, PostgreSQL)
+    [ ] Configure application.yml
+    [ ] Setup project structure
+[x] Setup Git repository #done:2026-02-10
+
+
+## Database Design #group-start:2026-02-15 #group-due:2026-02-28
+
+[ ] + Design database schema #id:db-001
+    /// Use PostgreSQL for production
+    [ ] Create User table
+    [ ] Create Product table
+    [ ] Create Order table
+    [ ] Create OrderItem table
+[ ] Write migration scripts #dep:db-001
+[ ] Review schema with team @john @mary
+
+
+## Domain Layer
+
+[ ] Implement User entity 2026-03-01 -> 2026-03-05
+    [ ] Add validation annotations
+    [ ] Add JPA annotations
+    [ ] Override equals and hashCode
+[ ] Implement Product entity 2026-03-01 -> 2026-03-05
+[ ] Implement Order entity 2026-03-06 -> 2026-03-10
+[ ] Implement OrderItem entity 2026-03-06 -> 2026-03-10
+
+
+## Repository Layer
+
+[ ] ! Create UserRepository -> 2026-03-12
+[ ] ! Create ProductRepository -> 2026-03-12
+[ ] ! Create OrderRepository -> 2026-03-15
+[ ] ! Create OrderItemRepository -> 2026-03-15
+
+
+## Service Layer #id:service-layer
+
+[@] Implement UserService @john
+    Currently implementing user registration logic.
+    Need to add email validation.
+    [ ] Create user method
+    [ ] Update user method
+    [ ] Delete user method
+    [ ] Find user by ID method
+[ ] Implement ProductService #dep:service-layer
+[ ] Implement OrderService #dep:service-layer
+[w] Implement PaymentService (waiting for payment gateway API) @devops
+
+
+## Controller Layer
+
+[ ] !! Implement UserController -> 2026-03-20
+    [ ] POST /api/users (create)
+    [ ] GET /api/users/{id} (read)
+    [ ] PUT /api/users/{id} (update)
+    [ ] DELETE /api/users/{id} (delete)
+[ ] !! Implement ProductController -> 2026-03-20
+[ ] !! Implement OrderController -> 2026-03-25
+
+
+## Security
+
+[ ] + Implement JWT authentication #id:security-001
+    [ ] Create JwtTokenProvider
+    [ ] Create JwtAuthenticationFilter
+    [ ] Configure SecurityConfig
+[ ] Implement role-based authorization #dep:security-001
+[ ] Add password encryption
+
+
+## Testing
+
+[ ] Write unit tests for services #group-due:2026-04-10
+    [ ] UserService tests
+    [ ] ProductService tests
+    [ ] OrderService tests
+[ ] Write integration tests for controllers
+[ ] Write repository tests
+
+
+## Documentation
+
+[ ] Write API documentation (OpenAPI/Swagger)
+[ ] Write README.md
+[x] Write setup guide #done:2026-02-14
+
+
+## Deployment
+
+[ ] Create Dockerfile
+[ ] Setup Docker Compose for local development
+[ ] Deploy to staging @devops
+[~] Deploy to Heroku #done:2026-02-13
+    /// Decided to use AWS instead

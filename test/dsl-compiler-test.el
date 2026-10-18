@@ -2,14 +2,7 @@
 
 (require 'ert)
 
-;; Mock markdown-mode
-(unless (featurep 'markdown-mode)
-  (provide 'markdown-mode)
-  (defvar markdown-mode-map (make-sparse-keymap))
-  (defun markdown-mode nil)
-  (defun markdown-cycle nil))
-
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 

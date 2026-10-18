@@ -1,7 +1,7 @@
 ;;; line-detection-remaining-test.el --- Tests for remaining line detection functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 

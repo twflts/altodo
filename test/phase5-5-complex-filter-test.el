@@ -3,13 +3,16 @@
 ;;; Code:
 
 (require 'ert)
-(load-file "/work/emacs/altodo/altodo.el")
+(require 'altodo)
+(add-to-list 'load-path
+             (file-name-directory (or load-file-name buffer-file-name)))
+(require 'altodo-test-helper)
 
 ;;; Helper: Load test file
 
 (defun load-test-file (filename)
   "Load test file and return buffer."
-  (let ((path (concat "/work/emacs/altodo/testfiles/" filename)))
+  (let ((path (altodo-test-file (concat "testfiles/" filename))))
     (find-file-noselect path)))
 
 ;;; Test: Multiple filters with AND condition

@@ -1,10 +1,9 @@
 ;;; filter-helper-test.el --- Unit tests for filter helper functions
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
-(defun test-filter-find-overlay ()
+(ert-deftest filter-helper-test-filter-find-overlay ()
   "Test altodo--filter-find-overlay."
   (with-temp-buffer
     (altodo-mode)
@@ -32,7 +31,7 @@
       
       (message "test-filter-find-overlay: PASS"))))
 
-(defun test-filter-invert-visibility ()
+(ert-deftest filter-helper-test-filter-invert-visibility ()
   "Test altodo--filter-invert-visibility."
   (with-temp-buffer
     (altodo-mode)
@@ -59,7 +58,7 @@
       
       (message "test-filter-invert-visibility: PASS"))))
 
-(defun test-filter-create-overlay ()
+(ert-deftest filter-helper-test-filter-create-overlay ()
   "Test altodo--filter-create-overlay."
   (with-temp-buffer
     (altodo-mode)
@@ -91,12 +90,5 @@
       
       (message "test-filter-create-overlay: PASS"))))
 
-(defun run-all-tests ()
-  "Run all unit tests."
-  (message "=== Running filter helper unit tests ===")
-  (test-filter-find-overlay)
-  (test-filter-invert-visibility)
-  (test-filter-create-overlay)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'filter-helper-test)
+;;; filter-helper-test.el ends here

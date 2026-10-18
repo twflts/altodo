@@ -1,7 +1,7 @@
 ;;; phase5-9-test.el --- Tests for Phase 5-9 tag-value filter -*- lexical-binding: t; -*-
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 ;;; Helper Functions Tests
 

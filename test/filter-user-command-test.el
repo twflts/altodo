@@ -1,7 +1,7 @@
 ;;; filter-user-command-test.el --- Tests for filter user commands
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 

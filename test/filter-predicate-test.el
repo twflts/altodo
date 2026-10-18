@@ -1,10 +1,9 @@
 ;;; filter-predicate-test.el --- Tests for filter predicate functions
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
-(defun test-line-done-p ()
+(ert-deftest filter-predicate-test-line-done-p ()
   "Test altodo--line-done-p."
   (with-temp-buffer
     (altodo-mode)
@@ -29,7 +28,7 @@
     
     (message "test-line-done-p: PASS")))
 
-(defun test-line-progress-p ()
+(ert-deftest filter-predicate-test-line-progress-p ()
   "Test altodo--line-progress-p."
   (with-temp-buffer
     (altodo-mode)
@@ -54,7 +53,7 @@
     
     (message "test-line-progress-p: PASS")))
 
-(defun test-line-open-p ()
+(ert-deftest filter-predicate-test-line-open-p ()
   "Test altodo--line-open-p."
   (with-temp-buffer
     (altodo-mode)
@@ -79,36 +78,36 @@
     
     (message "test-line-open-p: PASS")))
 
-(defun test-line-has-tag-p ()
+(ert-deftest filter-predicate-test-line-has-tag-p ()
   "Test altodo--line-has-tag-p."
   (with-temp-buffer
     (altodo-mode)
     (insert "[ ] Task without tag\n")
-    (insert "[ ] Task with @person tag\n")
-    (insert "[ ] Task with @work and @urgent tags\n")
+    (insert "[ ] Task with #person tag\n")
+    (insert "[ ] Task with #work and #urgent tags\n")
     
     ;; Line 1: no tag
     (goto-char (point-min))
     (when (altodo--line-has-tag-p "person")
-      (error "Line 1 should not have @person tag"))
+      (error "Line 1 should not have #person tag"))
     
     ;; Line 2: has @person
     (forward-line 1)
     (unless (altodo--line-has-tag-p "person")
-      (error "Line 2 should have @person tag"))
+      (error "Line 2 should have #person tag"))
     
-    ;; Line 3: has @work and @urgent
+    ;; Line 3: has @work and #urgent
     (forward-line 1)
     (unless (altodo--line-has-tag-p "work")
-      (error "Line 3 should have @work tag"))
+      (error "Line 3 should have #work tag"))
     (unless (altodo--line-has-tag-p "urgent")
-      (error "Line 3 should have @urgent tag"))
+      (error "Line 3 should have #urgent tag"))
     (when (altodo--line-has-tag-p "person")
-      (error "Line 3 should not have @person tag"))
+      (error "Line 3 should not have #person tag"))
     
     (message "test-line-has-tag-p: PASS")))
 
-(defun test-line-has-priority-p ()
+(ert-deftest filter-predicate-test-line-has-priority-p ()
   "Test altodo--line-has-priority-p."
   (with-temp-buffer
     (altodo-mode)
@@ -139,7 +138,7 @@
     
     (message "test-line-has-priority-p: PASS")))
 
-(defun test-line-has-star-p ()
+(ert-deftest filter-predicate-test-line-has-star-p ()
   "Test altodo--line-has-star-p."
   (with-temp-buffer
     (altodo-mode)
@@ -170,15 +169,5 @@
     
     (message "test-line-has-star-p: PASS")))
 
-(defun run-all-tests ()
-  "Run all predicate tests."
-  (message "=== Running filter predicate tests ===")
-  (test-line-done-p)
-  (test-line-progress-p)
-  (test-line-open-p)
-  (test-line-has-tag-p)
-  (test-line-has-priority-p)
-  (test-line-has-star-p)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'filter-predicate-test)
+;;; filter-predicate-test.el ends here

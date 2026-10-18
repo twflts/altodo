@@ -1,11 +1,10 @@
 ;;; fontlock-integration-test.el --- Integration tests for font-lock
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: Complex task with multiple elements
-(defun test-complex-task ()
+(ert-deftest fontlock-integration-test-complex-task ()
   "Test complex task with multiple face elements."
   (with-temp-buffer
     (altodo-mode)
@@ -23,7 +22,7 @@
     (message "test-complex-task: PASS")))
 
 ;; Test: Priority task with date
-(defun test-priority-task-with-date ()
+(ert-deftest fontlock-integration-test-priority-task-with-date ()
   "Test priority task with date."
   (with-temp-buffer
     (altodo-mode)
@@ -36,7 +35,7 @@
     (message "test-priority-task-with-date: PASS")))
 
 ;; Test: Done task with strikethrough
-(defun test-done-task-strikethrough ()
+(ert-deftest fontlock-integration-test-done-task-strikethrough ()
   "Test done task with strikethrough."
   (with-temp-buffer
     (altodo-mode)
@@ -49,7 +48,7 @@
     (message "test-done-task-strikethrough: PASS")))
 
 ;; Test: Multiline comment
-(defun test-multiline-comment ()
+(ert-deftest fontlock-integration-test-multiline-comment ()
   "Test multiline comment."
   (with-temp-buffer
     (altodo-mode)
@@ -64,7 +63,7 @@
     (message "test-multiline-comment: PASS")))
 
 ;; Test: Dependency tags
-(defun test-dependency-tags ()
+(ert-deftest fontlock-integration-test-dependency-tags ()
   "Test dependency tags."
   (with-temp-buffer
     (altodo-mode)
@@ -76,14 +75,5 @@
     
     (message "test-dependency-tags: PASS")))
 
-(defun run-all-tests ()
-  "Run all font-lock integration tests."
-  (message "=== Running font-lock integration tests ===")
-  (test-complex-task)
-  (test-priority-task-with-date)
-  (test-done-task-strikethrough)
-  (test-multiline-comment)
-  (test-dependency-tags)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'fontlock-integration-test)
+;;; fontlock-integration-test.el ends here

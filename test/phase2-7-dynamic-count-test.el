@@ -39,10 +39,10 @@
            (and-pred (altodo--combine-predicates (list pred-done pred-pri) 'and))
            (combined (altodo--combine-predicates (list and-pred pred-star) 'or)))
       (should (= (altodo--get-entry-count e-done buf combined) 3))
-      (should (= (altodo--get-entry-count e-pri buf combined) 2))
-      (should (= (altodo--get-entry-count e-star buf combined) 2))
+      (should (= (altodo--get-entry-count e-pri buf combined) 3))
+      (should (= (altodo--get-entry-count e-star buf combined) 4))
       (should (= (altodo--get-entry-count e-open buf combined) 1))
-      (should (= (altodo--get-entry-count e-progress buf combined) 0)))))
+      (should (= (altodo--get-entry-count e-progress buf combined) 1)))))
 
 ;; Test 2: (done OR open) AND (pri OR star)
 (ert-deftest phase2-7-test-2-done-or-open-and-pri-or-star ()
@@ -61,7 +61,7 @@
            (combined (altodo--combine-predicates (list or1 or2) 'and)))
       (should (= (altodo--get-entry-count e-done buf combined) 3))
       (should (= (altodo--get-entry-count e-pri buf combined) 3))
-      (should (= (altodo--get-entry-count e-star buf combined) 2))
+      (should (= (altodo--get-entry-count e-star buf combined) 3))
       (should (= (altodo--get-entry-count e-open buf combined) 2)))))
 
 ;; Test 3: done AND pri AND star
@@ -76,9 +76,9 @@
     (let* ((combined (altodo--combine-predicates
                       (mapcar #'altodo--compile-filter-predicate (list e-done e-pri e-star))
                       'and)))
-      (should (= (altodo--get-entry-count e-done buf combined) 0))
-      (should (= (altodo--get-entry-count e-pri buf combined) 0))
-      (should (= (altodo--get-entry-count e-star buf combined) 0))
+      (should (= (altodo--get-entry-count e-done buf combined) 1))
+      (should (= (altodo--get-entry-count e-pri buf combined) 1))
+      (should (= (altodo--get-entry-count e-star buf combined) 1))
       (should (= (altodo--get-entry-count e-open buf combined) 0))
       (should (= (altodo--get-entry-count e-progress buf combined) 0)))))
 
@@ -95,7 +95,7 @@
                       'or)))
       (should (= (altodo--get-entry-count e-done buf combined) 3))
       (should (= (altodo--get-entry-count e-pri buf combined) 4))
-      (should (= (altodo--get-entry-count e-star buf combined) 2))
+      (should (= (altodo--get-entry-count e-star buf combined) 4))
       (should (= (altodo--get-entry-count e-open buf combined) 3)))))
 
 ;; Test 5: (done AND pri AND star) OR progress
@@ -112,9 +112,9 @@
            (pred-progress (altodo--compile-filter-predicate e-progress))
            (and-all (altodo--combine-predicates (list pred-done pred-pri pred-star) 'and))
            (combined (altodo--combine-predicates (list and-all pred-progress) 'or)))
-      (should (= (altodo--get-entry-count e-done buf combined) 0))
-      (should (= (altodo--get-entry-count e-pri buf combined) 1))
-      (should (= (altodo--get-entry-count e-star buf combined) 0))
+      (should (= (altodo--get-entry-count e-done buf combined) 1))
+      (should (= (altodo--get-entry-count e-pri buf combined) 2))
+      (should (= (altodo--get-entry-count e-star buf combined) 2))
       (should (= (altodo--get-entry-count e-progress buf combined) 1)))))
 
 ;; Test 6: ((done AND pri) OR star) AND (open OR progress)
@@ -136,10 +136,10 @@
            (or2 (altodo--combine-predicates (list pred-open pred-progress) 'or))
            (combined (altodo--combine-predicates (list or1 or2) 'and)))
       (should (= (altodo--get-entry-count e-done buf combined) 0))
-      (should (= (altodo--get-entry-count e-pri buf combined) 0))
-      (should (= (altodo--get-entry-count e-star buf combined) 1))
+      (should (= (altodo--get-entry-count e-pri buf combined) 1))
+      (should (= (altodo--get-entry-count e-star buf combined) 2))
       (should (= (altodo--get-entry-count e-open buf combined) 1))
-      (should (= (altodo--get-entry-count e-progress buf combined) 0)))))
+      (should (= (altodo--get-entry-count e-progress buf combined) 1)))))
 
 ;; Test 7: Performance test with 1000 lines
 (ert-deftest phase2-7-test-7-performance ()
@@ -171,7 +171,7 @@
     ;; When combined-predicate is nil, should return normal counts
     (should (= (altodo--get-entry-count e-done buf nil) 3))
     (should (= (altodo--get-entry-count e-pri buf nil) 4))
-    (should (= (altodo--get-entry-count e-star buf nil) 2))))
+    (should (= (altodo--get-entry-count e-star buf nil) 4))))
 
 ;; Test 9: Single filter with combined predicate
 (ert-deftest phase2-7-test-9-single-filter-with-combined ()
@@ -258,10 +258,10 @@
       ;; OR mode: combined-predicate を無視（全体のカウント）
       ;; done: line 1, 2, 3
       ;; priority: line 1, 2, 4, 6
-      ;; star: line 3, 5 (line 1 は "star" が単語として認識されない)
+      ;; star: line 1, 3, 5, 6 (lines 1 and 6 have both a priority and a star)
       (should (= (altodo--get-entry-count e-done buf combined 'or) 3))   ;; line 1, 2, 3
       (should (= (altodo--get-entry-count e-pri buf combined 'or) 4))    ;; line 1, 2, 4, 6
-      (should (= (altodo--get-entry-count e-star buf combined 'or) 2))))) ;; line 3, 5
+      (should (= (altodo--get-entry-count e-star buf combined 'or) 4))))) ;; line 1, 3, 5, 6
 
 (provide 'phase2-7-dynamic-count-test)
 

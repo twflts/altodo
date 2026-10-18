@@ -1,0 +1,46 @@
+# Task States Test
+
+Tests all task state types: open, done, in-progress, waiting, cancelled.
+
+
+## Basic Task States
+
+[ ] Open task - not started yet
+[x] Done task - completed
+[@] In-progress task - currently working on this
+[w] Waiting task - blocked or on hold
+[~] Cancelled task - no longer needed
+
+
+## Nested Task States
+
+[ ] Parent open task
+    [ ] Child open task
+    [x] Child done task
+    [@] Child in-progress task
+    [w] Child waiting task
+    [~] Child cancelled task
+
+
+## Mixed States with Comments
+
+[ ] Task with single-line comment
+    /// This is a single-line comment
+[@] In-progress task with multi-line comment
+    This is the first line of multi-line comment.
+    This is the second line.
+    
+    This is the fourth line (third line is empty).
+[x] Completed task with timestamp #done:2026-02-15_10:30:00
+[~] Cancelled task with reason #done:2026-02-14_16:45:00
+    /// Cancelled because requirements changed
+
+
+## Deep Nesting
+
+[ ] Level 1 task
+    [ ] Level 2 task
+        [ ] Level 3 task
+            [ ] Level 4 task
+                [ ] Level 5 task
+                    [x] Level 6 completed task

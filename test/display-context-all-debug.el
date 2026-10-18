@@ -1,7 +1,7 @@
 ;; Debug test for :display-context all
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest display-context-all-with-comments ()
   "Test :display-context all shows comments"

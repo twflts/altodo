@@ -1,0 +1,125 @@
+# Markdown Integration Test
+
+Tests altodo format embedded in Markdown content.
+
+
+## Introduction
+
+This is a regular Markdown paragraph. It can contain **bold text**, *italic text*, 
+and `inline code`. altodo tasks can be embedded anywhere in the document.
+
+[ ] This is an altodo task in the middle of Markdown content
+
+
+## Code Blocks
+
+Markdown code blocks should not be interpreted as altodo:
+
+```
+[ ] This is NOT an altodo task (it's in a code block)
+/// This is NOT a comment (it's in a code block)
+    #tag is just text here
+```
+
+But outside the code block:
+
+[x] This IS an altodo task #real-tag
+
+
+## Inline Code
+
+Inline code should not be interpreted: `[ ] not a task` and `#not-a-tag`.
+
+But this is real: [ ] Real task with #real-tag
+
+
+## Lists
+
+Regular Markdown lists:
+
+- Item 1
+- Item 2
+  - Nested item
+
+altodo tasks:
+
+[ ] Task 1
+[ ] 
+[ ] Task 2
+    [ ] Nested task
+
+
+## Links and Images
+
+Regular Markdown link: [Example](https://example.com)
+
+[ ] Task with link: Check [documentation](https://docs.example.com) #work
+
+
+## Blockquotes
+
+> This is a blockquote.
+> It can contain multiple lines.
+
+[ ] Task after blockquote
+
+
+## Tables
+
+| Column 1 | Column 2 |
+|----------|----------|
+| Data 1   | Data 2   |
+
+[ ] Task after table
+
+
+## Horizontal Rules
+
+-----
+
+[ ] Task after horizontal rule
+
+-----
+
+
+## Mixed Content
+
+Here's a paragraph with **bold** and *italic* text.
+
+[ ] + Important task #urgent
+    Task details in multi-line comment.
+    More details here.
+    /// This task needs immediate attention
+
+Another paragraph with `inline code` and a [link](https://example.com).
+
+[ ] Task with inline markup __bold__ _italic_ **bold** *italic* `code`
+[@] In-progress task 2026-02-15 -> 2026-02-20 @john
+    [ ] Subtask 1
+    [ ] Subtask 2
+
+Final paragraph.
+
+
+## Indented Tasks Are Never Markdown Code Blocks
+
+In Markdown, a line indented by 4 spaces after a blank line is a code block. altodo uses
+indentation for nesting, so the indented task lines below are tasks (check the faces and
+that C-c C-x toggles them).
+
+[ ] Parent task
+
+    [ ] Child task after a blank line
+    
+        [ ] Grandchild task after a space-only line
+
+
+## Fenced Code Blocks Inside Comments
+
+[ ] Task with a code sample
+    Run this:
+    ```elisp
+    (altodo-mode)
+    [ ] this line is text inside the code block
+    ```
+    After the block, the comment continues.

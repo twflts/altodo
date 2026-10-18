@@ -1,11 +1,10 @@
 ;;; fontlock-matcher-test.el --- Tests for font-lock matcher functions
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: altodo--start-date-matcher
-(defun test-start-date-matcher ()
+(ert-deftest fontlock-matcher-test-start-date-matcher ()
   "Test altodo--start-date-matcher."
   (with-temp-buffer
     (altodo-mode)
@@ -27,7 +26,7 @@
     (message "test-start-date-matcher: PASS")))
 
 ;; Test: altodo--due-date-matcher
-(defun test-due-date-matcher ()
+(ert-deftest fontlock-matcher-test-due-date-matcher ()
   "Test altodo--due-date-matcher."
   (with-temp-buffer
     (altodo-mode)
@@ -49,7 +48,7 @@
     (message "test-due-date-matcher: PASS")))
 
 ;; Test: altodo--tag-matcher
-(defun test-tag-matcher ()
+(ert-deftest fontlock-matcher-test-tag-matcher ()
   "Test altodo--tag-matcher."
   (with-temp-buffer
     (altodo-mode)
@@ -71,7 +70,7 @@
     (message "test-tag-matcher: PASS")))
 
 ;; Test: altodo--person-tag-matcher
-(defun test-person-tag-matcher ()
+(ert-deftest fontlock-matcher-test-person-tag-matcher ()
   "Test altodo--person-tag-matcher."
   (with-temp-buffer
     (altodo-mode)
@@ -93,7 +92,7 @@
     (message "test-person-tag-matcher: PASS")))
 
 ;; Test: altodo--multiline-comment-matcher-new
-(defun test-multiline-comment-matcher-new ()
+(ert-deftest fontlock-matcher-test-multiline-comment-matcher-new ()
   "Test altodo--multiline-comment-matcher-new."
   (with-temp-buffer
     (altodo-mode)
@@ -109,14 +108,5 @@
     
     (message "test-multiline-comment-matcher-new: PASS")))
 
-(defun run-all-tests ()
-  "Run all matcher function tests."
-  (message "=== Running font-lock matcher tests ===")
-  (test-start-date-matcher)
-  (test-due-date-matcher)
-  (test-tag-matcher)
-  (test-person-tag-matcher)
-  (test-multiline-comment-matcher-new)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'fontlock-matcher-test)
+;;; fontlock-matcher-test.el ends here

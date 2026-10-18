@@ -386,6 +386,13 @@ alist 形式で複数の変数を指定可能：
 - フラグの後に半角スペースが必要
 
 
+#### スターと優先度の併用
+
+- 併用できる。順序は任意で、それぞれ 1 行に 1 つまでである
+- コマンド（`altodo-set-priority-1`〜`3`、`altodo-toggle-star-flag`）は、スター、優先度の順に書く。もう一方のフラグは保持する
+- 解析は `altodo--parse-flags` が行う
+
+
 #### 優先度フラグ
 
 - フラグ: `!`, `!!`, `!!!`
@@ -555,6 +562,10 @@ alist 形式で複数の変数を指定可能：
 - altodo-mode バッファ内で `markdown-pre-face` が適用されなくなる
 - altodo ファイルではインデント済みコードブロック（Markdown 仕様）は使用しないため、影響なし
 - `syntax-propertize-function` には手を加えないため、Emacs の設計原則に反しない
+
+---
+
+**補足**: タスク行・一行コメント行・複数行コメントの判定（`altodo--task-p`、`altodo--comment-p`、`altodo--multiline-comment-p`）は、フェンス付きコードブロックの内側かどうかだけを調べる（`altodo--in-fenced-code-block-p`）。インデント付きコードブロックとしては扱わない。altodo はネストと複数行コメントをインデントで表すためである。
 
 ---
 

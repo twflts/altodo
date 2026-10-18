@@ -1,0 +1,89 @@
+# Unicode and Multilingual Test
+
+Tests altodo format with various Unicode characters and languages.
+
+
+## ASCII Only
+
+[ ] Basic ASCII task
+[ ] Task with numbers 1234567890
+[ ] Task with symbols !@#$%^&*()
+
+
+## Japanese (日本語)
+
+[ ] 日本語のタスク #仕事
+[ ] サンプルさんに確認する @サンプルさん
+[ ] ドキュメント作成 2026-03-01 -> 2026-03-31
+    複数行コメントも日本語で書けます。
+    二行目のコメント。
+    /// これは日本語のコメントです
+
+
+## Chinese (中文)
+
+[ ] 中文任务 #工作
+[ ] 联系张三 @张三
+[ ] 完成文档 -> 2026-06-30
+
+
+## Korean (한국어)
+
+[ ] 한국어 작업 #업무
+[ ] 홍길동에게 연락 @홍길동
+[ ] 문서 작성 2026-02-15 ->
+
+
+## Emoji
+
+[ ] Task with emoji 📝 #work
+[ ] Meeting 🤝 @john @mary
+[ ] Celebration 🎉 #milestone
+[ ] Bug fix 🐛 -> 2026-02-20
+
+
+## Mixed Languages
+
+[ ] English and 日本語 mixed task
+[ ] Task with multiple languages: English, 日本語, 中文, 한국어
+[ ] Multilingual tags #english (non-ASCII tags like #日本語 #中文 #한국어 are NOT valid)
+[ ] Tag with non-ASCII value #lang:日本語 #country:中国 #region:한국 (values allow non-ASCII)
+
+
+## Special Unicode Characters
+
+[ ] Task with arrows → ← ↑ ↓
+[ ] Task with symbols © ® ™ § ¶
+[ ] Task with math symbols ∑ ∏ ∫ √
+[ ] Task with currency ¥ € £ $
+
+
+## Right-to-Left Languages (Arabic)
+
+[ ] مهمة عربية #عمل
+[ ] اتصل بالعميل @العميل
+
+
+## Cyrillic (Russian)
+
+[ ] Русская задача #работа
+[ ] Связаться с Иваном @Иван
+
+
+## Greek
+
+[ ] Ελληνική εργασία #εργασία
+[ ] Επικοινωνία με τον Γιάννη @Γιάννης
+
+
+## Complex Combinations
+
+[ ] + 重要なタスク #urgent #日本語
+    詳細な説明をここに記載します。
+    
+    複数行にわたるコメント。
+    /// このタスクは優先度が高いです
+[ ] !! 긴급 작업 2026-02-15 -> 2026-02-20 @홍길동
+[ ] Task with emoji and Japanese 📝 日本語 #work
+[x] Completed multilingual task #done:2026-02-15_10:00:00
+    /// English, 日本語, 中文, 한국어 all supported

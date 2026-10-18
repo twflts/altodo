@@ -1,7 +1,7 @@
 ;; Debug test for heading spacing - detailed
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest heading-spacing-debug-detailed ()
   "Debug heading spacing in detail"

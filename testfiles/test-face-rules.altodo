@@ -1,0 +1,52 @@
+# Face Rules Test (counts for the sidebar face rules)
+
+This file has fixed numbers of tasks so that the sidebar entries of the group
+"Face Rules" in `.altodo-locals.el_` show known counts:
+
+| Entry | Count | Expected color |
+|---|---|---|
+| Done (Color by Count) | 5 | red (>= 5) |
+| Open (Title Color) | 10 | red (>= 5) |
+| Priority (Count Color) | 2 | orange for the count only |
+| Star (Both Colors) | 3 | gold title, red count |
+
+Use: copy `.altodo-locals.el_` next to this file as `.altodo-locals.el`, open
+this file, and run `M-x altodo-sidebar-show`.
+
+## Test Cases for :face-rules and :count-face-rules
+
+### Done Tasks (for :face-rules testing)
+
+[x] Done task 1
+[x] Done task 2
+[x] Done task 3
+[x] Done task 4
+[x] Done task 5
+
+### Open Tasks (for :face-rules testing)
+
+[ ] Open task 1
+[ ] Open task 2
+[ ] Open task 3
+[ ] Open task 4
+[ ] Open task 5
+[ ] Open task 6
+[ ] Open task 7
+[ ] Open task 8
+[ ] Open task 9
+[ ] Open task 10
+
+### Priority Tasks (for :count-face-rules testing)
+
+[ ] ! Priority task 1
+[ ] ! Priority task 2
+
+### Star Tasks (for both :face-rules and :count-face-rules testing)
+
+[ ] + star 1
+
+### Mixed Tasks
+
+[x] + Done and starred
+[ ] ! Open and priority
+[@] ! In progress and priority

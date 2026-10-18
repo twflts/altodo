@@ -1,0 +1,112 @@
+# Comments Test
+
+Tests single-line comments (`///`) and multi-line comments.
+The rule (doc/altodo_spec.md, 3.2.3): the first line of a multi-line comment is indented by exactly the previous task / `///` line + 4 spaces. The same indentation continues the comment.
+
+
+## Single-Line Comments
+
+/// This is a standalone single-line comment
+[ ] Task with a single-line comment below
+    /// This is a note for the task above
+[ ] + Task with a starred note
+    /// + A single-line comment can have a flag
+    /// !! Even a priority flag
+
+
+## Nested Single-Line Comments
+
+[ ] + Parent task -> 2099-10-10
+    /// Comment for parent
+    [ ] + Child task -> 2099-10-10
+        /// Comment for child
+        [ ] + Grandchild task -> 2099-10-10
+            /// Comment for grandchild
+
+
+## Multi-Line Comments (OK)
+
+[ ] + Task with multi-line comment
+    This is the first line of the comment.
+    This is the second line.
+    This is the third line.
+
+[ ] Task with Markdown in the comment
+    A **bold** word, an *italic* word and `inline code`.
+    - list item 1
+    - list item 2
+    1. numbered item
+    [A link](https://example.com) is a comment line, not a task.
+    ```
+    [ ] a task-like line in a fenced code block is comment text
+    ```
+
+
+## Multi-Line Comments with Empty Lines (OK)
+
+The line below the second one has only spaces (4 of them), so the comment continues.
+
+[ ] + Task with space-only lines in the comment
+    First line of comment.
+    Second line of comment.
+    
+    Fourth line (third line contains only spaces).
+    Fifth line.
+
+
+## Nested Multi-Line Comments (OK)
+
+[ ] Parent task
+    Parent task comment line 1.
+    Parent task comment line 2.
+    [ ] Child task
+        Child task comment line 1.
+        Child task comment line 2.
+        
+        Child task comment line 4.
+
+
+## Description and Note (OK)
+
+The description comes first (part of the task). The `///` note follows (detached note).
+
+[ ] Task with a description and a note
+    This is the description of the task.
+    It is part of the task definition.
+    /// This is a note, not part of the task.
+        A multi-line comment under a note: the note's indentation + 4 spaces.
+
+
+## Not Multi-Line Comments (NG)
+
+The lines marked "NG" must look like normal Markdown text, not like comments.
+
+[ ] Parent task
+    [ ] Child task
+    NG: same indentation as the child task (not child + 4 spaces).
+
+[ ] Task with a comment that is too deep
+            NG: task + 12 spaces (not task + 4 spaces).
+
+[ ] Task with a comment after an empty line
+    OK: the first comment line.
+
+    NG: the line above is completely empty (zero characters), so the comment ended.
+
+[ ] Task with a note
+    /// A note
+    NG: same indentation as the note (not note + 4 spaces).
+
+[ ] Task whose comment has a deeper line
+    OK: comment line.
+        NG: deeper indentation (for example a nested list) is not part of the comment.
+
+NG: this line has no indentation, so it is normal text.
+
+
+## Comments with Special Characters (OK)
+
+[ ] Task with special chars in comment
+    Comment with symbols: !@#$%^&*()
+    Comment with numbers: 1234567890
+    Comment with punctuation: .,;:'"?!

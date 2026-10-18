@@ -2,12 +2,15 @@
 
 (require 'ert)
 (require 'altodo)
+(add-to-list 'load-path
+             (file-name-directory (or load-file-name buffer-file-name)))
+(require 'altodo-test-helper)
 
 ;;; Test 1: Load test-sample-project.altodo and show sidebar
 
 (ert-deftest altodo-test-phase2-1-mcp-real-load-and-show ()
   "Test loading test-sample-project.altodo and showing sidebar."
-  (let ((test-file "/work/emacs/altodo/testfiles/test-sample-project.altodo"))
+  (let ((test-file (altodo-test-file "testfiles/test-sample-project.altodo")))
     (should (file-exists-p test-file))
     
     (let ((buffer (find-file-noselect test-file)))
@@ -31,7 +34,7 @@
 
 (ert-deftest altodo-test-phase2-1-mcp-real-sidebar-structure ()
   "Test sidebar buffer has correct structure."
-  (let ((test-file "/work/emacs/altodo/testfiles/test-sample-project.altodo"))
+  (let ((test-file (altodo-test-file "testfiles/test-sample-project.altodo")))
     (should (file-exists-p test-file))
     
     (let ((buffer (find-file-noselect test-file)))
@@ -55,7 +58,7 @@
 
 (ert-deftest altodo-test-phase2-1-mcp-real-multiple-buffers ()
   "Test multiple buffers with independent sidebars."
-  (let ((test-file "/work/emacs/altodo/testfiles/test-sample-project.altodo"))
+  (let ((test-file (altodo-test-file "testfiles/test-sample-project.altodo")))
     (should (file-exists-p test-file))
     
     ;; Create two different buffers

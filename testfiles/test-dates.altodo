@@ -1,0 +1,84 @@
+# Dates Test (Start Date and Due Date)
+
+Tests date formats: start date, due date, and date ranges.
+
+The dates in this file are fixed (the "today" of this file is 2026-02-23), so the
+date faces depend on the day you open it. For dates relative to today, run
+`scripts/gen-testfiles.sh` and open `testfiles/generated/test-dates-relative.altodo`.
+
+
+## Start Date Only
+
+[ ] Task starting on specific date 2026-03-01 ->
+[ ] Task started yesterday 2026-02-22 ->
+[ ] Task starting next week 2026-03-03 ->
+[ ] Task started last month 2025-01-15 ->
+
+
+## Due Date Only
+
+[ ] Task with deadline -> 2026-06-30
+[ ] Urgent task overdue -> 2026-02-20
+[ ] Task due today -> 2026-02-23
+[ ] Task due tomorrow -> 2026-02-24
+[ ] Task due next week -> 2026-03-02
+
+
+## Date Range (Start and Due)
+
+[ ] Project task 2026-03-01 -> 2026-05-31
+[ ] Short task 2026-02-15 -> 2026-02-20
+[ ] Long-term task 2026-01-01 -> 2026-12-31
+[ ] Task started, due soon 2026-02-20 -> 2026-02-25
+[ ] Task starting soon, due later 2026-02-25 -> 2026-03-15
+
+
+## Dates in Nested Tasks
+
+[ ] Parent task 2026-03-01 -> 2026-06-30
+    [ ] Child task with own dates 2026-03-15 -> 2026-04-15
+    [ ] Child task with due date only -> 2026-05-01
+[ ] Child task with start date only 2026-04-01 ->
+    [ ] Child task overdue -> 2026-02-15
+    [ ] Child task started 2026-03-15 -> 2026-03-20
+
+
+## Dates in Headings
+
+### Q1 Planning 2026-01-01 -> 2026-03-31
+
+[ ] Task under Q1 heading 2026-02-01 -> 2026-02-28
+
+
+### Sprint Review -> 2026-02-28
+
+[ ] Prepare review materials 2026-02-20 -> 2026-02-27
+
+
+## Dates with Other Elements
+
+[ ] Task with date and tags 2026-03-01 -> 2026-03-31 #project:alpha #urgent
+[ ] + Starred task with date 2026-02-15 -> 2026-02-20
+[x] ! Priority task with deadline -> 2026-02-25 #done:2026-03-04T09:10:05+09:00
+[@] In-progress task 2026-02-10 -> 2026-02-20 @john
+
+[~] Cancelled task 2026-02-01 -> 2026-02-15
+
+
+## Edge Cases for Date Filters
+
+
+[ ] Task due within 30 days -> 2026-03-20
+[ ] Task started 3 days ago 2026-02-20 ->
+[ ] Task started 10 days ago 2026-02-13 ->
+[ ] Task due this week -> 2026-02-28
+[ ] Task due this month -> 2026-02-28
+[ ] Task starting this week 2026-02-27 ->
+[ ] Task starting this month 2026-02-28 ->
+
+
+## Invalid Date Examples (should be treated as normal text)
+
+[ ] Invalid format 2026/03/01 -> (slash instead of hyphen)
+[ ] Missing arrow 2026-03-01 2026-03-31
+[ ] Incomplete date 2026-03 ->

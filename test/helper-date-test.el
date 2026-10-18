@@ -1,11 +1,10 @@
 ;;; helper-date-test.el --- Tests for date helper functions
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: altodo--parse-date
-(defun test-parse-date ()
+(ert-deftest helper-date-test-parse-date ()
   "Test altodo--parse-date."
   ;; Test 1: ISO 8601 format (returns time value)
   (let ((result (altodo--parse-date "2026-02-21")))
@@ -25,7 +24,7 @@
   (message "test-parse-date: PASS"))
 
 ;; Test: altodo--today-start
-(defun test-today-start ()
+(ert-deftest helper-date-test-today-start ()
   "Test altodo--today-start."
   ;; Test 1: returns time value (list)
   (let ((result (altodo--today-start)))
@@ -40,7 +39,7 @@
   (message "test-today-start: PASS"))
 
 ;; Test: altodo--days-diff
-(defun test-days-diff ()
+(ert-deftest helper-date-test-days-diff ()
   "Test altodo--days-diff."
   ;; Test 1: same date (today)
   (let ((result (altodo--days-diff (altodo--today-start))))
@@ -64,7 +63,7 @@
   (message "test-days-diff: PASS"))
 
 ;; Test: altodo--determine-start-date-face
-(defun test-determine-start-date-face ()
+(ert-deftest helper-date-test-determine-start-date-face ()
   "Test altodo--determine-start-date-face."
   ;; Test 1: past date (started)
   (let ((result (altodo--determine-start-date-face "2020-01-01")))
@@ -86,7 +85,7 @@
   (message "test-determine-start-date-face: PASS"))
 
 ;; Test: altodo--determine-due-date-face
-(defun test-determine-due-date-face ()
+(ert-deftest helper-date-test-determine-due-date-face ()
   "Test altodo--determine-due-date-face."
   ;; Test 1: far past (overdue)
   (let ((result (altodo--determine-due-date-face "2020-01-01")))
@@ -107,14 +106,5 @@
   
   (message "test-determine-due-date-face: PASS"))
 
-(defun run-all-tests ()
-  "Run all date helper tests."
-  (message "=== Running date helper tests ===")
-  (test-parse-date)
-  (test-today-start)
-  (test-days-diff)
-  (test-determine-start-date-face)
-  (test-determine-due-date-face)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'helper-date-test)
+;;; helper-date-test.el ends here

@@ -1,7 +1,7 @@
 ;;; task-operation-test.el --- Tests for task operation functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 

@@ -1,7 +1,7 @@
 ;;; input-test.el --- Tests for input functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 

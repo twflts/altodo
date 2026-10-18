@@ -1,0 +1,78 @@
+# Special Tags Test
+
+Tests special tags: #id, #dep, #group-start, #group-due, @person, #done.
+
+
+## ID and Dependency Tags
+
+[ ] Task with unique ID #id:task-001
+[ ] Task depending on task-001 #dep:task-001
+[ ] Another dependent task #dep:task-001
+[ ] Task with UUID #id:7d444840-9dc0-11d1-b245-5ffdce74fad2
+[ ] Orphaned dependency (no matching ID) #dep:nonexistent-id
+
+
+## Group Start Tag
+
+[ ] Project A #group-start:2026-03-01
+    [ ] Subtask 1 (covered by the parent's #group-start)
+    [ ] Subtask 2 (covered by the parent's #group-start)
+    [ ] Subtask 3 (covered by the parent's #group-start)
+
+
+## Group Due Tag
+
+[ ] Project B #group-due:2026-06-30
+    [ ] Subtask 1 (covered by the parent's #group-due)
+    [ ] Subtask 2 (covered by the parent's #group-due)
+    [ ] Subtask 3 (covered by the parent's #group-due)
+
+
+## Combined Group Tags
+
+[ ] Project C #group-start:2026-04-01 #group-due:2026-09-30
+    /// The parent's tags give the start and due date of the whole group,
+    /// so the subtasks need no dates of their own.
+    [ ] Design phase
+    [ ] Implementation phase
+    [ ] Testing phase
+
+
+## Person/Location Tags (@person)
+
+[ ] Review code @john
+[ ] Meeting @mary @office
+[ ] Buy supplies @store
+[ ] Call client @john-doe
+[ ] Visit site @tokyo @japan
+
+
+## Done Tag
+
+[x] Completed task #done:2026-02-15
+[x] Completed with timestamp #done:2026-02-15_14:30:00
+[x] Completed with unixtime #done:1739635200
+[~] Cancelled task #done:2026-02-14
+
+
+## Complex Combinations
+
+[ ] Complex task #id:complex-001 #group-start:2026-03-01 #group-due:2026-06-30
+    [ ] Subtask A @john #dep:complex-001
+    [ ] Subtask B @mary 2026-04-01 -> 2026-05-01
+    [x] Subtask C completed #done:2026-02-15_10:00:00
+
+
+## Sequential Tasks (#seq-tasks)
+
+Each child can start only after the previous sibling is done or cancelled.
+
+[@] Sequential parent #seq-tasks
+    [x] Step 1 (done, so step 2 is ready)
+    [ ] Step 2 (ready)
+    [ ] Step 3 (blocked by step 2)
+    [ ] Step 4 (blocked by step 3)
+
+[ ] Not sequential: #seq-tasks-like is a different tag, not #seq-tasks
+    [ ] Child A
+    [ ] Child B

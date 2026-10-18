@@ -3,7 +3,7 @@
 ;;; Code:
 
 (require 'ert)
-(load-file "/work/emacs/altodo/altodo.el")
+(require 'altodo)
 
 ;;; Test: altodo--combine-predicates
 

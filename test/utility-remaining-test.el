@@ -1,7 +1,7 @@
 ;;; utility-remaining-test.el --- Tests for remaining utility functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest test-format-to-regex ()
   (let ((result (altodo--format-to-regex "%Y-%m-%d")))

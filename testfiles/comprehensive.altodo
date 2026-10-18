@@ -1,0 +1,124 @@
+# Java Project Development - Comprehensive Test
+
+This file tests all altodo features in a realistic Java project context.
+
+
+## Project Setup #project:setup
+
+[ ] Initialize project repository #id:setup-001
+    [ ] Create #git repository 
+    [ ] Setup .gitignore for #java
+    [ ] Configure Maven/Gradle build
+[ ] Setup development environment 2026-02-15 -> 2026-02-20
+    [ ] Install JDK 17
+    [ ] Configure IDE (IntelliJ IDEA)
+    [ ] Setup code formatter
+
+
+## Requirements Analysis #phase:requirements
+
+[@] + Gather requirements from stakeholders @john @mary
+    Requirements gathering is in progress.
+    Meeting scheduled for next week.
+    
+    Need to confirm the scope with the team.
+[ ] ! Document functional requirements -> 2026-03-01
+[ ] !! Document non-functional requirements -> 2026-03-01
+[ ] !!! Review requirements with client @john -> 2026-03-05
+
+
+## Design Phase #group-start:2026-03-06 #group-due:2026-03-31
+
+[ ] + System architecture design #id:design-001
+    /// High-level architecture diagram needed
+    [ ] Design #database schema
+        [ ] Define entity relationships
+        [ ] Create ER #diagram
+    [ ] Design REST #API endpoints
+        API design should follow RESTful principles.
+        Use OpenAPI 3.0 specification.
+    [ ] Design authentication flow
+[w] UI/UX design waiting for designer @designer
+[ ] Create class diagrams #dep:design-001
+
+
+## Implementation #phase:implementation
+
+### Backend Development #group-start:2026-04-01 #group-due:2026-05-31
+
+[ ] Setup Spring Boot project #id:backend-001
+    [ ] Configure application.properties
+    [ ] Setup #database connection
+    [ ] Configure logging
+[ ] Implement domain models
+    [ ] User entity
+    [ ] Product entity
+    [ ] Order entity
+[ ] Implement repositories #dep:backend-001
+    [ ] UserRepository
+    [ ] ProductRepository
+    [ ] OrderRepository
+[@] Implement service layer @john
+    Currently implementing business logic.
+    Need to add validation.
+    [ ] UserService
+    [ ] ProductService
+    [x] OrderService #done:2026-02-14_15:30:00
+[ ] ! Implement REST controllers -> 2026-05-15
+[ ] !! Add input validation -> 2026-05-15
+[ ] !!! Implement error handling -> 2026-05-15
+
+
+### Frontend Development #group-start:2026-04-15 #group-due:2026-06-15
+
+[ ] Setup React project #id:frontend-001
+[ ] Implement components #dep:frontend-001
+    [ ] Login component
+    [ ] #dashboard component
+    [ ] Product list component
+[ ] Implement state management
+    [ ] Setup Redux store
+    [ ] Create actions and reducers
+[ ] Integrate with backend API
+
+
+## Testing #phase:testing
+
+[ ] + Write unit tests #id:test-001
+    /// Target: 80% code coverage
+    [ ] Backend unit tests
+        [ ] Service layer tests
+        [ ] Repository tests
+    [ ] Frontend unit tests
+        [ ] Component tests
+        [ ] Reducer tests
+[ ] Write integration tests #dep:test-001
+[ ] Perform manual testing @qa-team
+[w] Waiting for test environment setup @devops
+
+
+## Deployment #phase:deployment
+
+[ ] Setup CI/CD pipeline 2026-06-01 -> 2026-06-10
+    [ ] Configure #git and GitHub Actions and #java
+    [ ] Setup automated testing
+    [ ] Configure deployment scripts
+[ ] Deploy to staging environment @devops
+[ ] Perform smoke testing on staging
+[ ] Deploy to production @devops @john
+
+
+## Documentation #group-due:2026-06-30
+
+[ ] Write #API documentation
+[ ] Write user manual
+[ ] Write deployment guide
+[x] Write README.md #done:2026-02-15
+
+
+## Completed Tasks
+
+[x] Initial project planning #done:2026-02-10_10:00:00
+[x] Team kickoff meeting @john @mary @designer #done:2026-02-12_14:00:00
+[~] Consider using MongoDB #done:2026-02-13
+    /// Decided to use PostgreSQL instead

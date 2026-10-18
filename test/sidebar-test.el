@@ -2,19 +2,20 @@
 
 (require 'ert)
 (require 'altodo)
+(add-to-list 'load-path
+             (file-name-directory (or load-file-name buffer-file-name)))
+(require 'altodo-test-helper)
 
 (ert-deftest altodo-sidebar-test-load-locals ()
   "Test loading .altodo-locals.el file."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let ((locals (altodo--load-locals-file)))
       (should locals)
       (should (assq 'altodo-filter-patterns locals)))))
 
 (ert-deftest altodo-sidebar-test-get-filter-patterns ()
   "Test getting filter patterns from .altodo-locals.el."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let ((patterns (altodo--get-filter-patterns)))
       (should patterns)
       (should (listp patterns))
@@ -23,8 +24,7 @@
 
 (ert-deftest altodo-sidebar-test-make-config ()
   "Test creating sidebar config."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let ((config (altodo-sidebar-make-config)))
       (should config)
       (should (plist-get config :name))
@@ -44,8 +44,7 @@
 
 (ert-deftest altodo-sidebar-test-pattern-types ()
   "Test all pattern types are loaded correctly."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let* ((patterns (altodo--get-filter-patterns))
            (types (delete-dups (mapcar (lambda (p) (plist-get p :type)) patterns))))
       (should (member 'search-simple types))
@@ -56,8 +55,7 @@
 
 (ert-deftest altodo-sidebar-test-search-simple-patterns ()
   "Test search-simple patterns."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let* ((patterns (altodo--get-filter-patterns))
            (simple-patterns (cl-remove-if-not
                              (lambda (p) (eq (plist-get p :type) 'search-simple))
@@ -69,8 +67,7 @@
 
 (ert-deftest altodo-sidebar-test-search-lambda-patterns ()
   "Test search-lambda patterns."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let* ((patterns (altodo--get-filter-patterns))
            (lambda-patterns (cl-remove-if-not
                              (lambda (p) (eq (plist-get p :type) 'search-lambda))
@@ -82,8 +79,7 @@
 
 (ert-deftest altodo-sidebar-test-group-header-patterns ()
   "Test group-header patterns."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let* ((patterns (altodo--get-filter-patterns))
            (group-patterns (cl-remove-if-not
                             (lambda (p) (eq (plist-get p :type) 'group-header))
@@ -95,8 +91,7 @@
 
 (ert-deftest altodo-sidebar-test-command-patterns ()
   "Test command patterns."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let* ((patterns (altodo--get-filter-patterns))
            (command-patterns (cl-remove-if-not
                               (lambda (p) (eq (plist-get p :type) 'command))
@@ -108,8 +103,7 @@
 
 (ert-deftest altodo-sidebar-test-nesting ()
   "Test nesting levels."
-  (with-temp-buffer
-    (setq buffer-file-name (expand-file-name "testfiles/test.altodo"))
+  (altodo-test-with-locals
     (let* ((patterns (altodo--get-filter-patterns))
            (nest-0 (cl-remove-if-not (lambda (p) (= (or (plist-get p :nest) 0) 0)) patterns))
            (nest-1 (cl-remove-if-not (lambda (p) (= (or (plist-get p :nest) 0) 1)) patterns)))

@@ -1,7 +1,7 @@
 ;; Test for blank line collapse feature
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest blank-line-collapse-consecutive-blanks ()
   "Test collapsing consecutive blank lines"

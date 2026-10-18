@@ -1,7 +1,7 @@
 ;; Test for normal text detection and heading range lines
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest normal-text-p-task-line ()
   "Test that task lines are not normal text"

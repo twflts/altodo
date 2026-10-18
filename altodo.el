@@ -208,9 +208,9 @@ If nil, use UTC."
   'uuid         - Full UUIDv7 (36 chars): 0698bf56-7d70-7000-aebc-0a374ec80ec5
   'base62       - Base62 encoded UUID (21 chars): CRl6Njdf8iwWyyc32HW2H
   'short        - Short ID, sortable (15 chars): eBnPYIBatZhU1lG
-  'short-random - Short ID, random first (15 chars): atZhU1lGeBnPYIB
+  'short-random - Short ID, random first (up to 16 chars): atZhU1lGeBnPYIB
   'tiny         - Tiny ID, sortable (10 chars): 2C47gz6WJT
-  'tiny-random  - Tiny ID, random first (10 chars): 6WJT2C47gz"
+  'tiny-random  - Tiny ID, random first (up to 10 chars): 6WJT2C47gz"
   :type '(choice (const :tag "Full UUIDv7 (36 chars)" uuid)
                  (const :tag "Base62 encoded (21 chars)" base62)
                  (const :tag "Short ID, sortable (15 chars)" short)
@@ -879,25 +879,41 @@ Returns face symbol or face list."
 Returns (regex-parse regex-match year-idx month-idx day-idx).
 regex-parse: with capture groups for parsing
 regex-match: without capture groups for font-lock matching"
-  (let ((regex format-str)
-        (year-idx 0)
-        (month-idx 0)
-        (day-idx 0)
-        (group-count 0))
-    (when (string-match "%Y" regex)
-      (setq group-count (1+ group-count))
-      (setq year-idx group-count)
-      (setq regex (replace-regexp-in-string "%Y" "\\\\([0-9]\\\\{4\\\\}\\\\)" regex t t)))
-    (when (string-match "%m" regex)
-      (setq group-count (1+ group-count))
-      (setq month-idx group-count)
-      (setq regex (replace-regexp-in-string "%m" "\\\\([0-9]\\\\{2\\\\}\\\\)" regex t t)))
-    (when (string-match "%d" regex)
-      (setq group-count (1+ group-count))
-      (setq day-idx group-count)
-      (setq regex (replace-regexp-in-string "%d" "\\\\([0-9]\\\\{2\\\\}\\\\)" regex t t)))
-    (let ((regex-match (replace-regexp-in-string "\\\\(" "\\\\(?:" regex nil t)))
-      (list regex regex-match year-idx month-idx day-idx))))
+  (let ((pos 0)
+        (group-count 0)
+        (regex-parse "")
+        (regex-match "")
+        (year-idx nil)
+        (month-idx nil)
+        (day-idx nil))
+    ;; Literal text between specifiers is quoted, and group numbers follow
+    ;; the order in which the specifiers appear in FORMAT-STR.
+    (while (string-match "%[Ymd]" format-str pos)
+      (let* ((spec (aref format-str (1+ (match-beginning 0))))
+             (literal (regexp-quote
+                       (substring format-str pos (match-beginning 0))))
+             (digits (if (eq spec ?Y) "[0-9]\\{4\\}" "[0-9]\\{2\\}")))
+        (setq group-count (1+ group-count))
+        (pcase spec
+          (?Y (setq year-idx group-count))
+          (?m (setq month-idx group-count))
+          (?d (setq day-idx group-count)))
+        (setq regex-parse (concat regex-parse literal "\\(" digits "\\)")
+              regex-match (concat regex-match literal "\\(?:" digits "\\)")
+              pos (match-end 0))))
+    (let ((tail (regexp-quote (substring format-str pos))))
+      (list (concat regex-parse tail) (concat regex-match tail)
+            year-idx month-idx day-idx))))
+
+(defun altodo--normalize-date-string (date-str)
+  "Return DATE-STR in YYYY-MM-DD form, or nil if it cannot be parsed.
+DATE-STR is written in the format of `altodo-date-format'."
+  (let ((regex-info (altodo--date-regex-info)))
+    (when (string-match (nth 0 regex-info) date-str)
+      (format "%s-%s-%s"
+              (match-string (nth 2 regex-info) date-str)
+              (match-string (nth 3 regex-info) date-str)
+              (match-string (nth 4 regex-info) date-str)))))
 
 (defun altodo--date-regex-info ()
   "Return date regex info (regex-parse regex-match year-idx month-idx day-idx)."
@@ -1255,20 +1271,20 @@ Flags override tags to ensure consistent highlighting."
     (altodo--start-not-yet-text-matcher . (1 'altodo-start-not-yet-text-face prepend))
     
     ;; 6. 優先度フラグ（3段階）
-    (,(format "^[ ]*\\[.\\][ ]*\\(%s\\{3,\\}\\) \\(.*\\)" (regexp-quote altodo-flag-priority)) .
+    (,(format "^[ ]*\\[.\\][ ]*\\(?:%s \\)?\\(%s\\{3,\\}\\) \\(.*\\)" (regexp-quote altodo-flag-star) (regexp-quote altodo-flag-priority)) .
      ((1 'altodo-flag-priority3-face t)
       (2 'altodo-flag-priority3-text-face prepend)))
     
-    (,(format "^[ ]*\\[.\\][ ]*\\(%s\\{2\\}\\) \\(.*\\)" (regexp-quote altodo-flag-priority)) .
+    (,(format "^[ ]*\\[.\\][ ]*\\(?:%s \\)?\\(%s\\{2\\}\\) \\(.*\\)" (regexp-quote altodo-flag-star) (regexp-quote altodo-flag-priority)) .
      ((1 'altodo-flag-priority2-face t)
       (2 'altodo-flag-priority2-text-face prepend)))
     
-    (,(format "^[ ]*\\[.\\][ ]*\\(%s\\) \\(.*\\)" (regexp-quote altodo-flag-priority)) .
+    (,(format "^[ ]*\\[.\\][ ]*\\(?:%s \\)?\\(%s\\) \\(.*\\)" (regexp-quote altodo-flag-star) (regexp-quote altodo-flag-priority)) .
      ((1 'altodo-flag-priority1-face t)
       (2 'altodo-flag-priority1-text-face prepend)))
     
     ;; 7. スターフラグ
-    (,(format "^[ ]*\\[.\\][ ]*\\(%s\\) \\(.*\\)" (regexp-quote altodo-flag-star)) .
+    (,(format "^[ ]*\\[.\\][ ]*\\(?:%s+ \\)?\\(%s\\) \\(.*\\)" (regexp-quote altodo-flag-priority) (regexp-quote altodo-flag-star)) .
      ((1 'altodo-flag-star-face t)
       (2 'altodo-flag-star-text-face prepend)))
     
@@ -1400,6 +1416,8 @@ tags, and dates.
   ;; then altodo faces are added as base colors
   (font-lock-add-keywords nil (altodo-font-lock-keywords) 'append)
   (setq-local indent-line-function #'altodo-indent-line)
+  ;; The nesting is written with spaces (see the format specification).
+  (setq-local indent-tabs-mode nil)
   
   ;; Enable font-lock-multiline (already set by markdown-mode, but ensure it)
   (setq-local font-lock-multiline t)
@@ -1629,68 +1647,86 @@ Supports both markdown headers and altodo tasks/comments/multiline-comments."
 
 ;; === 複数行コメント判定関数 ===
 
-(defun altodo--has-task-or-comment-above ()
-  "Check if there is a task or comment line above.
-Recursively checks through empty lines and multiline comments."
+(defun altodo--in-fenced-code-block-p ()
+  "Return non-nil if point is in a fenced code block (``` or ~~~).
+Indented code blocks of Markdown are not counted: altodo uses indentation
+for nesting and multi-line comments, so an indented line is never a code
+block, even right after a blank line."
+  (save-match-data
+    (and (markdown-get-enclosing-fenced-block-construct) t)))
+
+(defun altodo--leading-spaces ()
+  "Return the number of leading spaces of the current line."
   (save-excursion
-    (let ((max-depth 100)
-          (depth 0))
-      (forward-line -1)
-      (while (and (not (bobp)) 
-                  (< depth max-depth)
-                  (looking-at "^[ \t]+"))
-        (cond
-         ;; 空行（インデントのみ）をスキップ
-         ((looking-at "^[ \t]*$")
+    (beginning-of-line)
+    (skip-chars-forward " ")
+    (- (point) (line-beginning-position))))
+
+(defun altodo--task-or-comment-line-p ()
+  "Return non-nil if the current line is a task or a `///' comment line.
+A line inside a fenced code block is not."
+  (save-excursion
+    (beginning-of-line)
+    (and (or (looking-at altodo-task-regex)
+             (looking-at altodo-comment-regex))
+         (not (altodo--in-fenced-code-block-p)))))
+
+(defun altodo--multiline-comment-indent-ok-p (indent)
+  "Return non-nil if the lines above make an INDENT-space line a comment.
+Going up through the lines with the same indentation, the first task or
+`///' line found must be indented by `altodo-indent-size' spaces less
+than INDENT.  A completely empty line, or a line with another indentation,
+ends the search."
+  (save-excursion
+    (let ((result nil)
+          (done nil))
+      (while (not done)
+        (if (bobp)
+            (setq done t)
           (forward-line -1)
-          (setq depth (1+ depth)))
-         ;; タスク行・コメント行でない = 複数行コメント
-         ((and (not (looking-at altodo-task-regex))
-               (not (looking-at altodo-comment-regex)))
-          (forward-line -1)
-          (setq depth (1+ depth)))
-         ;; それ以外は終了
-         (t
-          (setq depth max-depth))))
-      (or (looking-at altodo-task-regex)
-          (looking-at altodo-comment-regex)))))
+          (cond
+           ((altodo--task-or-comment-line-p)
+            (setq result (= indent (+ (altodo--leading-spaces)
+                                      altodo-indent-size))
+                  done t))
+           ((looking-at "^$") (setq done t))
+           ((= (altodo--leading-spaces) indent))
+           (t (setq done t)))))
+      result)))
 
 (defun altodo--multiline-comment-matcher-new (limit)
-  "Match multiline comments up to LIMIT using direct pattern matching.
-Excludes markdown list items."
+  "Match multiline comments up to LIMIT.
+Each match is one line, without its newline."
   (catch 'found
     (while (and (< (point) limit) (not (eobp)))
-      (if (and (looking-at "^[ \t]+\\($\\|[^ \t\n[]\\)")
-               (not (looking-at altodo-task-regex))
-               (not (looking-at altodo-comment-regex))
-               (not (looking-at "^[ \t]*[-*+][ \t]"))      ; markdown unordered list
-               (not (looking-at "^[ \t]*[0-9]+\\.[ \t]"))) ; markdown ordered list
-          (if (altodo--has-task-or-comment-above)
-              (let ((line-start (point))
-                    (line-end (line-end-position)))
-                (set-match-data (list line-start line-end))
-                (goto-char (1+ line-end))
-                (throw 'found t))
-            (forward-line 1))
+      (if (and (looking-at " +")
+               (altodo--multiline-comment-p))
+          (let ((line-start (point))
+                (line-end (line-end-position)))
+            (set-match-data (list line-start line-end))
+            (goto-char (1+ line-end))
+            (throw 'found t))
         (forward-line 1)))
     nil))
 
 ;; === Helper functions ===
 
 (defun altodo--multiline-comment-p ()
-  "Check if current line is a multiline comment.
-Includes empty lines with indentation that belong to a multiline comment block.
-Returns nil if in a code block.
-Returns t if current line is a multiline comment, nil otherwise."
+  "Check if the current line is a multi-line comment.
+A multi-line comment line is indented by exactly `altodo-indent-size'
+spaces more than the task or `///' line above it, or has the same
+indentation as the multi-line comment line above it.  A line that
+contains only that many spaces is included.  Every line other than a task
+line qualifies, including Markdown lists, links and fenced code blocks.
+A completely empty line, or a line with another indentation, ends the
+comment."
   (save-excursion
     (beginning-of-line)
-    (and (not (markdown-code-block-at-point-p))
-         (not (looking-at altodo-task-regex))
-         (not (looking-at altodo-comment-regex))
-         (looking-at "^[ \t]+\\($\\|[^ \t\n[]\\)")  ; empty line or non-bracket indented line
-         (not (looking-at "^[ \t]*[-*+][ \t]"))      ; exclude markdown list
-         (not (looking-at "^[ \t]*[0-9]+\\.[ \t]"))  ; exclude markdown list
-         (altodo--has-task-or-comment-above))))
+    (let ((indent (altodo--leading-spaces)))
+      (and (> indent 0)
+           (not (altodo--task-p))
+           (not (altodo--comment-p))
+           (altodo--multiline-comment-indent-ok-p indent)))))
 
 (defun altodo--multiline-comment-matcher (limit)
   "Font-lock matcher for multiline comments up to LIMIT."
@@ -1766,7 +1802,7 @@ Returns nil if in a code block.
 Returns t if current line is a task line, nil otherwise."
   (save-excursion
     (beginning-of-line)
-    (and (not (markdown-code-block-at-point-p))
+    (and (not (altodo--in-fenced-code-block-p))
          (looking-at altodo-task-regex))))
 
 (defun altodo--comment-p ()
@@ -1775,7 +1811,7 @@ Returns nil if in a code block.
 Returns t if current line is a single-line comment, nil otherwise."
   (save-excursion
     (beginning-of-line)
-    (and (not (markdown-code-block-at-point-p))
+    (and (not (altodo--in-fenced-code-block-p))
          (looking-at altodo-comment-regex))))
 
 (defun altodo--empty-task-line-p ()
@@ -1852,11 +1888,13 @@ Returns value."
 (defun altodo--filter-find-overlay (line-start line-end)
   "Find existing filter overlay for the line from LINE-START to LINE-END.
 Returns the overlay if found, nil otherwise."
+  ;; `overlays-in' uses the overlay tree, so this does not scan every
+  ;; overlay of the buffer.
   (seq-find (lambda (ov)
               (and (eq (overlay-get ov 'category) 'altodo-filter)
                    (= (overlay-start ov) line-start)
                    (= (overlay-end ov) line-end)))
-            altodo--filter-overlays))
+            (overlays-in line-start line-end)))
 
 (defun altodo--filter-invert-visibility (overlay)
   "Invert the visibility of OVERLAY.
@@ -2054,22 +2092,20 @@ Returns a new predicate function that combines all predicates."
    (t
     (error "Invalid combine-mode: %s" combine-mode))))
 
-(defun altodo--filter-lines (predicate &optional show-multiline-comment display-context)
+(cl-defun altodo--filter-lines (predicate &optional (show-multiline-comment t)
+                                          display-context)
   "Apply filter using PREDICATE function.
 PREDICATE is called at the beginning of each line.
 If PREDICATE returns t, the line is shown; otherwise, it is hidden.
 SHOW-MULTILINE-COMMENT (default t) controls whether to show multiline comments
-attached to matching task/comment lines.
+attached to matching task/comment lines.  Passing nil hides them.
 DISPLAY-CONTEXT (default 'heading-only) controls display of heading and comment lines:
   - 'all: show heading and multiline comments
   - 'heading-only: show heading only
   - 'none: show matched lines only"
-  (let ((max-iterations 10000)
-        (iterations 0)
-        (show-multiline (if show-multiline-comment show-multiline-comment t))
+  (let ((show-multiline show-multiline-comment)
         (ctx (or display-context 'heading-only))
-        (matched-line-numbers nil)
-        (start-time (current-time)))
+        (matched-line-numbers nil))
     
     ;; Phase 1 Optimization: Initialize heading cache
     (altodo--compute-all-heading-ranges)
@@ -2077,18 +2113,16 @@ DISPLAY-CONTEXT (default 'heading-only) controls display of heading and comment 
     (save-excursion
       ;; First pass: create overlays for all lines
       (goto-char (point-min))
-      (while (and (not (eobp)) (< iterations max-iterations))
+      (while (not (eobp))
         (let* ((line-start (line-beginning-position))
                (line-end (1+ (line-end-position))))
           (unless (altodo--filter-find-overlay line-start line-end)
             (altodo--filter-create-overlay line-start line-end t)))
-        (forward-line 1)
-        (setq iterations (1+ iterations)))
+        (forward-line 1))
       
       ;; Second pass: remove overlays for matched lines and collect line numbers
-      (setq iterations 0)
       (goto-char (point-min))
-      (while (and (not (eobp)) (< iterations max-iterations))
+      (while (not (eobp))
         (let* ((line-start (line-beginning-position))
                (line-end (1+ (line-end-position)))
                (line-num (line-number-at-pos))
@@ -2106,24 +2140,25 @@ DISPLAY-CONTEXT (default 'heading-only) controls display of heading and comment 
                     (when comment-range
                       (altodo--filter-show-multiline-comments (car comment-range) (cdr comment-range))))))))
         
-        (forward-line 1)
-        (setq iterations (1+ iterations)))
+        (forward-line 1))
       
       ;; Third pass: apply display-context option
       (when (and matched-line-numbers (not (eq ctx 'none)))
-        (let ((display-lines (altodo--compute-display-lines (nreverse matched-line-numbers) ctx)))
+        (let ((display-lines (sort (altodo--compute-display-lines
+                                    (nreverse matched-line-numbers) ctx)
+                                   #'<))
+              (current-line 1))
+          ;; Walk the sorted line numbers once instead of counting lines
+          ;; from the beginning of the buffer for each of them.
+          (goto-char (point-min))
           (dolist (line-num display-lines)
-            (save-excursion
-              (goto-char (point-min))
-              (forward-line (1- line-num))
-              (let* ((line-start (line-beginning-position))
-                     (line-end (1+ (line-end-position))))
-                (altodo--filter-remove-overlay line-start line-end)))))))
+            (forward-line (- line-num current-line))
+            (setq current-line line-num)
+            (altodo--filter-remove-overlay (line-beginning-position)
+                                           (1+ (line-end-position)))))))
     
     ;; Force redisplay after all overlays are processed
-    (redisplay t)
-    (when (>= iterations max-iterations)
-      (message "Warning: altodo--filter-lines reached max iterations"))))
+    (redisplay t)))
 
 ;;; Display Context Helper Functions
 
@@ -2168,19 +2203,21 @@ DISPLAY-CONTEXT (default 'heading-only) controls display of heading and comment 
 Returns new display-lines with consecutive blank lines reduced to one."
   (let ((sorted-lines (sort (copy-sequence display-lines) #'<))
         (result nil)
-        (prev-blank-p nil))
-    (dolist (line sorted-lines)
-      ;; Inline blank-line-p check
-      (let ((blank-p (save-excursion
-                       (goto-char (point-min))
-                       (forward-line (1- line))
-                       (looking-at "^[ \t]*$"))))
-        (if (and blank-p prev-blank-p)
-            ;; Skip consecutive blank lines
-            nil
-          ;; Add line
-          (push line result)
-          (setq prev-blank-p blank-p))))
+        (prev-blank-p nil)
+        (current-line 1))
+    (save-excursion
+      (goto-char (point-min))
+      (dolist (line sorted-lines)
+        ;; Move from the previous line number instead of the buffer start.
+        (forward-line (- line current-line))
+        (setq current-line line)
+        (let ((blank-p (looking-at "^[ \t]*$")))
+          (if (and blank-p prev-blank-p)
+              ;; Skip consecutive blank lines
+              nil
+            ;; Add line
+            (push line result)
+            (setq prev-blank-p blank-p)))))
     (nreverse result)))
 
 (defun altodo--add-heading-spacing (display-lines heading-line)
@@ -2203,6 +2240,22 @@ Add line before heading only if there are already lines after this heading in di
     (push heading-line display-lines))
   display-lines)
 
+(defvar altodo--goto-line-cache nil
+  "Cons of a line number and its position, used by `altodo--goto-line'.
+Bind this to nil around a loop that visits many lines in ascending order.")
+
+(defun altodo--goto-line (line-num)
+  "Move point to the beginning of line LINE-NUM.
+Counts lines from the line cached in `altodo--goto-line-cache' when
+LINE-NUM is at or after it, and from the beginning of the buffer otherwise."
+  (let ((cache altodo--goto-line-cache))
+    (if (and cache (>= line-num (car cache)))
+        (progn (goto-char (cdr cache))
+               (forward-line (- line-num (car cache))))
+      (goto-char (point-min))
+      (forward-line (1- line-num)))
+    (setq altodo--goto-line-cache (cons line-num (point)))))
+
 (defun altodo--compute-display-lines (matched-lines display-context)
   "Compute display lines based on DISPLAY-CONTEXT option.
 MATCHED-LINES: list of line numbers that match the filter
@@ -2210,14 +2263,14 @@ DISPLAY-CONTEXT: 'all, 'heading-only, or 'none
 Returns: list of line numbers to display (including heading and comment lines)"
   ;; Optimization 2: Cache heading-ranges to avoid repeated calls
   (let ((display-lines matched-lines)
-        (heading-ranges (altodo--compute-all-heading-ranges)))
+        (heading-ranges (altodo--compute-all-heading-ranges))
+        (altodo--goto-line-cache nil))
     (cond
       ((eq display-context 'all)
        ;; Add heading lines and multiline comment lines
        (dolist (line-num matched-lines)
          (save-excursion
-           (goto-char (point-min))
-           (forward-line (1- line-num))
+           (altodo--goto-line line-num)
            (let ((current-pos (point)))
              ;; Add heading line if exists
              (dolist (entry heading-ranges)
@@ -2248,8 +2301,7 @@ Returns: list of line numbers to display (including heading and comment lines)"
        ;; Add heading lines only
        (dolist (line-num matched-lines)
          (save-excursion
-           (goto-char (point-min))
-           (forward-line (1- line-num))
+           (altodo--goto-line line-num)
            (let ((current-pos (point)))
              (dolist (entry heading-ranges)
                (let ((range (cdr entry)))
@@ -2360,22 +2412,20 @@ VALUE should be a number."
 
 (defun altodo--line-has-priority-p ()
   "Return t if current line has priority flag (!), nil otherwise.
-Priority flag can be one or more '!' characters followed by a space."
+Priority flag can be one or more '!' characters followed by a space.
+It may follow a star flag."
   (save-excursion
     (beginning-of-line)
     (when (looking-at altodo-task-regex)
-      (let ((content (match-string 3)))
-        (and (string-match-p (concat "^[ \t]*" (regexp-quote altodo-flag-priority) "+ ")
-                             content)
-             t)))))
+      (and (nth 1 (altodo--parse-flags (match-string 3))) t))))
 
 (defun altodo--line-has-star-p ()
-  "Return t if current line has star flag (+), nil otherwise."
+  "Return t if current line has star flag (+), nil otherwise.
+It may follow a priority flag."
   (save-excursion
     (beginning-of-line)
     (when (looking-at altodo-task-regex)
-      (let ((content (match-string 3)))
-        (altodo--has-star-flag-p content)))))
+      (altodo--has-star-flag-p (match-string 3)))))
 
 (defun altodo--line-state-any-p (states)
   "Return t if current line has any of the STATES.
@@ -2449,6 +2499,29 @@ Returns date string (e.g., \"2026-01-31\") or nil."
               (day (match-string day-idx)))
           (format "%s-%s-%s" year month day))))))
 
+(defun altodo--days-to-week-end ()
+  "Return the number of days from today to the last day of this week.
+The week starts on `altodo-week-start-day' (0 is Sunday, 1 is Monday)."
+  (let ((today-wday (nth 6 (decode-time (current-time))))
+        (week-start (or altodo-week-start-day 1)))
+    (mod (- (+ week-start 6) today-wday) 7)))
+
+(defun altodo--days-to-month-end ()
+  "Return the number of days from today to the last day of this month."
+  (let* ((today-decoded (decode-time (current-time)))
+         (today-day (nth 3 today-decoded))
+         (month (nth 4 today-decoded))
+         (year (nth 5 today-decoded))
+         (next-month (if (= month 12) 1 (1+ month)))
+         (next-year (if (= month 12) (1+ year) year))
+         ;; Start from noon so that a daylight saving time change cannot
+         ;; move the result to the previous day.
+         (last-day (nth 3 (decode-time
+                           (time-subtract
+                            (encode-time 0 0 12 1 next-month next-year)
+                            (* 24 60 60))))))
+    (- last-day today-day)))
+
 (defun altodo--due-date-matches-p (condition)
   "Check if current line's due date matches CONDITION.
 CONDITION: 'overdue, 'today, 'tomorrow, 'this-week, 'this-month,
@@ -2466,22 +2539,9 @@ Returns t if matches, nil otherwise."
           ('today (= days-diff 0))
           ('tomorrow (= days-diff 1))
           ('this-week
-           (let* ((today-decoded (decode-time (current-time)))
-                  (today-wday (nth 6 today-decoded))
-                  (days-to-week-end (mod (- 7 today-wday) 7)))
-             (and (>= days-diff 0) (<= days-diff days-to-week-end))))
+           (and (>= days-diff 0) (<= days-diff (altodo--days-to-week-end))))
           ('this-month
-           (let* ((today-decoded (decode-time (current-time)))
-                  (year (nth 5 today-decoded))
-                  (month (nth 4 today-decoded))
-                  (next-month (if (= month 12) 1 (1+ month)))
-                  (next-year (if (= month 12) (1+ year) year))
-                  (last-day-of-month-time (encode-time (list 0 0 0 0 next-month next-year nil nil nil)))
-                  (last-day-of-month-decoded (decode-time (time-subtract last-day-of-month-time (seconds-to-time 86400))))
-                  (last-day (nth 3 last-day-of-month-decoded))
-                  (today-day (nth 3 today-decoded))
-                  (days-to-month-end (- last-day today-day)))
-             (and (>= days-diff 0) (<= days-diff days-to-month-end))))
+           (and (>= days-diff 0) (<= days-diff (altodo--days-to-month-end))))
           ((pred stringp) (string= due-date condition))
           (`(before ,date) (string< due-date date))
           (`(after ,date) (string> due-date date))
@@ -2507,14 +2567,14 @@ Signals error on invalid date format."
     ((string-match "^before:\\(.+\\)$" condition-str)
      (let ((date-str (match-string 1 condition-str)))
        (if (altodo--parse-date date-str)
-           (list 'before date-str)
+           (list 'before (altodo--normalize-date-string date-str))
          (error "Invalid date format in 'before' condition: %s (expected format: %s)" 
                 date-str (or altodo-date-format "YYYY-MM-DD")))))
     
     ((string-match "^after:\\(.+\\)$" condition-str)
      (let ((date-str (match-string 1 condition-str)))
        (if (altodo--parse-date date-str)
-           (list 'after date-str)
+           (list 'after (altodo--normalize-date-string date-str))
          (error "Invalid date format in 'after' condition: %s (expected format: %s)" 
                 date-str (or altodo-date-format "YYYY-MM-DD")))))
     
@@ -2522,7 +2582,8 @@ Signals error on invalid date format."
      (let ((start-str (match-string 1 condition-str))
            (end-str (match-string 2 condition-str)))
        (if (and (altodo--parse-date start-str) (altodo--parse-date end-str))
-           (list 'between start-str end-str)
+           (list 'between (altodo--normalize-date-string start-str)
+                 (altodo--normalize-date-string end-str))
          (error "Invalid date format in 'between' condition (expected format: %s)" 
                 (or altodo-date-format "YYYY-MM-DD")))))
     
@@ -2535,7 +2596,7 @@ Signals error on invalid date format."
     
     ;; 絶対日付（altodo-date-format に対応）
     ((altodo--parse-date condition-str)
-     condition-str)
+     (altodo--normalize-date-string condition-str))
     
     (t (error "Invalid due date condition: %s" condition-str))))
 
@@ -2587,24 +2648,9 @@ Returns t if matches, nil otherwise."
           ('today (= days-diff 0))
           ('not-yet (> days-diff 0))
           ('this-week
-           (let* ((today-decoded (decode-time (current-time)))
-                  (today-wday (nth 6 today-decoded))
-                  (week-start (or altodo-week-start-day 1))
-                  (days-to-week-end (mod (- 7 today-wday (- week-start 1)) 7)))
-             (and (>= days-diff 0) (<= days-diff days-to-week-end))))
+           (and (>= days-diff 0) (<= days-diff (altodo--days-to-week-end))))
           ('this-month
-           (let* ((today-decoded (decode-time (current-time)))
-                  (year (nth 5 today-decoded))
-                  (month (nth 4 today-decoded))
-                  (next-month (if (= month 12) 1 (1+ month)))
-                  (next-year (if (= month 12) (1+ year) year))
-                  (last-day-time (time-subtract
-                                  (encode-time 0 0 0 1 next-month next-year)
-                                  (seconds-to-time 86400)))
-                  (last-day (nth 3 (decode-time last-day-time)))
-                  (today-day (nth 3 today-decoded))
-                  (days-to-month-end (- last-day today-day)))
-             (and (>= days-diff 0) (<= days-diff days-to-month-end))))
+           (and (>= days-diff 0) (<= days-diff (altodo--days-to-month-end))))
           ((pred stringp) (string= start-date condition))
           (`(before ,date) (string< start-date date))
           (`(after ,date) (string> start-date date))
@@ -2628,14 +2674,14 @@ Signals error on invalid date format."
     ((string-match "^before:\\(.+\\)$" condition-str)
      (let ((date-str (match-string 1 condition-str)))
        (if (altodo--parse-date date-str)
-           (list 'before date-str)
+           (list 'before (altodo--normalize-date-string date-str))
          (error "Invalid date format in 'before' condition: %s (expected format: %s)" 
                 date-str (or altodo-date-format "YYYY-MM-DD")))))
     
     ((string-match "^after:\\(.+\\)$" condition-str)
      (let ((date-str (match-string 1 condition-str)))
        (if (altodo--parse-date date-str)
-           (list 'after date-str)
+           (list 'after (altodo--normalize-date-string date-str))
          (error "Invalid date format in 'after' condition: %s (expected format: %s)" 
                 date-str (or altodo-date-format "YYYY-MM-DD")))))
     
@@ -2643,7 +2689,8 @@ Signals error on invalid date format."
      (let ((start-str (match-string 1 condition-str))
            (end-str (match-string 2 condition-str)))
        (if (and (altodo--parse-date start-str) (altodo--parse-date end-str))
-           (list 'between start-str end-str)
+           (list 'between (altodo--normalize-date-string start-str)
+                 (altodo--normalize-date-string end-str))
          (error "Invalid date format in 'between' condition (expected format: %s)" 
                 (or altodo-date-format "YYYY-MM-DD")))))
     
@@ -2654,7 +2701,7 @@ Signals error on invalid date format."
      (list 'past (string-to-number (match-string 1 condition-str))))
     
     ((altodo--parse-date condition-str)
-     condition-str)
+     (altodo--normalize-date-string condition-str))
     
     (t (error "Invalid start date condition: %s" condition-str))))
 
@@ -2936,8 +2983,12 @@ Returns a lambda function that returns t/nil."
                   (lambda () (altodo--line-nest-level-p level))))
        ("heading" (lambda () (altodo--line-in-heading-range-with-filter-p arg t 'only-tasks)))
        ("multiline-comment-contains" (lambda () (altodo--multiline-comment-contains-regexp-p arg)))
-       ("due-date" (lambda () (altodo--due-date-matches-p (altodo--parse-due-date-condition arg))))
-       ("start-date" (lambda () (altodo--start-date-matches-p (altodo--parse-start-date-condition arg))))
+       ;; Parse the condition once here, so that an invalid condition is
+       ;; reported when the pattern is compiled, not on every line.
+       ("due-date" (let ((condition (altodo--parse-due-date-condition arg)))
+                     (lambda () (altodo--due-date-matches-p condition))))
+       ("start-date" (let ((condition (altodo--parse-start-date-condition arg)))
+                       (lambda () (altodo--start-date-matches-p condition))))
        ("tag-value" (altodo--parse-tag-value-condition arg))
        ("parent-task-regexp" (lambda () (altodo--line-parent-task-matches-regexp-p arg)))
        ("root-task-regexp" (lambda () (altodo--line-root-parent-task-matches-regexp-p arg)))
@@ -2986,11 +3037,12 @@ Returns a lambda function. On error, returns a fallback lambda that matches noth
   "Get list of line numbers for multiline comments following current line.
 Returns nil if no multiline comments follow."
   (save-excursion
-    (let ((start-line (line-number-at-pos))
-          (lines nil))
+    (let ((lines nil))
       (forward-line 1)
+      ;; Decide from the text, not from a text property set by font-lock,
+      ;; so that the result does not depend on what is fontified.
       (while (and (not (eobp))
-                  (get-text-property (point) 'altodo-multiline-comment))
+                  (altodo--multiline-comment-p))
         (push (line-number-at-pos) lines)
         (forward-line 1))
       (nreverse lines))))
@@ -3025,20 +3077,31 @@ Returns nil."
              ;; その他 → markdown-mode の標準動作
              (t
               (altodo--reset-indent-flags)
-              (if (fboundp 'markdown-cycle)
-                  (markdown-cycle)
-                (indent-for-tab-command))
+              ;; `markdown-cycle' falls back to `indent-line-function', which
+              ;; is this function; bind it to the Markdown one to avoid an
+              ;; endless recursion.
+              (let ((indent-line-function
+                     (if (fboundp 'markdown-indent-line)
+                         #'markdown-indent-line
+                       #'indent-relative)))
+                (if (fboundp 'markdown-cycle)
+                    (markdown-cycle)
+                  (indent-for-tab-command)))
               nil))))
       (when new-indent
-        (let ((indent-delta (- new-indent current-indent)))
+        (let* ((indent-delta (- new-indent current-indent))
+               ;; Collect the comment lines before changing the indentation:
+               ;; they are a comment only while they are indented by 4 spaces
+               ;; more than this line.
+               (multiline-lines (when (and (or (altodo--task-p)
+                                               (altodo--comment-p))
+                                           (/= indent-delta 0))
+                                  (altodo--get-multiline-comment-lines))))
           ;; 現在行をインデント
           (altodo--set-line-indent new-indent)
           ;; 複数行コメントも一緒にインデント（タスク/1行コメントの場合のみ）
-          (when (and (or (altodo--task-p) (altodo--comment-p))
-                     (/= indent-delta 0))
-            (let ((multiline-lines (altodo--get-multiline-comment-lines)))
-              (when multiline-lines
-                (altodo--indent-multiline-comments multiline-lines indent-delta))))
+          (when multiline-lines
+            (altodo--indent-multiline-comments multiline-lines indent-delta))
           (move-to-column (max (+ point-pos (- new-indent cur-pos)) 0)))))))
 
 (defun altodo--indent-task-or-comment (current-line current-indent)
@@ -3248,9 +3311,54 @@ Returns value."
     (beginning-of-line)
     (cond
      ((looking-at altodo-task-regex)
-      (replace-match (format "%s \\3" altodo-comment-marker) nil nil))
+      ;; Group 1 is the indentation.  Group 3 starts with the space after
+      ;; the state mark, if any.
+      (let ((new-text (save-match-data
+                        (concat (match-string 1) altodo-comment-marker " "
+                                (string-trim-left (match-string 3))))))
+        (replace-match new-text nil t)))
      ((looking-at altodo-comment-regex)
       (replace-match "\\1[ ] \\2" nil nil)))))
+
+;; === Flags ===
+;; A task or `///' line can have a star flag (+) and a priority flag (!, !!,
+;; !!!) together, in either order, each followed by one space.  The commands
+;; write the star first.
+
+(defun altodo--parse-flags (content)
+  "Split CONTENT into its leading flags and the rest.
+Return (STAR PRIORITY REST).  STAR is non-nil with a star flag, PRIORITY
+is the level (1 to 3) or nil, and REST is the text after the flags.
+A flag is the star or a run of the priority character, followed by a
+space.  The order does not matter, and each kind counts once."
+  (let ((pos (if (string-match "\\`[ \t]*" content) (match-end 0) 0))
+        (regex (concat "\\(" (regexp-quote altodo-flag-star) "\\|"
+                       (regexp-quote altodo-flag-priority) "+\\) "))
+        (star nil)
+        (priority nil)
+        (done nil))
+    (while (and (not done)
+                (string-match regex content pos)
+                (= (match-beginning 0) pos))
+      (let ((flag (match-string 1 content)))
+        (cond
+         ((and (string= flag altodo-flag-star) (not star))
+          (setq star t pos (match-end 0)))
+         ((and (not (string= flag altodo-flag-star)) (not priority))
+          (setq priority (min (length flag) 3) pos (match-end 0)))
+         (t (setq done t)))))
+    (list star priority (substring content pos))))
+
+(defun altodo--format-flags (star priority rest)
+  "Return the flags STAR and PRIORITY followed by REST, separated by spaces."
+  (mapconcat #'identity
+             (delq nil (list (and star altodo-flag-star)
+                             (and priority
+                                  (make-string priority
+                                               (string-to-char
+                                                altodo-flag-priority)))
+                             (and (not (string-empty-p rest)) rest)))
+             " "))
 
 (defun altodo--get-priority-level ()
   "Get priority level (1-3) of current line, or nil if no priority flag."
@@ -3258,68 +3366,55 @@ Returns value."
     (beginning-of-line)
     (let ((content (cond
                     ((looking-at altodo-task-regex) (match-string 3))
-                    ((looking-at altodo-comment-regex) (match-string 2))
-                    (t nil))))
+                    ((looking-at altodo-comment-regex) (match-string 2)))))
       (when content
-        (cond
-         ((string-match-p (concat "^\\s-*" (regexp-quote altodo-flag-priority) "\\{3\\}") content) 3)
-         ((string-match-p (concat "^\\s-*" (regexp-quote altodo-flag-priority) "\\{2\\}") content) 2)
-         ((string-match-p (concat "^\\s-*" (regexp-quote altodo-flag-priority)) content) 1)
-         (t nil))))))
+        (nth 1 (altodo--parse-flags content))))))
 
 (defun altodo--remove-priority-from-string (str)
-  "Remove priority flags (!, !!, !!!) from STR."
-  (replace-regexp-in-string 
-   (concat "^[ \t]*" (regexp-quote altodo-flag-priority) "+[ \t]*")
-   ""
-   str))
+  "Remove the priority flag (!, !!, !!!) from STR, keeping the star flag."
+  (pcase-let ((`(,star ,_ ,rest) (altodo--parse-flags str)))
+    (altodo--format-flags star nil rest)))
 
 (defun altodo--has-star-flag-p (str)
   "Return t if STR has star flag (+)."
-  (and (string-match-p (concat "^[ \t]*" (regexp-quote altodo-flag-star) " ") str)
-       t))
+  (and (nth 0 (altodo--parse-flags str)) t))
 
 (defun altodo--remove-star-from-string (str)
-  "Remove star flag (+) from STR."
-  (replace-regexp-in-string 
-   (concat "^[ \t]*" (regexp-quote altodo-flag-star) "[ \t]*")
-   " "
-   str))
+  "Remove the star flag (+) from STR, keeping the priority flag."
+  (pcase-let ((`(,_ ,priority ,rest) (altodo--parse-flags str)))
+    (altodo--format-flags nil priority rest)))
 
-(defun altodo--set-priority-flag (level)
-  "Set priority flag to LEVEL (1-3) on current line.
-Returns value."
+(defun altodo--replace-flags (transform)
+  "Rewrite the flags of the task or comment line at point.
+TRANSFORM is called with the star, the priority and the rest of the line,
+and returns the new content.  Return non-nil if the line was changed."
   (save-excursion
     (beginning-of-line)
     (cond
-     ;; タスク行
      ((looking-at altodo-task-regex)
-      (let ((indent (match-string 1))
-            (state (match-string 2))
-            (content (match-string 3)))
-        (let* ((cleaned (save-match-data (altodo--remove-priority-from-string content)))
-               (flag (make-string level (string-to-char altodo-flag-priority)))
-               (trimmed (save-match-data (string-trim cleaned))))
-          (replace-match (format "%s[%s] %s%s" 
-                               indent 
-                               (or state " ")
-                               flag
-                               (if (string-empty-p trimmed) "" (concat " " trimmed)))))))
-     ;; コメント行
+      (let* ((indent (match-string 1))
+             (state (match-string 2))
+             (parsed (save-match-data (altodo--parse-flags (match-string 3))))
+             (new (save-match-data (apply transform parsed))))
+        (replace-match (format "%s[%s]%s" indent (or state " ")
+                               (if (string-empty-p new) "" (concat " " new))))
+        t))
      ((looking-at altodo-comment-regex)
-      (let ((indent (match-string 1))
-            (content (match-string 2)))
-        (let* ((cleaned (save-match-data (altodo--remove-priority-from-string content)))
-               (flag (make-string level (string-to-char altodo-flag-priority)))
-               (trimmed (save-match-data (string-trim cleaned))))
-          (replace-match (format "%s%s %s%s" 
-                               indent 
-                               altodo-comment-marker
-                               flag
-                               (if (string-empty-p trimmed) "" (concat " " trimmed)))))))
-     ;; その他の行
-     (t
-      (message "Not on a task or comment line")))))
+      (let* ((indent (match-string 1))
+             (parsed (save-match-data (altodo--parse-flags (match-string 2))))
+             (new (save-match-data (apply transform parsed))))
+        (replace-match (format "%s%s%s" indent altodo-comment-marker
+                               (if (string-empty-p new) "" (concat " " new))))
+        t))
+     (t (message "Not on a task or comment line") nil))))
+
+(defun altodo--set-priority-flag (level)
+  "Set priority flag to LEVEL (1-3) on current line.
+The star flag is kept."
+  (altodo--replace-flags
+   (lambda (star _priority rest)
+     (altodo--format-flags star level rest))))
+
 (defun altodo-set-priority-1 ()
   "Set priority flag to level 1 (!).
 Returns nil."
@@ -3338,48 +3433,15 @@ Returns nil."
   (interactive)
   (altodo--set-priority-flag 3))
 
-
 (defun altodo-toggle-star-flag ()
   "Toggle star flag (+) on current task or comment line.
+The priority flag is kept.
 Returns nil."
   (interactive)
-  (save-excursion
-    (beginning-of-line)
-    (cond
-     ;; タスク行
-     ((looking-at altodo-task-regex)
-      (let ((indent (match-string 1))
-            (state (match-string 2))
-            (content (match-string 3)))
-        (if (save-match-data (altodo--has-star-flag-p content))
-            ;; フラグを削除
-            (let ((cleaned (save-match-data (altodo--remove-star-from-string content))))
-              (replace-match (format "%s[%s]%s" indent (or state " ") cleaned)))
-          ;; フラグを追加
-          (let ((trimmed (save-match-data (string-trim content))))
-            (replace-match (format "%s[%s] %s%s" 
-                                 indent 
-                                 (or state " ")
-                                 altodo-flag-star
-                                 (if (string-empty-p trimmed) "" (concat " " trimmed))))))))
-     ;; コメント行
-     ((looking-at altodo-comment-regex)
-      (let ((indent (match-string 1))
-            (content (match-string 2)))
-        (if (save-match-data (altodo--has-star-flag-p content))
-            ;; フラグを削除
-            (let ((cleaned (save-match-data (altodo--remove-star-from-string content))))
-              (replace-match (format "%s%s%s" indent altodo-comment-marker cleaned)))
-          ;; フラグを追加
-          (let ((trimmed (save-match-data (string-trim content))))
-            (replace-match (format "%s%s %s%s" 
-                                 indent 
-                                 altodo-comment-marker
-                                 altodo-flag-star
-                                 (if (string-empty-p trimmed) "" (concat " " trimmed))))))))
-     ;; その他の行
-     (t
-      (message "Not on a task or comment line")))))
+  (altodo--replace-flags
+   (lambda (star priority rest)
+     (altodo--format-flags (not star) priority rest)))
+  nil)
 
 (defun altodo-start-multiline-comment ()
   "Start a multiline comment at current indentation level + 4.
@@ -3391,115 +3453,6 @@ Returns nil."
         (newline)
         (indent-to (+ indent altodo-indent-size)))
     (message "Not on a task or comment line")))
-
-;;; Testing Functions
-
-;;;###autoload
-(defun altodo-run-full-test-suite ()
-  "Run comprehensive test suite for altodo-mode.
-Returns value."
-  (interactive)
-  (message "=== Running Full altodo Test Suite ===")
-  
-  (let ((regex-passed (altodo-test-regex-patterns))
-        (helper-passed (altodo-test-helper-functions))
-        (total-tests 0)
-        (passed-tests 0))
-    
-    ;; Count and report results
-    (when regex-passed (setq passed-tests (1+ passed-tests)))
-    (when helper-passed (setq passed-tests (1+ passed-tests)))
-    (setq total-tests 2)
-    
-    ;; Additional integration tests
-    (message "Running integration tests...")
-    (let ((integration-passed t))
-      
-      ;; Test state change functions
-      (condition-case err
-          (progn
-            (altodo--get-state-face "x")
-            (altodo--get-state-text-face "@")
-            (altodo--get-flag-text-face "+" "w")
-            (message "✓ State function integration test passed"))
-        (error
-         (message "✗ State function integration test failed: %s" err)
-         (setq integration-passed nil)))
-      
-      (when integration-passed 
-        (setq passed-tests (1+ passed-tests)))
-      (setq total-tests (1+ total-tests)))
-    
-    ;; Final report
-    (message "=== Test Suite Results ===")
-    (message "Tests passed: %d/%d" passed-tests total-tests)
-    (if (= passed-tests total-tests)
-        (message "✓ All tests PASSED - altodo-mode is ready for production")
-      (message "✗ Some tests FAILED - review issues before deployment"))
-    
-    (= passed-tests total-tests)))
-
-;;;###autoload
-(defun altodo-test-regex-patterns ()
-  "Test altodo regex patterns for correctness.
-Returns value."
-  (interactive)
-  (let ((test-cases '(("[ ] test task" . ("" "test task"))
-                      ("[x] completed task" . ("x" "completed task"))
-                      ("    [ ] indented task" . ("" "indented task"))
-                      ("[@ ] progress task" . ("@" " progress task"))
-                      ("[w] waiting task" . ("w" "waiting task"))
-                      ("[~] cancelled task" . ("~" "cancelled task"))
-                      ("not a task" . nil)))
-        (passed 0)
-        (total (length test-cases)))
-    (message "Testing altodo-task-regex...")
-    (dolist (test-case test-cases)
-      (let ((input (car test-case))
-            (expected (cdr test-case)))
-        (if (string-match altodo-task-regex input)
-            (let ((actual (list (match-string 1 input) (match-string 2 input))))
-              (if (equal expected actual)
-                  (progn
-                    (message "✓ PASS: '%s'" input)
-                    (setq passed (1+ passed)))
-                (message "✗ FAIL: '%s' -> Expected: %s, Got: %s" input expected actual)))
-          (if (null expected)
-              (progn
-                (message "✓ PASS: '%s' (no match expected)" input)
-                (setq passed (1+ passed)))
-            (message "✗ FAIL: '%s' -> Expected match but got none" input)))))
-    (message "Test Results: %d/%d passed" passed total)
-    (= passed total)))
-
-;;;###autoload
-(defun altodo-test-helper-functions ()
-  "Test altodo helper functions for correctness.
-Returns value."
-  (interactive)
-  (let ((passed 0) (total 0))
-    (message "Testing helper functions...")
-    
-    ;; Test altodo--get-state-face
-    (dolist (test-case '(("x" . altodo-task-done)
-                         ("@" . altodo--task-progress)
-                         ("w" . altodo-task-waiting)
-                         ("~" . altodo-task-cancelled)
-                         ("" . altodo-task-open)
-                         ("invalid" . altodo-task-open)))
-      (setq total (1+ total))
-      (let* ((input (car test-case))
-             (expected (cdr test-case))
-             (actual (altodo--get-state-face input)))
-        (if (eq expected actual)
-            (progn
-              (message "✓ PASS: altodo--get-state-face('%s') -> %s" input actual)
-              (setq passed (1+ passed)))
-          (message "✗ FAIL: altodo--get-state-face('%s') -> Expected: %s, Got: %s" 
-                   input expected actual))))
-    
-    (message "Helper function tests: %d/%d passed" passed total)
-    (= passed total)))
 
 ;;; Auto-mode
 
@@ -4285,7 +4238,12 @@ Uses the source buffer (altodo main buffer) for counting."
                   (equal (plist-get entry :type) "dynamic"))
               (dolist (expanded (altodo--expand-dynamic-filter entry source-buffer combined-predicate))
                 (sidebar--insert-entry expanded config source-buffer sidebar-window combined-predicate combine-mode))
-            (sidebar--insert-entry entry config source-buffer sidebar-window combined-predicate combine-mode)))))))
+            (sidebar--insert-entry entry config source-buffer sidebar-window combined-predicate combine-mode)))
+        ;; Each entry ends with a newline; drop the last one so that the
+        ;; sidebar does not end with an empty line.
+        (goto-char (point-max))
+        (when (and (> (point-max) (point-min)) (eq (char-before) ?\n))
+          (delete-char -1))))))
 
 (defun altodo--make-repeated-pattern (pattern width)
   "Create a repeated PATTERN string to fill WIDTH display columns.
@@ -4568,9 +4526,16 @@ Returns alist with configuration or nil if file not found."
     (let ((locals-file (expand-file-name ".altodo-locals.el"
                                          (file-name-directory buffer-file-name))))
       (when (file-exists-p locals-file)
-        (with-temp-buffer
-          (insert-file-contents locals-file)
-          (read (current-buffer)))))))
+        (condition-case err
+            (with-temp-buffer
+              (insert-file-contents locals-file)
+              (read (current-buffer)))
+          (error
+           (display-warning 'altodo
+                            (format "Cannot read %s: %s" locals-file
+                                    (error-message-string err))
+                            :warning)
+           nil))))))
 
 (defun altodo--get-filter-patterns ()
   "Get filter patterns from .altodo-locals.el.
@@ -4624,14 +4589,13 @@ Supports both ATX (# ## ###) and Setext (=== or ---) syntax."
     ;; Check ATX syntax
     (if (looking-at "^\\(#+\\)[ \t]+")
         (length (match-string 1))
-      ;; Check Setext syntax (next line)
-      (let ((current-line (line-number-at-pos)))
-        (forward-line 1)
-        (when (and (< (line-number-at-pos) (+ current-line 2))
-                   (looking-at "^\\(=+\\|-+\\)[ \t]*$"))
-          (if (looking-at "^=+")
-              1
-            2))))))
+      ;; Check Setext syntax (next line).  `forward-line' returns 0 only
+      ;; when there is a next line, so no line counting is needed.
+      (when (and (zerop (forward-line 1))
+                 (looking-at "^\\(=+\\|-+\\)[ \t]*$"))
+        (if (looking-at "^=+")
+            1
+          2)))))
 
 (defun altodo--heading-text ()
   "Get heading text of current line.
@@ -4643,31 +4607,40 @@ Supports both ATX (# ## ###) and Setext (=== or ---) syntax."
     (if (looking-at "^#+[ \t]+\\(.+\\)$")
         (match-string 1)
       ;; Check Setext syntax (next line)
-      (let ((current-line (line-number-at-pos)))
-        (forward-line 1)
-        (when (and (< (line-number-at-pos) (+ current-line 2))
-                   (looking-at "^\\(=+\\|-+\\)[ \t]*$"))
-          (forward-line -1)
-          (beginning-of-line)
-          (when (looking-at "^\\(.+\\)$")
-            (match-string 1)))))))
+      (when (and (zerop (forward-line 1))
+                 (looking-at "^\\(=+\\|-+\\)[ \t]*$"))
+        (forward-line -1)
+        (beginning-of-line)
+        (when (looking-at "^\\(.+\\)$")
+          (match-string 1))))))
 
 (defun altodo--compute-all-heading-ranges ()
   "Compute all heading ranges in buffer and cache them.
-Returns alist of (heading-regexp . (start . end))."
-  (let ((cache nil))
+Returns alist of (heading-text . (start . end)), in buffer order.
+The range of an ATX heading starts at the line after the heading and
+ends before the next heading of the same or a higher level, or at the end
+of the buffer.  The buffer is scanned once."
+  (let ((entries nil)
+        (open nil))
     (save-excursion
       (goto-char (point-min))
       (while (not (eobp))
-        (when (altodo--heading-level)
-          (let ((heading-text (altodo--heading-text)))
-            (when heading-text
-              (let ((range (altodo--find-heading-range heading-text t)))
-                (when range
-                  (push (cons heading-text range) cache))))))
-        (forward-line 1)))
-    (setq altodo--heading-cache (nreverse cache))
-    altodo--heading-cache))
+        (let ((level (altodo--heading-level)))
+          (when level
+            (let ((line-start (line-beginning-position)))
+              ;; This heading ends the open headings of the same or a
+              ;; deeper level.
+              (while (and open (<= level (car (car open))))
+                (setcdr (cdr (cdr (pop open))) line-start))
+              (when (looking-at "^#+[ \t]+\\(.+\\)$")
+                (let ((entry (cons (match-string 1)
+                                   (cons (line-beginning-position 2) nil))))
+                  (push entry entries)
+                  (push (cons level entry) open))))))
+        (forward-line 1))
+      (dolist (item open)
+        (setcdr (cdr (cdr item)) (point-max))))
+    (setq altodo--heading-cache (nreverse entries))))
 
 (defun altodo--find-heading-range (heading-regexp &optional include-children)
   "Find range of lines under heading matching HEADING-REGEXP.
@@ -5036,7 +5009,9 @@ Returns nil."
   "Check if current line has #seq-tasks tag."
   (save-excursion
     (beginning-of-line)
-    (re-search-forward "#seq-tasks" (line-end-position) t)))
+    ;; The whole tag name: `#seq-tasks-foo' is another tag.
+    (re-search-forward "\\(?:^\\|[ \t]\\)#seq-tasks\\(?:[ \t]\\|$\\)"
+                       (line-end-position) t)))
 
 (defun altodo--get-seq-tasks-parent ()
   "Get parent task with #seq-tasks tag."
@@ -5095,15 +5070,6 @@ Parent depends on all children:
                           (unless (altodo--task-is-completed child-state)
                             (setq all-completed nil))))))
                   (if all-completed 'ready 'blocked))))))))))
-
-(defun altodo--update-seq-tasks-status ()
-  "Update seq-tasks status when task state changes."
-  (when (altodo--has-seq-tasks-tag)
-    (let ((parent (altodo--get-seq-tasks-parent)))
-      (when parent
-        (save-excursion
-          (goto-char (cdr parent))
-          (font-lock-fontify-line))))))
 
 ;;; seq-tasks Filter Functions
 
@@ -5325,6 +5291,13 @@ Returns value."
         (setq-local altodo-sidebar--active-entries (list entry)))))
   (altodo-sidebar-refresh))
 
+(defun altodo--get-display-context-option (entry)
+  "Return the :display-context of filter ENTRY.
+The value is `all', `heading-only' or `none'.  It defaults to `heading-only'."
+  (if (plist-member entry :display-context)
+      (plist-get entry :display-context)
+    'heading-only))
+
 (defun altodo-sidebar--apply-filter (button)
   "Apply filter from BUTTON.
 Extracts pattern from button and applies filter to altodo buffer."
@@ -5365,12 +5338,9 @@ Extracts pattern from button and applies filter to altodo buffer."
                 altodo-sidebar--current-combined-predicate nil)
           (altodo-sidebar--update-active-entry entry)
           (with-current-buffer source-buffer
-            (let ((display-context (if (plist-member entry :display-context)
-                                       (plist-get entry :display-context)
-                                     'heading-only)))
-              (altodo--filter-lines (altodo--compile-filter-predicate entry)
-                                   show-multiline
-                                   display-context)))
+            (altodo--filter-lines (altodo--compile-filter-predicate entry)
+                                  show-multiline
+                                  (altodo--get-display-context-option entry)))
           (altodo-sidebar-refresh)
           (altodo--update-sidebar-modeline))
          
@@ -5485,16 +5455,12 @@ Works anywhere on the line containing a filter."
   (let ((button (or (button-at (point))
                     (button-at (line-beginning-position))
                     (button-at (1- (line-end-position))))))
-    (unless button
-      (message "No filter on this line"))
-    
-    (when button
+    (if (not button)
+        (message "No filter on this line")
       (let ((entry (button-get button 'sidebar-entry)))
-        (unless entry
-        (message "No filter entry at point")
-        (nil))
-      
-        (altodo-sidebar--toggle-filter-selection entry)))))
+        (if entry
+            (altodo-sidebar--toggle-filter-selection entry)
+          (message "No filter entry at point"))))))
 
 (defun altodo-sidebar-set-and-mode ()
   "Set AND mode for multiple filter combination.
@@ -5526,14 +5492,12 @@ M-x command: altodo-sidebar-toggle-combine-mode"
   (interactive)
   (altodo--with-sidebar-buffer
    (lambda ()
-     (unless altodo-sidebar--selected-filters
-       (message "No filters selected")
-       (nil))
-     
-     (setq altodo-sidebar--combine-mode
-           (if (eq altodo-sidebar--combine-mode 'and) 'or 'and))
-     (altodo-sidebar--apply-combined-filter)
-     (altodo-sidebar-refresh))))
+     (if (not altodo-sidebar--selected-filters)
+         (message "No filters selected")
+       (setq altodo-sidebar--combine-mode
+             (if (eq altodo-sidebar--combine-mode 'and) 'or 'and))
+       (altodo-sidebar--apply-combined-filter)
+       (altodo-sidebar-refresh)))))
 
 (defun altodo-sidebar--toggle-combine-mode ()
   "Toggle between AND and OR combine modes.
@@ -5564,16 +5528,12 @@ M-x command: altodo-sidebar-mouse-toggle-selection"
   
   (let* ((pos (posn-point (event-start event)))
          (button (button-at pos)))
-    (unless button
-      (message "No filter at point")
-      (nil))
-    
-    (let ((entry (button-get button 'sidebar-entry)))
-      (unless entry
-        (message "No filter entry at point")
-        (nil))
-      
-      (altodo-sidebar--toggle-filter-selection entry))))
+    (if (not button)
+        (message "No filter at point")
+      (let ((entry (button-get button 'sidebar-entry)))
+        (if entry
+            (altodo-sidebar--toggle-filter-selection entry)
+          (message "No filter entry at point"))))))
 
 
 (provide 'altodo)

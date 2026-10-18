@@ -8,16 +8,22 @@
 
 (require 'ert)
 (require 'altodo)
+(add-to-list 'load-path
+             (file-name-directory (or load-file-name buffer-file-name)))
+(require 'altodo-test-helper)
 
 (defun date-arrow-test--get-face-at (content line col)
-  "Get face at LINE COL in CONTENT."
-  (with-temp-buffer
-    (insert content)
-    (altodo-mode)
-    (font-lock-ensure)
-    (goto-line line)
-    (move-to-column col)
-    (get-text-property (point) 'face)))
+  "Get face at LINE COL in CONTENT, as seen on 2026-03-10.
+The date faces depend on today's date, so it is fixed."
+  (altodo-test-with-today 2026 3 10
+    (with-temp-buffer
+      (insert content)
+      (altodo-mode)
+      (font-lock-ensure)
+      (goto-char (point-min))
+      (forward-line (1- line))
+      (move-to-column col)
+      (get-text-property (point) 'face))))
 
 (defun date-arrow-test--has-face-p (content line col face)
   "Check if FACE is applied at LINE COL in CONTENT."

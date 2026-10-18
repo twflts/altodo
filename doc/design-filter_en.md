@@ -63,8 +63,9 @@ Reasons:
 
 ### Performance Requirements
 
-- Within 1 second for 5000-line buffer
-- Filtering is not subject to undo/redo
+- The shorter the processing time, the better. No upper limit is set as a requirement
+- The design-time guideline is within 1 second for a 5000-line buffer. Measure it with `scripts/bench-filter.sh`
+- Filtering is excluded from undo/redo
 
 
 ## 4. Basic Design Principles
@@ -501,15 +502,18 @@ Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse bu
 
 ### Optimization
 
-1. **predicate cache**: Reuse same predicate
-2. **heading-range cache**: Cache heading ranges
-3. **Line-by-line processing**: Process one line at a time, reduce unnecessary goto-char
+1. **heading-range cache**: Cache the heading ranges
+2. **Relative line movement**: Process line numbers in ascending order and move from the previous position, instead of counting lines from the beginning of the buffer (`altodo--goto-line`)
+3. **Narrowed overlay search**: Examine only the overlays in the range of the target line (`overlays-in`)
 
 
-### Benchmark Goals
+### Measurement
 
-- 5000-line buffer: Within 1 second
-- Dynamic filter update: Within 100ms
+`scripts/bench-filter.sh` measures the processing time for each number of lines, pattern, and display context.
+
+- Guideline: within 1 second for a 5000-line buffer, and within 100ms for a dynamic filter update. Both are design-time guidelines, not upper limits. The shorter the processing time, the better
+- The calculation of heading ranges (`altodo--compute-all-heading-ranges`) scans the buffer once (proportional to the number of lines). For 10,000 lines (`tag:work`, with display context) the measured time dropped from 2.99 s to 1.51 s
+- Known issue: going from 5,000 to 10,000 lines multiplies the time by 3.6 (`tag:work`, with display context), which is more than proportional to the number of lines. The cause is not identified. Removing the overlay of each matched line (`altodo--filter-remove-overlay`) scans a list
 
 
 ## 11. Face Application Priority (Layer Structure)

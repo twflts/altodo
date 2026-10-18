@@ -1,7 +1,7 @@
 ;;; matcher-remaining-test.el --- Tests for remaining matcher functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (defvar test-buffer nil)
 

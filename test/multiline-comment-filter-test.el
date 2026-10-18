@@ -164,16 +164,15 @@
     (goto-char (point-min))
     (should (null (altodo--line-has-multiline-comment-p)))))
 
-(ert-deftest multiline-comment-test-markdown-list-not-comment ()
-  "Test markdown list is not multiline comment."
+(ert-deftest multiline-comment-test-markdown-list-is-comment ()
+  "A markdown list indented by 4 spaces under a task is a multiline comment."
   (with-temp-buffer
     (insert "[ ] Task\n")
     (insert "    - List item\n")
     (insert "    - Another item\n")
-    
+    (altodo-mode)
     (goto-char (point-min))
-    ;; Markdown list should not be detected as multiline comment
-    (should (null (altodo--line-has-multiline-comment-p)))))
+    (should (altodo--line-has-multiline-comment-p))))
 
 (provide 'multiline-comment-filter-test)
 ;;; multiline-comment-filter-test.el ends here

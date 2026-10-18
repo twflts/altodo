@@ -1,10 +1,9 @@
 ;;; filter-real-test.el --- Real-world test with filter-test.altodo
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
-(defun test-filter-with-real-file ()
+(ert-deftest filter-real-test-filter-with-real-file ()
   "Test filtering with real altodo file."
   (with-temp-buffer
     (insert-file-contents "test/filter-test.altodo")
@@ -51,4 +50,5 @@
     (message "=== All real-world tests passed ===")
     ))
 
-(test-filter-with-real-file)
+(provide 'filter-real-test)
+;;; filter-real-test.el ends here

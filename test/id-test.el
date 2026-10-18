@@ -1,7 +1,7 @@
 ;;; id-test.el --- Tests for ID generation functions
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest test-generate-id ()
   (should (stringp (altodo--generate-id))))

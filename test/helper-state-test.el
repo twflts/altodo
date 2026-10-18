@@ -1,11 +1,10 @@
 ;;; helper-state-test.el --- Tests for state helper functions
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: altodo--normalize-state
-(defun test-normalize-state ()
+(ert-deftest helper-state-test-normalize-state ()
   "Test altodo--normalize-state."
   ;; Test 1: nil input
   (let ((result (altodo--normalize-state nil)))
@@ -35,7 +34,7 @@
   (message "test-normalize-state: PASS"))
 
 ;; Test: altodo--task-is-completed
-(defun test-task-is-completed ()
+(ert-deftest helper-state-test-task-is-completed ()
   "Test altodo--task-is-completed."
   ;; Test 1: done state
   (unless (altodo--task-is-completed altodo-state-done)
@@ -60,7 +59,7 @@
   (message "test-task-is-completed: PASS"))
 
 ;; Test: altodo--get-state-face
-(defun test-get-state-face ()
+(ert-deftest helper-state-test-get-state-face ()
   "Test altodo--get-state-face."
   ;; Test 1: done state
   (let ((result (altodo--get-state-face altodo-state-done)))
@@ -90,7 +89,7 @@
   (message "test-get-state-face: PASS"))
 
 ;; Test: altodo--get-state-text-face
-(defun test-get-state-text-face ()
+(ert-deftest helper-state-test-get-state-text-face ()
   "Test altodo--get-state-text-face."
   ;; Test 1: done state
   (let ((result (altodo--get-state-text-face altodo-state-done)))
@@ -119,13 +118,5 @@
   
   (message "test-get-state-text-face: PASS"))
 
-(defun run-all-tests ()
-  "Run all state helper tests."
-  (message "=== Running state helper tests ===")
-  (test-normalize-state)
-  (test-task-is-completed)
-  (test-get-state-face)
-  (test-get-state-text-face)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'helper-state-test)
+;;; helper-state-test.el ends here

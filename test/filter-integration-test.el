@@ -1,10 +1,9 @@
 ;;; filter-integration-test.el --- Integration tests for filter functions
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
-(defun test-filter-lines-show-done ()
+(ert-deftest filter-integration-test-filter-lines-show-done ()
   "Test filtering to show only done tasks."
   (with-temp-buffer
     (altodo-mode)
@@ -40,7 +39,7 @@
     
     (message "test-filter-lines-show-done: PASS")))
 
-(defun test-filter-clear ()
+(ert-deftest filter-integration-test-filter-clear ()
   "Test clearing all filters."
   (with-temp-buffer
     (altodo-mode)
@@ -70,7 +69,7 @@
     
     (message "test-filter-clear: PASS")))
 
-(defun test-filter-empty-buffer ()
+(ert-deftest filter-integration-test-filter-empty-buffer ()
   "Test filtering on empty buffer."
   (with-temp-buffer
     (altodo-mode)
@@ -85,7 +84,7 @@
     
     (message "test-filter-empty-buffer: PASS")))
 
-(defun test-filter-all-match ()
+(ert-deftest filter-integration-test-filter-all-match ()
   "Test filtering where all lines match."
   (with-temp-buffer
     (altodo-mode)
@@ -103,7 +102,7 @@
     
     (message "test-filter-all-match: PASS")))
 
-(defun test-filter-none-match ()
+(ert-deftest filter-integration-test-filter-none-match ()
   "Test filtering where no lines match."
   (with-temp-buffer
     (altodo-mode)
@@ -121,14 +120,5 @@
     
     (message "test-filter-none-match: PASS")))
 
-(defun run-all-tests ()
-  "Run all integration tests."
-  (message "=== Running filter integration tests ===")
-  (test-filter-lines-show-done)
-  (test-filter-clear)
-  (test-filter-empty-buffer)
-  (test-filter-all-match)
-  (test-filter-none-match)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'filter-integration-test)
+;;; filter-integration-test.el ends here

@@ -1,7 +1,7 @@
 ;;; start-date-filter-test.el --- Tests for start date filter -*- lexical-binding: t; -*-
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 ;; Test helper macro
 (defmacro start-date-test--with-buffer (content &rest body)

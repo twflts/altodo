@@ -1,7 +1,7 @@
 ;; Test for heading spacing (before/after newlines)
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 (ert-deftest heading-spacing-first-heading-only ()
   "Test first heading gets newline after only"

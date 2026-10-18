@@ -1,11 +1,10 @@
 ;;; fontlock-facespec-test.el --- Tests for font-lock facespec
 
-(require 'package)
-(package-initialize)
-(load-file "altodo.el")
+(require 'ert)
+(require 'altodo)
 
 ;; Test: Static face application
-(defun test-static-face ()
+(ert-deftest fontlock-facespec-test-static-face ()
   "Test static face application."
   ;; Test 1: altodo-task-bracket-face exists
   (unless (facep 'altodo-task-bracket-face)
@@ -18,7 +17,7 @@
   (message "test-static-face: PASS"))
 
 ;; Test: Dynamic face (lambda)
-(defun test-dynamic-face-state ()
+(ert-deftest fontlock-facespec-test-dynamic-face-state ()
   "Test dynamic face for task states."
   ;; Test 1: get-state-face returns correct face for done
   (let ((result (altodo--get-state-face altodo-state-done)))
@@ -33,7 +32,7 @@
   (message "test-dynamic-face-state: PASS"))
 
 ;; Test: Dynamic face (date)
-(defun test-dynamic-face-date ()
+(ert-deftest fontlock-facespec-test-dynamic-face-date ()
   "Test dynamic face for dates."
   ;; Test 1: determine-start-date-face returns correct face for past
   (let ((result (altodo--determine-start-date-face "2020-01-01")))
@@ -47,12 +46,5 @@
   
   (message "test-dynamic-face-date: PASS"))
 
-(defun run-all-tests ()
-  "Run all facespec tests."
-  (message "=== Running font-lock facespec tests ===")
-  (test-static-face)
-  (test-dynamic-face-state)
-  (test-dynamic-face-date)
-  (message "=== All tests passed ==="))
-
-(run-all-tests)
+(provide 'fontlock-facespec-test)
+;;; fontlock-facespec-test.el ends here

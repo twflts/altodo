@@ -1,0 +1,147 @@
+;; .altodo-locals.el - Filter configuration for test-sample-project.altodo
+
+(
+ (altodo-sidebar-position . left)
+ (altodo-sidebar-size . 30)
+ (altodo-sidebar-indent . 2)
+ 
+ (altodo-sidebar-face-alist .
+  ((face-rules-high . ((t (:foreground "red" :weight bold))))
+   (face-rules-mid . ((t (:foreground "orange"))))
+   (face-rules-low . ((t (:foreground "green"))))
+   (face-count-high . ((t (:foreground "red" :weight bold))))
+   (face-count-mid . ((t (:foreground "orange"))))
+   (face-count-low . ((t (:foreground "green"))))))
+ 
+ (altodo-filter-patterns .
+  (
+   (:title "Count Samples" :type group-header :nest 0)
+   (:title "Done + Star %n" :type comment :pattern "and:done,star" :count-format t :nest 1)
+   (:title "Priority + Important %n" :type comment :pattern "and:priority,tag:important" :count-format t :nest 1)
+   (:title "Open or Progress %n" :type comment :pattern "or:open,progress" :count-format t :nest 1)
+   
+   (:title "Status" :type group-header :nest 0)
+   (:title "Done [x] %n" :type search-simple :pattern "done" :count-format t :nest 1)
+   (:title "In Progress [@] %n" :type search-simple :pattern "progress" :count-format t :nest 1)
+   (:title "Waiting [w] %n" :type search-simple :pattern "waiting" :count-format t :nest 1)
+   (:title "Open [ ] %n" :type search-simple :pattern "open" :count-format t :nest 1)
+   (:title "Cancelled [~] %n" :type search-simple :pattern "cancelled" :count-format t :nest 1)
+   
+   (:title "Flags" :type group-header :nest 0)
+   (:title "Priority (!) %n" :type search-simple :pattern "priority" :count-format t :nest 1)
+   (:title "Star (+) %n" :type search-simple :pattern "star" :count-format t :nest 1)
+   
+   (:title "Tags" :type group-header :nest 0)
+   (:title "#important %n" :type search-simple :pattern "tag:important" :count-format t :nest 1)
+   (:title "#id %n" :type search-simple :pattern "tag:id" :count-format t :nest 1)
+   (:title "#phase %n" :type search-simple :pattern "tag:phase" :count-format t :nest 1)
+   
+   (:title "Tag Values (Phase 5-9)" :type group-header :nest 0)
+   (:title "Priority: High %n" :type search-simple :pattern "tag-value:priority high" :count-format t :nest 1)
+   (:title "Priority: Medium %n" :type search-simple :pattern "tag-value:priority medium" :count-format t :nest 1)
+   (:title "Priority: Low %n" :type search-simple :pattern "tag-value:priority low" :count-format t :nest 1)
+   (:title "Estimate > 5 %n" :type search-simple :pattern "tag-value:estimate (> 5)" :count-format t :nest 1)
+   (:title "Estimate < 5 %n" :type search-simple :pattern "tag-value:estimate (< 5)" :count-format t :nest 1)
+   (:title "Estimate = 5 %n" :type search-simple :pattern "tag-value:estimate (= 5)" :count-format t :nest 1)
+   (:title "Owner: john %n" :type search-simple :pattern "tag-value:owner john" :count-format t :nest 1)
+   (:title "Owner: alice %n" :type search-simple :pattern "tag-value:owner alice" :count-format t :nest 1)
+   (:title "High Priority & Est>5 %n" :type search-simple :pattern "and:tag-value:priority high,tag-value:estimate (> 5)" :count-format t :nest 1)
+   (:title "High or Medium Priority %n" :type search-simple :pattern "or:tag-value:priority high,tag-value:priority medium" :count-format t :nest 1)
+   
+   (:title "Parent Task Filters" :type group-header :nest 0)
+   (:title "Parent: プロジェクト %n" :type search-simple :pattern "parent-task-regexp:プロジェクト" :count-format t :nest 1)
+   (:title "Parent: フェーズ %n" :type search-simple :pattern "parent-task-regexp:フェーズ" :count-format t :nest 1)
+   (:title "Parent: 実装 %n" :type search-simple :pattern "parent-task-regexp:実装" :count-format t :nest 1)
+   (:title "Root: プロジェクト %n" :type search-simple :pattern "root-task-regexp:プロジェクト" :count-format t :nest 1)
+   (:title "Root: Alpha %n" :type search-simple :pattern "root-task-regexp:Alpha" :count-format t :nest 1)
+   (:title "Root: Beta %n" :type search-simple :pattern "root-task-regexp:Beta" :count-format t :nest 1)
+   (:title "Parent: 進行中 & Done %n" :type search-simple :pattern "and:parent-task-regexp:進行中,done" :count-format t :nest 1)
+   (:title "Root: ルート & Open %n" :type search-simple :pattern "and:root-task-regexp:ルート,open" :count-format t :nest 1)
+   
+   (:title "People" :type group-header :nest 0)
+   (:title "@田中 %n" :type search-simple :pattern "person:田中" :count-format t :nest 1)
+   (:title "@佐藤 %n" :type search-simple :pattern "person:佐藤" :count-format t :nest 1)
+   (:title "@team %n" :type search-simple :pattern "person:team" :count-format t :nest 1)
+   
+   (:title "Complex" :type group-header :nest 0)
+   (:title "Open + Priority %n" :type search-simple :pattern "and:open,priority" :count-format t :nest 1)
+   (:title "Open or Progress %n" :type search-simple :pattern "or:open,progress" :count-format t :nest 1)
+   
+   (:title "Section Name" :type separator :pattern "─" :nest 0)
+   
+   (:title "Dynamic Filters (Phase 2-4)" :type group-header :nest 0)
+   (:title "@%s [%n]" :type dynamic :dynamic-type "person" :sort-by "count" :limit 5 :count-format t :nest 1)
+   (:title "#%s [%n]" :type dynamic :dynamic-type "tag" :tag-mode "name-only" :sort-by "count" :limit 5 :count-format t :nest 1)
+   (:title "ignore value -> #%s [%n]" :type dynamic :dynamic-type "tag" :tag-mode "name-only" :sort-by "alpha" :limit 10 :count-format t :nest 1)
+   (:title "Due: %s [%n]" :type dynamic :dynamic-type "due" :sort-by "alpha" :count-format t :nest 1)
+   (:title "Start: %s [%n]" :type dynamic :dynamic-type "start" :sort-by "alpha" :count-format t :nest 1)
+   
+   (:title "" :type separator :nest 0)
+   
+   (:title "Face Rules (Phase 2-5)" :type group-header :nest 0)
+   (:title "Done (Color by Count) %n" :type search-simple :pattern "done" :count-format t :nest 1
+    :face-rules ((>= 5 (:foreground "red" :weight bold))
+                 (>= 1 (:foreground "orange"))
+                 (= 0 (:foreground "green"))))
+   (:title "Open (Title Color) %n" :type search-simple :pattern "open" :count-format t :nest 1
+    :face-rules ((>= 5 altodo-flag-priority-text-face)
+                 (>= 1 altodo-task-done-text-face)
+                 (= 0 altodo--task-progress-text-face)))
+   (:title "Priority (Count Color) %n" :type search-simple :pattern "priority" :count-format t :nest 1
+    :count-face-rules ((>= 2 (:foreground "red" :weight bold))
+                       (>= 1 (:foreground "orange"))
+                       (= 0 (:foreground "green"))))
+   (:title "Star (Both Colors) %n" :type search-simple :pattern "star" :count-format t :nest 1
+    :face-rules ((>= 2 (:foreground "gold" :weight bold))
+                 (>= 1 (:foreground "yellow"))
+                 (= 0 (:foreground "gray")))
+    :count-face-rules ((>= 2 (:foreground "red" :weight bold))
+                       (>= 1 (:foreground "orange"))
+                       (= 0 (:foreground "gray"))))
+   
+   (:title "" :type separator :nest 0)
+   
+   (:title "Dates (DSL)" :type group-header :nest 0)
+   (:title "Overdue %n" :type search-simple :pattern "due-date:overdue" :count-format t :nest 1)
+   (:title "Due today %n" :type search-simple :pattern "due-date:today" :count-format t :nest 1)
+   (:title "Due within 7 days %n" :type search-simple :pattern "due-date:within:7" :count-format t :nest 1)
+   (:title "Due this week %n" :type search-simple :pattern "due-date:this-week" :count-format t :nest 1)
+   (:title "Due this month %n" :type search-simple :pattern "due-date:this-month" :count-format t :nest 1)
+   (:title "Started %n" :type search-simple :pattern "start-date:passed" :count-format t :nest 1)
+   (:title "Not started yet %n" :type search-simple :pattern "start-date:not-yet" :count-format t :nest 1)
+   (:title "Due in 2099 %n" :type search-simple :pattern "due-date:between:2099-01-01:2099-12-31" :count-format t :nest 1)
+
+   (:title "Other DSL Patterns" :type group-header :nest 0)
+   (:title "Top level tasks %n" :type search-simple :pattern "and:level:0,open" :count-format t :nest 1)
+   (:title "Text: review %n" :type search-simple :pattern "text:review" :count-format t :nest 1)
+   (:title "Regexp: ^\\[x\\] %n" :type search-simple :pattern "regexp:^\\[x\\]" :count-format t :nest 1)
+   (:title "Has multi-line comment %n" :type search-simple :pattern "has-multiline-comment" :count-format t :nest 1)
+   (:title "Comment contains TODO %n" :type search-simple :pattern "multiline-comment-contains:TODO" :count-format t :nest 1)
+   (:title "Not done %n" :type search-simple :pattern "not:done" :count-format t :nest 1)
+
+   (:title "Display Context" :type group-header :nest 0)
+   (:title "Open: heading only (default) %n" :type search-simple :pattern "open" :count-format t :nest 1
+    :display-context heading-only)
+   (:title "Open: all context %n" :type search-simple :pattern "open" :count-format t :nest 1
+    :display-context all)
+   (:title "Open: matched lines only %n" :type search-simple :pattern "open" :count-format t :nest 1
+    :display-context none)
+   (:title "Open: hide multi-line comments %n" :type search-simple :pattern "open" :count-format t :nest 1
+    :multiline-comment nil)
+
+   (:title "Lambda Patterns" :type group-header :nest 0)
+   (:title "Open and overdue %n" :type search-lambda :count-format t :nest 1
+    :pattern (lambda ()
+               (and (altodo--due-date-matches-p 'overdue)
+                    (not (or (altodo--line-state-p altodo-state-done)
+                             (altodo--line-state-p altodo-state-cancelled)))))
+    :face-rules ((>= 1 error)))
+   (:title "Open and due today %n" :type search-lambda :count-format t :nest 1
+    :pattern (lambda ()
+               (and (altodo--due-date-matches-p 'today)
+                    (not (or (altodo--line-state-p altodo-state-done)
+                             (altodo--line-state-p altodo-state-cancelled))))))
+
+   (:title "Quick Actions" :type group-header :nest 0)
+   (:title "[Clear Filter]" :type command :nest 1 :command altodo-filter-clear)
+   )))

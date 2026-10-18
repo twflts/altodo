@@ -1,0 +1,19 @@
+# 修正前後のバックアップ（git で履歴を管理できるため追跡しない）
+/.claude/backup/
+
+# Emacs
+*.elc
+*~
+\#*\#
+.#*
+
+# Windows 用の開発補助スクリプト（ローカル専用）
+/kick_robocopy.bat
+/mklink_in_emacs_lispdir.bat
+
+# ローカル設定
+/.claude/settings.local.json
+/testfiles/generated/
+
+# done ファイル（C-c C-t d で生成される）
+/testfiles/*_done.altodo

@@ -1,7 +1,7 @@
 ;;; parent-task-regexp-test.el --- Tests for parent task regexp filter -*- lexical-binding: t; -*-
 
 (require 'ert)
-(load-file "altodo.el")
+(require 'altodo)
 
 ;;; Helper Functions Tests
 

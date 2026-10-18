@@ -1,0 +1,24 @@
+# Date Format YYYY/MM/DD Test
+
+Evaluate this before opening the file (or set it in your init file):
+
+    (setq altodo-date-format "%Y/%m/%d")
+
+Then run `M-x revert-buffer` and check that the dates below get the date faces
+and that the filters `due-date:` / `start-date:` of the sidebar work with them.
+The same dates written as YYYY-MM-DD are plain text with this setting.
+
+
+## Slash Dates
+
+[ ] Starts 2099/01/01 ->
+[ ] Due -> 2099/12/31
+[ ] Range 2099/01/01 -> 2099/12/31
+[ ] Overdue -> 2000/01/01
+[ ] Started 2000/01/01 -> 2099/12/31
+
+
+## Hyphen Dates (not dates with this setting)
+
+[ ] Starts 2099-01-01 ->
+[ ] Due -> 2099-12-31

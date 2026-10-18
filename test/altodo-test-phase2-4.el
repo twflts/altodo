@@ -19,23 +19,23 @@
       (should (= (cdr (assoc "bob" result)) 1)))))
 
 (ert-deftest altodo-test-phase2-4-collect-tag-ignore-value-t ()
-  "Test collecting #tag values with ignore-value=t."
+  "Test collecting #tag names with tag-mode name-only."
   (with-temp-buffer
     (insert "[x] Task A #tag:important\n")
     (insert "[x] Task B #tag:urgent\n")
     (insert "[x] Task C #tag:important\n")
-    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) t)))
+    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) "name-only")))
       (should (equal (length result) 1))
       (should (assoc "tag" result))
       (should (= (cdr (assoc "tag" result)) 3)))))
 
 (ert-deftest altodo-test-phase2-4-collect-tag-ignore-value-nil ()
-  "Test collecting #tag values with ignore-value=nil."
+  "Test collecting #tag values with tag-mode with-value."
   (with-temp-buffer
     (insert "[x] Task A #priority:high\n")
     (insert "[x] Task B #priority:high\n")
     (insert "[x] Task C #priority:low\n")
-    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) nil)))
+    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) "with-value")))
       (should (equal (length result) 2))
       (should (assoc "priority:high" result))
       (should (assoc "priority:low" result))
@@ -117,7 +117,7 @@
     (let* ((entry '(:title "@%s [%n]" :type dynamic :dynamic-type "person" :count-format t))
            (result (altodo--expand-dynamic-filter entry (current-buffer))))
       (should (equal (length result) 2))
-      (should (equal (plist-get (car result) :title) "@alice [2]"))
+      (should (equal (plist-get (car result) :title) "@alice [%n]"))
       (should (equal (plist-get (car result) :pattern) "person:alice")))))
 
 (ert-deftest altodo-test-phase2-4-expand-tag ()
@@ -126,10 +126,10 @@
     (insert "[x] Task A #priority:high\n")
     (insert "[x] Task B #priority:high\n")
     (insert "[x] Task C #priority:low\n")
-    (let* ((entry '(:title "#%s [%n]" :type dynamic :dynamic-type "tag" :tag-ignore-value nil :count-format t))
+    (let* ((entry '(:title "#%s [%n]" :type dynamic :dynamic-type "tag" :tag-mode "with-value" :count-format t))
            (result (altodo--expand-dynamic-filter entry (current-buffer))))
       (should (equal (length result) 2))
-      (should (equal (plist-get (car result) :title) "#priority:high [2]"))
+      (should (equal (plist-get (car result) :title) "#priority:high [%n]"))
       (should (equal (plist-get (car result) :pattern) "tag:priority:high")))))
 
 (ert-deftest altodo-test-phase2-4-expand-due ()
@@ -156,8 +156,8 @@
     (let* ((entry '(:title "@%s [%n]" :type dynamic :dynamic-type "person" :sort-by "count" :limit 2 :count-format t))
            (result (altodo--expand-dynamic-filter entry (current-buffer))))
       (should (equal (length result) 2))
-      (should (equal (plist-get (car result) :title) "@alice [3]"))
-      (should (equal (plist-get (cadr result) :title) "@bob [2]")))))
+      (should (equal (plist-get (car result) :title) "@alice [%n]"))
+      (should (equal (plist-get (cadr result) :title) "@bob [%n]")))))
 
 (ert-deftest altodo-test-phase2-4-complex-mixed-tags ()
   "Test collecting mixed tag names and values."
@@ -166,7 +166,7 @@
     (insert "[x] Task B #priority:high\n")
     (insert "[x] Task C #priority:low\n")
     (insert "[x] Task D #status:open\n")
-    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) nil)))
+    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) "with-value")))
       (should (equal (length result) 3))
       (should (assoc "priority:high" result))
       (should (assoc "priority:low" result))
@@ -179,7 +179,7 @@
     (insert "[x] Task B #priority:high\n")
     (insert "[x] Task C #priority:low\n")
     (insert "[x] Task D #status:open\n")
-    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) t)))
+    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) "name-only")))
       (should (equal (length result) 2))
       (should (assoc "priority" result))
       (should (assoc "status" result))
@@ -211,8 +211,8 @@
     (let* ((entry '(:title "Due: %s [%n]" :type dynamic :dynamic-type "due" :sort-by "count" :limit 2 :count-format t))
            (result (altodo--expand-dynamic-filter entry (current-buffer))))
       (should (equal (length result) 2))
-      (should (equal (plist-get (car result) :title) "Due: 2026-03-05 [3]"))
-      (should (equal (plist-get (cadr result) :title) "Due: 2026-03-10 [1]")))))
+      (should (equal (plist-get (car result) :title) "Due: 2026-03-05 [%n]"))
+      (should (equal (plist-get (cadr result) :title) "Due: 2026-03-10 [%n]")))))
 
 (ert-deftest altodo-test-phase2-4-complex-empty-buffer ()
   "Test collecting from empty buffer."
