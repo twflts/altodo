@@ -22,11 +22,6 @@ altodo.el functions as a custom extension of __Emacs Markdown Mode__ https://git
 - __Utility Functions__ - Helper functions
 
 
-### Extension Modules
-
-- __altodo-enhanced.el__ - Progress visualization and statistics features (WIP)
-
-
 ### Implementation Policy
 
 #### Plain Text Focus
@@ -52,7 +47,7 @@ altodo.el functions as a custom extension of __Emacs Markdown Mode__ https://git
 #### Font-lock
 
 - 5-layer processing (Task brackets → Base → Partial elements → Emphasis → Priority)
-- 29 face definitions (all task states, flags, tags, comments, date-based)
+- 50 face definitions (all task states, flags, tags, comments, date-based)
 - Efficiency through integrated processing
 
 
@@ -120,7 +115,7 @@ altodo.el functions as a custom extension of __Emacs Markdown Mode__ https://git
 
 #### Others
 
-- `altodo-toggle-comment` command
+- Key binding for `altodo-toggle-comment` (the command itself is implemented)
 - `#group-start`, `#group-due` tags
 
 
@@ -152,71 +147,16 @@ altodo.el functions as a custom extension of __Emacs Markdown Mode__ https://git
 
 #### Regex Definitions
 
-##### Task Line Regex
+The implementation defines the following constants.
 
-```elisp
-(defconst altodo-task-regex
-  (concat "^\\([ \t]*\\)"
-          "\\(\\[\\([~xw@ ]\\)\\]\\)"  ; Task state bracket
-          "\\(?: \\(.*\\)\\)?$")        ; Task body (optional)
-  "Regex matching a task line.")
-```
+- `altodo-task-regex`: a task line. The value is `^\([ ]*\)\[\([x@w~ ]?\)\]\(.*\)$`. Group 1 is the indentation at the beginning of the line, group 2 is the state character, and group 3 is the string after the state mark
+- `altodo-comment-regex`: a single-line comment line. The value is `^\([ \t]*\)/// \(.*\)$`
+- `altodo-tag-with-value-regex`: a tag with a value. The value is `\(?:^\|[ \t]\)\(#[a-zA-Z0-9_-]+\):\("[^"]*"\|[^[:space:]]+\)`. The value can be enclosed in double quotes
+- `altodo-tag-without-value-regex`: a tag without a value. The value is `\(?:^\|[ \t]\)\(#[a-zA-Z0-9_-]+\)\b`
+- `altodo-person-tag-regex`: an @person tag. The value is `\(?:^\|[[:space:]]\)\(@[^[:space:]]+\)`
+- `altodo-special-tag-regex`: special tags. Generated from `altodo-special-tag-names`
 
-**Structure**:
-- `^` - Line start
-- `[ \t]*` - Leading whitespace (indent)
-- `\\[[~xw@ ]\\]` - Task state bracket (`[ ]`, `[@]`, `[w]`, `[x]`, `[~]`)
-- `\\(?: \\(.*\\)\\)?$` - Task body (optional)
-
-
-##### Comment Line Regex
-
-```elisp
-(defconst altodo-comment-regex
-  (format "^\\([ \t]*\\)%s \\(.*\\)$"
-          (regexp-quote altodo-comment-marker))
-  "Regex matching a comment line.")
-```
-
-**Structure**:
-- `^` - Line start
-- `[ \t]*` - Leading whitespace (indent)
-- `/// ` - Comment marker
-- `\\(.*\\)$` - Comment body
-
-
-##### Tag Regex
-
-```elisp
-(defconst altodo-tag-regex
-  (concat "\\(?:^\\|[ \t]\\)"        ; Line start or after whitespace
-          "\\(#\\)"                  ; # tag start
-          "\\(" altodo-tag-name-regex "\\)"  ; Tag name
-          "\\(?::\\([^ \t\n]*\\)\\)?")      ; Value (optional)
-  "Regex matching a tag.")
-```
-
-**Structure**:
-- `\\(?:^\\|[ \t]\\)` - Line start or after whitespace
-- `#` - Tag start
-- Tag name (`altodo-tag-name-regex`)
-- `:value` (optional)
-
-
-##### Date Regex
-
-```elisp
-(defconst altodo-date-regex
-  (concat "\\([0-9]\\{4\\}[-/][0-9]\\{2\\}[-/][0-9]\\{2\\}\\)"  ; Date
-          "\\(?: -> \\)?"                                        ; Arrow (optional)
-          "\\(?:\\([0-9]\\{4\\}[-/][0-9]\\{2\\}[-/][0-9]\\{2\\}\\)\\)?")  ; End date
-  "Regex matching a date range.")
-```
-
-**Structure**:
-- `YYYY-MM-DD` or `YYYY/MM/DD` format date
-- ` -> ` arrow (optional)
-- End date (optional)
+The date regular expression is not a constant. `altodo--date-regex-info` generates it at run time from `altodo-date-format` (the default `nil` means `YYYY-MM-DD`).
 
 
 #### Task State Character List
@@ -233,101 +173,115 @@ altodo.el functions as a custom extension of __Emacs Markdown Mode__ https://git
 
 ### 4.2 Customizable Variables
 
-| Variable Name                         | Default               | Description                            |
-|---------------------------------------|-----------------------|----------------------------------------|
-| `altodo-indent-size`                  | 4                     | Indent size                            |
-| `altodo-auto-save`                    | t                     | Enable/disable auto-save               |
-| `altodo-font-lock-maximum-decoration` | t                     | Maximize font-lock decoration          |
-| `altodo-done-tag-format`              | `"%Y-%m-%d_%H:%M:%S"` | Done tag timestamp format              |
-| `altodo-due-warning-days`             | 7                     | Days before due date to show warning   |
-| `altodo-due-urgent-days`              | 2                     | Days before due date to show urgent    |
-| `altodo-date-patterns`                | YYYY-MM-DD format     | Supported date format pattern list     |
-| `altodo-done-file-prefix`             | `"_done"`             | Done file prefix                       |
-| `altodo-auto-move-enabled`            | t                     | Enable/disable auto-move               |
-| `altodo-auto-move-interval`           | 3600                  | Auto-move execution interval (seconds) |
-| `altodo-auto-save-after-move`         | t                     | Auto-save source file after move       |
+| Variable                                       | Default        | Description                                               |
+| ---------------------------------------------- | -------------- | --------------------------------------------------------- |
+| `altodo-indent-size`                           | `4`            | Indentation size                                          |
+| `altodo-enable-markdown-in-multiline-comments` | `t`            | Enable Markdown formatting in multi-line comments         |
+| `altodo-auto-save`                             | `nil`          | Save the file automatically when a task state changes     |
+| `altodo-skk-wrap-newline`                      | `t`            | Wrap newline commands for SKK input method compatibility  |
+| `altodo-font-lock-maximum-decoration`          | `t`            | Maximize font-lock decoration                             |
+| `altodo-done-tag-datetime-format`              | `nil`          | Time format of `#done` (`nil` is ISO 8601 with time zone) |
+| `altodo-use-local-timezone`                    | `t`            | Use the local time zone for the `#done` time              |
+| `altodo-insert-id-format`                      | `'tiny-random` | ID format of `#id`                                        |
+| `altodo-date-format`                           | `nil`          | Date format (`nil` is `YYYY-MM-DD`)                       |
+| `altodo-week-start-day`                        | `1`            | First day of the week (0 is Sunday, 1 is Monday)          |
+| `altodo-done-file-prefix`                      | `"_done"`      | String added to the done file name                        |
+| `altodo-move-single-line-comments-manually`    | `t`            | Enable manual move of single-line comments                |
+| `altodo-auto-move-interval`                    | `3600`         | Interval of the automatic move (seconds)                  |
+| `altodo-auto-save-after-move`                  | `nil`          | Save the source file after a move                         |
+| `altodo-auto-move-skip-done-files`             | `t`            | Exclude done files from the automatic move                |
+| `altodo-show-auto-move-in-mode-line`           | `t`            | Show the automatic move state in the mode line            |
+
+For the sidebar and debug variables, see "Settings" in `README_en.md`.
 
 
 ### 4.3 Face Definitions
 
 #### Task State Faces
 
-| Face                         | Description          |
-|------------------------------|----------------------|
-| `altodo-task-open-face`      | For open tasks       |
-| `altodo-task-done-face`      | For done tasks       |
-| `altodo-task-progress-face`  | For in-progress tasks|
-| `altodo-task-waiting-face`   | For waiting tasks    |
-| `altodo-task-cancelled-face` | For cancelled tasks  |
+| Face                         | Description           |
+| ---------------------------- | --------------------- |
+| `altodo-task-open-face`      | For open tasks        |
+| `altodo-task-done-face`      | For done tasks        |
+| `altodo--task-progress-face` | For in-progress tasks |
+| `altodo-task-waiting-face`   | For waiting tasks     |
+| `altodo-task-cancelled-face` | For cancelled tasks   |
+
 
 #### Task Text Faces
 
-| Face                              | Description                              |
-|-----------------------------------|------------------------------------------|
-| `altodo-task-open-text-face`      | For open task text (light green)         |
-| `altodo-task-done-text-face`      | For done task text (strikethrough)       |
-| `altodo-task-progress-text-face`  | For in-progress task text (magenta)      |
-| `altodo-task-waiting-text-face`   | For waiting task text (light gray)       |
-| `altodo-task-cancelled-text-face` | For cancelled task text (strikethrough)  |
+| Face                              | Description                             |
+| --------------------------------- | --------------------------------------- |
+| `altodo-task-open-text-face`      | For open task text (light green)        |
+| `altodo-task-done-text-face`      | For done task text (strikethrough)      |
+| `altodo--task-progress-text-face` | For in-progress task text (magenta)     |
+| `altodo-task-waiting-text-face`   | For waiting task text (light gray)      |
+| `altodo-task-cancelled-text-face` | For cancelled task text (strikethrough) |
+
 
 #### Comment Faces
 
-| Face                            | Description                      |
-|---------------------------------|----------------------------------|
-| `altodo-comment-face`           | For single-line comments (red)   |
-| `altodo-multiline-comment-face` | For multi-line comments (gray)   |
+| Face                            | Description                    |
+| ------------------------------- | ------------------------------ |
+| `altodo-comment-face`           | For single-line comments (red) |
+| `altodo-multiline-comment-face` | For multi-line comments (gray) |
+
 
 #### Flag Faces
 
-| Face                         | Description                     |
-|------------------------------|---------------------------------|
-| `altodo-flag-star-face`      | For star flag (gold bold)       |
-| `altodo-flag-priority1-face` | For priority 1 flag (red)       |
-| `altodo-flag-priority2-face` | For priority 2 flag (red bold)  |
-| `altodo-flag-priority3-face` | For priority 3 flag (red bold)  |
+| Face                         | Description                    |
+| ---------------------------- | ------------------------------ |
+| `altodo-flag-star-face`      | For star flag (gold bold)      |
+| `altodo-flag-priority1-face` | For priority 1 flag (red)      |
+| `altodo-flag-priority2-face` | For priority 2 flag (red bold) |
+| `altodo-flag-priority3-face` | For priority 3 flag (red bold) |
+
 
 #### Tag and Date Faces
 
-| Face                      | Description                      |
-|---------------------------|----------------------------------|
-| `altodo-tag-face`         | For general tags (purple)        |
-| `altodo-tag-value-face`   | For tag values (dark purple bold)|
-| `altodo-special-tag-face` | For special tags (magenta bold)  |
-| `altodo-date-face`        | For dates (blue)                 |
+| Face                      | Description                       |
+| ------------------------- | --------------------------------- |
+| `altodo-tag-face`         | For general tags (purple)         |
+| `altodo-tag-value-face`   | For tag values (dark purple bold) |
+| `altodo-special-tag-face` | For special tags (magenta bold)   |
+| `altodo-date-face`        | For dates (blue)                  |
+
 
 #### Dependency Faces
 
-| Face                           | Description                        |
-|--------------------------------|------------------------------------|
-| `altodo-dep-blocked-text-face` | For dependency blocked (red)       |
-| `altodo-dep-blocked-tag-face`  | For dependency blocked tag (red)   |
-| `altodo-dep-ready-tag-face`    | For dependency ready tag (green)   |
-| `altodo-dep-error-tag-face`    | For dependency error (red bold)    |
+| Face                           | Description                      |
+| ------------------------------ | -------------------------------- |
+| `altodo-dep-blocked-text-face` | For dependency blocked (red)     |
+| `altodo-dep-blocked-tag-face`  | For dependency blocked tag (red) |
+| `altodo-dep-ready-tag-face`    | For dependency ready tag (green) |
+| `altodo-dep-error-tag-face`    | For dependency error (red bold)  |
 
 
 ### 4.4 Keymap
 
-| Key         | Function               | Function Name                     | Description                                                 |
-|-------------|------------------------|-----------------------------------|-------------------------------------------------------------|
-| `TAB`       | Indent operation       | `altodo-indent-line`              | Make/unmake subtask                                         |
-| `RET`       | Newline/new task       | `altodo-enter`                    | Context-aware newline processing                            |
-| `C-c C-x`   | Task state toggle      | `altodo-toggle-task-state`        | Toggle open ↔ done                                         |
-| `C-c C-t o` | Open task              | `altodo-set-task-open`            | Change to `[ ]`                                             |
-| `C-c C-t x` | Done task              | `altodo-set-task-done`            | Change to `[x]`                                             |
-| `C-c C-t @` | In-progress task       | `altodo-set-task-progress`        | Change to `[@]`                                             |
-| `C-c C-t w` | Waiting task           | `altodo-set-task-waiting`         | Change to `[w]`                                             |
-| `C-c C-t ~` | Cancelled task         | `altodo-set-task-cancelled`       | Change to `[~]`                                             |
-| `C-c C-t d` | Move done task         | `altodo-move-done-tasks-at-point` | Move done/cancelled task at cursor/region to done file     |
-| `C-c C-a`   | Add task               | `altodo-add-task`                 | Add subtask or new task                                     |
-| `C-c C-m`   | Start multiline comment| `altodo-start-multiline-comment`  | Start multiline comment                                     |
-| `C-c C-s`   | Toggle star flag       | `altodo-toggle-star-flag`         | Toggle `+` flag                                             |
-| `C-c C-f 1` | Set priority 1         | `altodo-set-priority-1`           | Set `!` flag                                                |
-| `C-c C-f 2` | Set priority 2         | `altodo-set-priority-2`           | Set `!!` flag                                               |
-| `C-c C-f 3` | Set priority 3         | `altodo-set-priority-3`           | Set `!!!` flag                                              |
-| `C-c C-v f c` | Clear filter         | `altodo-filter-clear`             | Clear all filters                                           |
-| `C-c C-v s t` | Toggle sidebar       | `altodo-sidebar-toggle`           | Toggle sidebar visibility                                   |
-| `C-c C-v s r` | Refresh sidebar      | `altodo-sidebar-refresh`          | Refresh sidebar content                                     |
-| `C-c =`     | Toggle comment         | `altodo-toggle-comment`           | Toggle task ↔ comment                                      |
+On lines other than task lines and single-line comment lines, each key calls the `markdown-mode` binding.
+
+| Key                             | Function                                                               | Description                           |
+| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------- |
+| `TAB`                           | `altodo-indent-line`                                                   | Make/unmake a subtask                 |
+| `RET`                           | `altodo-enter`                                                         | Context-dependent newline             |
+| `<backtab>`                     | `outline-cycle`                                                        | Cycle the outline                     |
+| `C-c C-x`                       | `altodo-toggle-task-state`                                             | Toggle open ↔ completed              |
+| `C-c C-t o`, `x`, `@`, `w`, `~` | `altodo-set-task-open`, `-done`, `-progress`, `-waiting`, `-cancelled` | Set the state                         |
+| `C-c C-t d`                     | `altodo-move-done-tasks-at-point`                                      | Move a finished task to the done file |
+| `C-c C-a`                       | `altodo-add-task`                                                      | Add a task                            |
+| `M-RET`                         | `altodo-add-subtask`                                                   | Add a subtask                         |
+| `C-c C-m`                       | `altodo-start-multiline-comment`                                       | Start a multi-line comment            |
+| `C-c C-s`                       | `altodo-toggle-star-flag`                                              | Toggle the star flag                  |
+| `C-c C-f 1`, `2`, `3`           | `altodo-set-priority-1`, `-2`, `-3`                                    | Set the priority                      |
+| `C-c C-i`                       | `altodo-insert-id`                                                     | Insert `#id`                          |
+| `C-c C-j`                       | `altodo-goto-dependency`                                               | Jump to the dependency task           |
+| `M-<right>`, `M-<left>`         | `altodo-indent-increase`, `altodo-indent-decrease`                     | Increase/decrease the indentation     |
+| `C-c C-v f c`                   | `altodo-filter-clear`                                                  | Clear the filter                      |
+| `C-c C-v s t`                   | `altodo-sidebar-toggle`                                                | Toggle the sidebar                    |
+| `C-c C-v s r`                   | `altodo-sidebar-refresh`                                               | Refresh the sidebar                   |
+
+`altodo-toggle-comment` (toggle task ↔ comment) has no key binding. Run it with `M-x`.
 
 
 ## 4. Configuration File (.altodo-locals.el)
@@ -374,13 +328,13 @@ Multiple variables can be specified in alist format:
 
 `.altodo-locals.el` can specify any variable in alist format. The implementation simply reads the file as Lisp data, so there are no restrictions.
 
-| Variable Name               | Description                                 |
-|-----------------------------|---------------------------------------------|
-| `altodo-filter-patterns`    | Sidebar filter pattern list                 |
-| `altodo-sidebar-face-alist` | Sidebar face definitions                    |
-| `altodo-sidebar-position`   | Sidebar display position (`left` or `right`)|
-| `altodo-sidebar-size`       | Sidebar width (characters)                  |
-| `altodo-sidebar-indent`     | Sidebar indent width                        |
+| Variable Name               | Description                                  |
+| --------------------------- | -------------------------------------------- |
+| `altodo-filter-patterns`    | Sidebar filter pattern list                  |
+| `altodo-sidebar-face-alist` | Sidebar face definitions                     |
+| `altodo-sidebar-position`   | Sidebar display position (`left` or `right`) |
+| `altodo-sidebar-size`       | Sidebar width (ratio to the window width)    |
+| `altodo-sidebar-indent`     | Sidebar indent width                         |
 
 **Example**:
 
@@ -389,7 +343,7 @@ Multiple variables can be specified in alist format:
  (altodo-filter-patterns . (...))
  (altodo-sidebar-face-alist . (...))
  (altodo-sidebar-position . right)
- (altodo-sidebar-size . 30)
+ (altodo-sidebar-size . 0.3)
  )
 ```
 
@@ -398,7 +352,7 @@ Multiple variables can be specified in alist format:
 
 If the file does not exist, use the following default values:
 
-- `altodo-filter-patterns` → `altodo--default-filter-patterns` variable
+- `altodo-filter-patterns` → `altodo-default-filter-patterns` variable
 - Sidebar faces → Default faces
 
 
@@ -408,13 +362,13 @@ If the file does not exist, use the following default values:
 
 5 task states:
 
-| State     | Mark  | Description                    |
-|-----------|-------|--------------------------------|
-| Open      | `[ ]` | Task before execution          |
-| Progress  | `[@]` | Task currently in progress     |
-| Waiting   | `[w]` | Task on hold (waiting state)   |
-| Done      | `[x]` | Completed task                 |
-| Cancelled | `[~]` | Task cancelled before completion|
+| State     | Mark  | Description                      |
+| --------- | ----- | -------------------------------- |
+| Open      | `[ ]` | Task before execution            |
+| Progress  | `[@]` | Task currently in progress       |
+| Waiting   | `[w]` | Task on hold (waiting state)     |
+| Done      | `[x]` | Completed task                   |
+| Cancelled | `[~]` | Task cancelled before completion |
 
 
 ### 5.2 Flags and Priority
@@ -424,6 +378,12 @@ If the file does not exist, use the following default values:
 - Flag: `+`
 - Usage: Particularly important tasks
 - Example: `[ ] + Task with star flag`
+
+
+#### Lines That Accept Flags
+
+- A flag is placed immediately after the task state mark of a task line, or immediately after `///` of a single-line comment line
+- One space is required after the flag
 
 
 #### Priority Flags
@@ -438,45 +398,29 @@ If the file does not exist, use the following default values:
 #### Single-line Comment
 
 - Marker: `///`
+- Usage: A detached note (a side remark, a review memo) that is not part of the task
 - Example: `/// This is a single-line comment`
+- A flag (`+`, `!`) can be added. Example: `/// ! Important note`
 
 
 #### Multi-line Comment
 
-- Indented lines immediately following a task line or single-line comment line
-- Indent rule: Parent line indent + 4 spaces
-- Ends with blank line (no indent)
+- Attaches to: the task line or single-line comment line immediately above
+- Usage: The description of the task, as part of the task
+- Example: the line `    Description of the task` after `[ ] Task`
 
 
-#### Multi-line Comment Termination Detection
+#### Multi-line Comment Detection Rules
 
-Multi-line comments end with **blank line (no indent)**.
+The details of the specification follow section 3.2.3 of `doc/altodo_spec_en.md`. The detection rules are as follows.
 
-**Detection Logic**:
+- The first line begins with the indentation of the task line or single-line comment line above it + 4 spaces. There is no exception
+- Every line with the same indentation as the first line, other than a task line, is part of the comment. This includes Markdown lists, links, and fenced code blocks
+- Subsequent lines have the same indentation as the previous multi-line comment line. A line that keeps the indentation but contains only spaces is also part of the comment
+- A line with a different indentation (shallower or deeper) or a completely empty line (zero characters) ends the comment. A more deeply indented line, such as a nested Markdown list item, is not part of the comment
+- A line starting with a task state mark is always a task line
 
-```elisp
-(defun altodo--multiline-comment-p ()
-  "Check if current line is part of a multiline comment.
-Returns t if in multiline comment, nil otherwise."
-  (save-excursion
-    (beginning-of-line)
-    (let ((indent (current-indentation)))
-      (cond
-       ;; Single-line comment is not multiline comment
-       ((looking-at-p (format "^%s[ \t]*$"
-                             (regexp-quote altodo-comment-marker)))
-        nil)
-       ;; No indent means end of multiline comment
-       ((= indent 0)
-        nil)
-       ;; With indent means continuation of multiline comment
-       (t t)))))
-```
-
-**Processing**:
-1. If current line is single-line comment line (`///` only), end
-2. If current line has no indent, end
-3. If current line has indent, continue
+Detection is performed line by line, using regular expressions and the state of the previous line. An indented line is not treated as a Markdown indented code block (section 6.0).
 
 
 ### 5.4 Tags
@@ -495,13 +439,14 @@ Returns t if in multiline comment, nil otherwise."
 
 #### Special Tags
 
-| Tag                 | Description                      |
-|---------------------|----------------------------------|
-| `#id:value`         | Unique identifier                |
-| `#dep:value`        | Dependency (specify reference ID)|
-| `#group-start:date` | Group task start date            |
-| `#group-due:date`   | Group task due date              |
-| `#done:timestamp`   | Task completion/cancellation time|
+| Tag                 | Description                       |
+| ------------------- | --------------------------------- |
+| `#id:value`         | Unique identifier                 |
+| `#dep:value`        | Dependency (specify reference ID) |
+| `#group-start:date` | Group task start date             |
+| `#group-due:date`   | Group task due date               |
+| `#done:timestamp`   | Task completion/cancellation time |
+| `#seq-tasks`        | Subtasks run from top to bottom   |
 
 
 #### @person Tags
@@ -564,6 +509,12 @@ Returns t if in multiline comment, nil otherwise."
 - Prefix: Configurable with `altodo-done-file-prefix`
 
 
+#### Limitations
+
+- The current version does not keep the nested (tree) structure of tasks. Only the lines of the completed or cancelled task and their multi-line comments are moved under the heading. Subtasks remain in the source buffer
+- A future improvement is planned to move subtasks together
+
+
 ### 5.8 Filtering Feature
 
 #### Parent Task Regex Filter
@@ -582,7 +533,7 @@ Returns t if in multiline comment, nil otherwise."
 
 - Display match count with `%n` placeholder in `:title`
 - `:count-format` option: Enable/disable count processing
-- `:type` option: Specify filter type (nil, "comment", "group-header", "dynamic")
+- `:type` option: Specify filter type (`nil`, `comment`, `group-header`, `separator`, `command`, `dynamic`, `search-simple`, `search-lambda`)
 
 
 ## 6. Markdown Integration and Code Block Handling
@@ -649,6 +600,7 @@ Only targets fenced code blocks (``` or ~~~), not indented code blocks."
 
 ---
 
+
 ## 6. Font-lock Design
 
 ### 6.1 Processing Order (Layer Structure)
@@ -689,17 +641,17 @@ Layer 5: Priority (entire comments, strikethrough)
 
 ### 6.3 Override Flag Strategy
 
-| Layer | Element                  | Override Flag | Reason                                                     |
-|-------|--------------------------|---------------|------------------------------------------------------------|
-| 1     | Bracket/state character  | `t`           | Finalize bracket and state character faces                 |
-| 2     | Entire text              | `append`      | Prioritize markdown-mode faces, add altodo-mode faces      |
-| 3     | (Empty)                  | -             | Tags moved to Layer 4                                      |
-| 4     | Date-based text          | `prepend`     | Stack multiple faces                                       |
-| 4     | Flag (symbol part)       | `t`           | Finalize flag symbol face                                  |
-| 4     | Flag (text part)         | `prepend`     | Stack multiple faces                                       |
-| 4     | Tags/dates               | `t`           | Finalize tag and date faces                                |
-| 5     | Comments                 | `prepend`     | Stack multiple faces                                       |
-| 5     | Strikethrough            | `t`           | Finalize strikethrough face                                |
+| Layer | Element                 | Override Flag | Reason                                                |
+| ----- | ----------------------- | ------------- | ----------------------------------------------------- |
+| 1     | Bracket/state character | `t`           | Finalize bracket and state character faces            |
+| 2     | Entire text             | `append`      | Prioritize markdown-mode faces, add altodo-mode faces |
+| 3     | (Empty)                 | -             | Tags moved to Layer 4                                 |
+| 4     | Date-based text         | `prepend`     | Stack multiple faces                                  |
+| 4     | Flag (symbol part)      | `t`           | Finalize flag symbol face                             |
+| 4     | Flag (text part)        | `prepend`     | Stack multiple faces                                  |
+| 4     | Tags/dates              | `t`           | Finalize tag and date faces                           |
+| 5     | Comments                | `prepend`     | Stack multiple faces                                  |
+| 5     | Strikethrough           | `t`           | Finalize strikethrough face                           |
 
 
 ### 6.4 seq-tasks Implementation

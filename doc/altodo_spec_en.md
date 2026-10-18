@@ -86,6 +86,7 @@ Below is an example of tasks written in altodo format.
 altodo is a TODO format that can be embedded in Markdown (CommonMark).
 The design avoids conflicts with other Markdown (CommonMark) syntax (headings, lists, code blocks, etc.), so Markdown (CommonMark) syntax including inline elements can be used as-is.
 Text containing altodo syntax enclosed in backticks (`) for inline code or code blocks is treated the same as Markdown (CommonMark) code and does not have the effect of altodo syntax.
+However, because altodo expresses nesting and multi-line comments with indentation, indented task lines, single-line comment lines, and multi-line comments are never treated as Markdown (CommonMark) indented code blocks, even right after a blank line.
 
 
 ### 3.2 Task Lines and Comment Lines (Single-line and Multi-line)
@@ -93,7 +94,7 @@ Text containing altodo syntax enclosed in backticks (`) for inline code or code 
 #### 3.2.1 Task Lines and Single-line Comment Lines
 
 A task line must start with one of `[ ]`, `[x]`, `[@]`, `[w]`, or `[~]` (collectively called __task state marks__), which indicate the task status.
-A single-line comment line starts with `///` (called __single-line comment mark__) and is treated as a comment for task lines or other lines.
+A single-line comment line starts with `///` (called __single-line comment mark__) and is treated as a detached note (a side remark, a review memo, etc.) that is not part of the task. A single-line comment line is a single line only.
 Immediately after each mark, one space is required.
 For subtasks, indentation with spaces is added from the beginning of the line.
 
@@ -126,9 +127,11 @@ Subtasks can be nested infinitely.
 
 Multi-line comments are comment lines spanning multiple lines attached to a task line or single-line comment line.
 
-- The first line of a multi-line comment begins with the indentation of the previous task line or single-line comment line + 4 spaces.
-- Subsequent lines of a multi-line comment have the same indentation as the previous multi-line comment line.
-- Multi-line comments end with a line with no indentation.
+- The first line of a multi-line comment begins with the indentation of the previous task line or single-line comment line + 4 spaces, and attaches to that previous line. This rule applies without exception.
+- Every line with the same indentation as the first line, other than a task line, is part of the multi-line comment. This includes Markdown lists, links (`[text](URL)`), and fenced code blocks.
+- Subsequent lines of a multi-line comment have the same indentation as the previous multi-line comment line. A line that keeps the indentation but contains only spaces is also part of the multi-line comment.
+- A multi-line comment ends with a line whose indentation is different (shallower or deeper), or a completely empty line (zero characters). There is no exception: a more deeply indented line, such as a nested Markdown list item, is not part of the multi-line comment.
+- A line starting with a task state mark is always a task line. To write text that starts with a task state mark as-is in a multi-line comment, enclose it in a fenced code block.
 
 __Example__
 
@@ -143,18 +146,43 @@ __Example__
         Multi-line comments can also be specified for subtasks
 ```
 
+__Examples that are not multi-line comments__
+
+```
+[ ] Task
+    [ ] Subtask
+    A line with the same indentation as the subtask. Not the subtask's indentation + 4 spaces, so it is normal Markdown text
+            A line with the subtask's indentation + 8 spaces. Not + 4 spaces, so it is normal Markdown text
+```
+
+
+#### 3.2.4 Choosing Between Multi-line Comments and Single-line Comments
+
+Both multi-line comments and single-line comments can be written under a task. Choose according to whether the text is part of the task.
+
+- Multi-line comment (no mark): the description or rationale of the task itself, as part of the task definition. Write a task description as a multi-line comment, even if it is a single line.
+- Single-line comment (`///`): a detached note (a side remark, a review memo, etc.) that is not part of the task. It can be indented under a task for grouping, but it is not part of the task definition. The `///` mark takes a single line, but it can be followed by a multi-line comment without a mark. In this case, the text is also treated as a detached note.
+
+Do not stack multiple `///` lines to write a task description. Use a multi-line comment without a mark.
+
+```
+[ ] Task
+    Description of this task (part of the task)
+    /// Side note: revisit the naming once the API is frozen (a note that is not part of the task)
+```
+
 
 ### 3.3 Task Line Types (Open, Completed, In Progress, etc.)
 
 Task state marks for task lines are of the following types:
 
-| Mark | Type       | Category           | Details                                    |
-|------|------------|--------------------|--------------------------------------------|
-| [ ]  | Open       | Open (In Progress) | Task not yet started                       |
-| [@]  | In Progress| Open (In Progress) | Task currently in progress or being handled|
-| [w]  | Waiting    | Open (In Progress) | Task on hold (waiting state)               |
-| [x]  | Completed  | Completed          | Task completed (after execution)           |
-| [~]  | Cancelled  | Completed          | Task cancelled before completion           |
+| Mark | Type        | Category           | Details                                     |
+| ---- | ----------- | ------------------ | ------------------------------------------- |
+| [ ]  | Open        | Open (In Progress) | Task not yet started                        |
+| [@]  | In Progress | Open (In Progress) | Task currently in progress or being handled |
+| [w]  | Waiting     | Open (In Progress) | Task on hold (waiting state)                |
+| [x]  | Completed   | Completed          | Task completed (after execution)            |
+| [~]  | Cancelled   | Completed          | Task cancelled before completion            |
 
 
 ### 3.4 Flags
@@ -167,6 +195,7 @@ __Example__
 ```
 [ ] + Task with star flag
 [ ] +NG Example line. Intended to add a star flag, but missing one space. Treated as normal text.
+/// ! Flags can also be added to single-line comment lines
 ```
 
 
@@ -231,7 +260,7 @@ __Example__
 #### 3.5.2 Start Date and Due Date
 
 Start date and due date can be specified for a task. Date notation is in `YYYY-MM-DD` format, but any format can be specified. For example, `YYYY/MM/DD` format.
-Space before and after start date and due date is required. However, if a tag comes at the end of a line, the space at the end of the line is not required.
+Space before and after start date and due date is required. However, if a date comes at the end of a line, the space at the end of the line is not required.
 
 - Start date specification: `YYYY-MM-DD ->`
 - Due date specification: `-> YYYY-MM-DD`
@@ -302,7 +331,7 @@ __Usage__
 
 - Specify assignee
 - Specify location
-- Use as filter condition (planned for future implementation)
+- Use as filter condition
 
 
 #### 3.6.4 Task Completion/Cancellation Time #done
@@ -320,3 +349,37 @@ __Example__
 [x] Document creation #done:2003-01-15
     [~] Conduct review #person:john #done:1042624800
 ```
+
+
+#### 3.6.5 Group Start Date and Due Date #group-start, #group-due
+
+Tags indicating the start date and due date of a "group" made of a task and its subtasks. Add them to the parent task; they represent the start date and due date of the parent task and all its subtasks. They are used to specify the dates of all subtasks at once on the parent task, instead of adding a start date and due date to each subtask.
+The value is a date, in the same format as the start date and due date in 3.5.2.
+
+__Example__
+
+```
+[ ] Project A #group-start:2026-03-01 #group-due:2026-06-30
+    [ ] Design
+    [ ] Implementation
+```
+
+
+#### 3.6.6 Sequential Execution of Subtasks #seq-tasks
+
+A tag that makes subtasks execute from top to bottom. When `#seq-tasks` is added to a parent task, each child task cannot be executed until the preceding sibling task is completed (`[x]`) or cancelled (`[~]`).
+
+__Example__
+
+```
+[@] Parent task executed sequentially #seq-tasks
+    [ ] Step 1 (can be executed)
+    [ ] Step 2 (cannot be executed until step 1 is finished)
+    [ ] Step 3 (cannot be executed until step 2 is finished)
+```
+
+
+### 3.7 Literal Text and Escaping
+
+A way to write `#`, `@`, or `->` as-is, without the effect of a tag, person tag, or date (escaping with `\`), is not supported at present. Support is planned for the future.
+For now, work around it with the rule on surrounding spaces (`foo@bar` is not a person tag) or with a fenced code block.

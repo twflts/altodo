@@ -62,7 +62,7 @@ Below is an example of altodo format tasks.
         Nested task A multi-line comment line 1
         Nested task A multi-line comment line 2
         
-        Blank line 3 is part of comment if indented (comment line 4)
+        A line with only the same indentation spaces also continues the comment (comment line 4)
 [ ] Tagged task #home (space required before/after tag)
 [ ] Task with start date 2025-01-01 -> starts from this date
     [ ] Task with due date -> 2025-12-31 must complete by this date
@@ -73,6 +73,7 @@ Below is an example of altodo format tasks.
 [ ] Dependent task 2 (references ID) #dep:20250101-0000
 [ ] People @JohnDoe or places @home can be tagged with @person tags
 ```
+
 
 ### Main Syntax
 
@@ -87,14 +88,17 @@ Below is an example of altodo format tasks.
 
 #### Comments
 
-- `/// comment`: Single-line comment
-- Task/comment indent + 4 spaces: Multi-line comment
+- `/// comment`: Single-line comment. A detached note (a side remark, a review memo) that is not part of the task
+- Multi-line comment: lines at the indent of the task/single-line comment above + 4 spaces. Part of the task, such as its description
+    - The first line must be indented by exactly the previous line + 4 spaces. A line at the same indent or at + 8 spaces is not a multi-line comment
+    - A completely empty line (zero characters) or a line with a different indent ends the comment
 
 
 #### Flags
 
 - `!`, `!!`, `!!!`: Priority (typically 3 levels, more `!` = higher priority)
 - `+`: Star flag
+- Flags can also be added to single-line comments (`/// ! note`)
 
 
 #### Tags
@@ -107,6 +111,10 @@ Special tags with functionality:
 
 - `#id:value`: ID tag
 - `#dep:value`: Dependency tag (references ID tag value)
+- `#done:timestamp`: Time the task was completed or cancelled (added automatically by the application)
+- `#seq-tasks`: Subtasks run from top to bottom (a task cannot start until the preceding sibling is completed or cancelled)
+
+Writing `#`, `@`, or `->` literally (escaping) is not supported at present (see section 3.7 of `doc/altodo_spec_en.md`).
 
 
 #### Due/Start Dates
@@ -168,10 +176,19 @@ altodo-mode inherits from markdown-mode, so markdown-mode keybindings are also a
 - `M-x altodo-sidebar-show`: Show sidebar
 - `M-x altodo-sidebar-hide`: Hide sidebar
 - `M-x altodo-sidebar-toggle`: Toggle sidebar
+- `C-c C-v s t`: Toggle sidebar
+- `C-c C-v s r`: Refresh sidebar
+- `C-c C-v f c`: Clear filter
+
 
 #### Sidebar Operations (within sidebar)
 
-- `C-SPC`: Select/deselect filter
+- `RET`, `SPC`: Apply filter
+- `s`: Select/deselect filter (multiple selection)
+- `c`: Clear filter
+- `r`: Refresh sidebar
+- `q`: Close sidebar
+- `n`, `p`: Move to next/previous line
 - `C-c C-a`: Switch to AND mode
 - `C-c C-o`: Switch to OR mode
 - `C-c C-t`: Toggle AND/OR
@@ -234,39 +251,39 @@ M-x altodo-stop-auto-move-timer
 
 #### Basic Settings
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `altodo-indent-size` | Indent size (spaces) | `4` |
-| `altodo-enable-markdown-in-multiline-comments` | Enable Markdown formatting in multi-line comments | `t` |
-| `altodo-auto-save` | Auto-save file on task state change | `nil` |
-| `altodo-skk-wrap-newline` | Wrap newline for SKK input method compatibility | `t` |
+| Variable                                       | Description                                       | Default |
+| ---------------------------------------------- | ------------------------------------------------- | ------- |
+| `altodo-indent-size`                           | Indent size (spaces)                              | `4`     |
+| `altodo-enable-markdown-in-multiline-comments` | Enable Markdown formatting in multi-line comments | `t`     |
+| `altodo-auto-save`                             | Auto-save file on task state change               | `nil`   |
+| `altodo-skk-wrap-newline`                      | Wrap newline for SKK input method compatibility   | `t`     |
 
 
 #### Sidebar Settings
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `altodo-sidebar-modeline-enabled` | Show filter state in sidebar mode line | `t` |
-| `altodo-sidebar-dynamic-count-enabled` | Dynamically update count with multiple filters | `t` |
-| `altodo-sidebar-buffer-name` | Sidebar buffer name | `"*altodo-filters*"` |
-| `altodo-sidebar-position` | Sidebar position (`left` or `right`) | `'left` |
-| `altodo-sidebar-size` | Sidebar width (window ratio 0.0-1.0) | `0.2` |
-| `altodo-sidebar-indent` | Sidebar indent width | `2` |
-| `altodo-sidebar-focus-after-activation` | Focus sidebar after activation | `nil` |
-| `altodo-sidebar-auto-resize` | Auto-resize sidebar | `nil` |
-| `altodo-sidebar-hide-mode-line` | Hide sidebar mode line | `nil` |
-| `altodo-sidebar-hide-line-numbers` | Hide sidebar line numbers | `t` |
+| Variable                                | Description                                    | Default              |
+| --------------------------------------- | ---------------------------------------------- | -------------------- |
+| `altodo-sidebar-modeline-enabled`       | Show filter state in sidebar mode line         | `t`                  |
+| `altodo-sidebar-dynamic-count-enabled`  | Dynamically update count with multiple filters | `t`                  |
+| `altodo-sidebar-buffer-name`            | Sidebar buffer name                            | `"*altodo-filters*"` |
+| `altodo-sidebar-position`               | Sidebar position (`left` or `right`)           | `'left`              |
+| `altodo-sidebar-size`                   | Sidebar width (window ratio 0.0-1.0)           | `0.2`                |
+| `altodo-sidebar-indent`                 | Sidebar indent width                           | `2`                  |
+| `altodo-sidebar-focus-after-activation` | Focus sidebar after activation                 | `nil`                |
+| `altodo-sidebar-auto-resize`            | Auto-resize sidebar                            | `nil`                |
+| `altodo-sidebar-hide-mode-line`         | Hide sidebar mode line                         | `nil`                |
+| `altodo-sidebar-hide-line-numbers`      | Hide sidebar line numbers                      | `t`                  |
 
 
 #### Date/ID Settings
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `altodo-date-format` | Date format (nil for ISO 8601) | `nil` |
-| `altodo-week-start-day` | Week start day (1=Monday, 0=Sunday) | `1` |
-| `altodo-done-tag-datetime-format` | #done tag timestamp format | `nil` |
-| `altodo-use-local-timezone` | Use local timezone in #done tag | `t` |
-| `altodo-insert-id-format` | #id: tag ID format | `'tiny-random` |
+| Variable                          | Description                         | Default        |
+| --------------------------------- | ----------------------------------- | -------------- |
+| `altodo-date-format`              | Date format (nil for ISO 8601)      | `nil`          |
+| `altodo-week-start-day`           | Week start day (1=Monday, 0=Sunday) | `1`            |
+| `altodo-done-tag-datetime-format` | #done tag timestamp format          | `nil`          |
+| `altodo-use-local-timezone`       | Use local timezone in #done tag     | `t`            |
+| `altodo-insert-id-format`         | #id: tag ID format                  | `'tiny-random` |
 
 
 ##### `altodo-date-format`
@@ -280,6 +297,7 @@ Date display format. `nil` uses ISO 8601 format (`YYYY-MM-DD`).
 (setq altodo-date-format nil)             ;; 2026-01-15 (ISO 8601)
 ```
 
+
 ##### `altodo-done-tag-datetime-format`
 
 `#done:TIMESTAMP` tag timestamp format. `nil` uses ISO 8601 format (`YYYY-MM-DDTHH:MM:SS+HH:MM`).
@@ -290,51 +308,53 @@ Date display format. `nil` uses ISO 8601 format (`YYYY-MM-DD`).
 (setq altodo-done-tag-datetime-format nil)                  ;; 2026-01-15T14:30:00+09:00
 ```
 
+
 ##### `altodo-insert-id-format`
 
 ID tag format for `C-c C-i` insertion.
 
 **Options**:
-- `'tiny-random`: Random 8 characters (default)
-- `'tiny-sortable`: Timestamp-based 8 characters (sortable)
-- `'short-random`: Random 16 characters
-- `'short-sortable`: Timestamp-based 16 characters
-- `'uuidv7`: UUID v7 format
+- `'tiny-random`: 10 characters, random part first (default)
+- `'tiny`: 10 characters, timestamp part first (sortable by time)
+- `'short-random`: 15 characters, random part first
+- `'short`: 15 characters, timestamp part first (sortable by time)
+- `'base62`: 21 characters, UUID v7 written in Base62
+- `'uuid`: 36 characters, UUID v7 format
 
 **Examples**:
 ```elisp
-(setq altodo-insert-id-format 'tiny-random)      ;; a1b2c3d4
-(setq altodo-insert-id-format 'tiny-sortable)    ;; 20260115a1b2
-(setq altodo-insert-id-format 'uuidv7)           ;; 7d444840-9dc0-11d1-b245-5ffdce74fad2
+(setq altodo-insert-id-format 'tiny-random)      ;; 6WJT2C47gz
+(setq altodo-insert-id-format 'tiny)             ;; 2C47gz6WJT
+(setq altodo-insert-id-format 'uuid)             ;; 0698bf56-7d70-7000-aebc-0a374ec80ec5
 ```
 
 
 #### Task Move Settings
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `altodo-done-file-prefix` | Done file prefix | `"_done"` |
-| `altodo-move-single-line-comments-manually` | Enable manual single-line comment move | `t` |
-| `altodo-auto-move-interval` | Auto-move execution interval (seconds) | `3600` |
-| `altodo-auto-save-after-move` | Auto-save after move | `nil` |
-| `altodo-auto-move-skip-done-files` | Skip done files | `t` |
-| `altodo-show-auto-move-in-mode-line` | Show auto-move state in mode line | `t` |
+| Variable                                    | Description                            | Default   |
+| ------------------------------------------- | -------------------------------------- | --------- |
+| `altodo-done-file-prefix`                   | Done file prefix                       | `"_done"` |
+| `altodo-move-single-line-comments-manually` | Enable manual single-line comment move | `t`       |
+| `altodo-auto-move-interval`                 | Auto-move execution interval (seconds) | `3600`    |
+| `altodo-auto-save-after-move`               | Auto-save after move                   | `nil`     |
+| `altodo-auto-move-skip-done-files`          | Skip done files                        | `t`       |
+| `altodo-show-auto-move-in-mode-line`        | Show auto-move state in mode line      | `t`       |
 
 
 #### Debug Settings
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `altodo-debug-mode` | Enable debug mode | `nil` |
-| `altodo-font-lock-maximum-decoration` | Maximize font-lock decoration | `t` |
-| `altodo-debug-log-file` | Debug log file path | `nil` |
-| `altodo-debug-log-to-messages` | Output debug log to *Messages* buffer | `nil` |
+| Variable                              | Description                           | Default |
+| ------------------------------------- | ------------------------------------- | ------- |
+| `altodo-debug-mode`                   | Enable debug mode                     | `nil`   |
+| `altodo-font-lock-maximum-decoration` | Maximize font-lock decoration         | `t`     |
+| `altodo-debug-log-file`               | Debug log file path                   | `nil`   |
+| `altodo-debug-log-to-messages`        | Output debug log to *Messages* buffer | `nil`   |
 
 
 #### Default Filter Settings
 
-| Variable | Description | Default |
-|----------|-------------|---------|
+| Variable                         | Description                     | Default   |
+| -------------------------------- | ------------------------------- | --------- |
 | `altodo-default-filter-patterns` | Default sidebar filter patterns | See below |
 
 ```elisp
@@ -415,7 +435,7 @@ ID tag format for `C-c C-i` insertion.
 
 ### Installation
 
-- Emacs 27.1 or later
+- Emacs 29.1 or later (verified with Emacs 29.3 and markdown-mode 2.6)
 - markdown-mode installed
     - altodo.el is tested and developed with the version available at release time
 
@@ -431,6 +451,7 @@ cp ./altodo.el ~/.emacs.d/lisp/.
 (require 'altodo)
 (add-to-list 'auto-mode-alist '("\\.altodo\\'" . altodo-mode))
 ```
+
 
 #### Getting Started
 

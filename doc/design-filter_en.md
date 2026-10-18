@@ -21,15 +21,15 @@ Implement filtering functionality in altodo-mode to filter tasks and comments ba
 
 ### Filter Types
 
-| Filter           | Description                                    |
-|------------------|------------------------------------------------|
-| State Filter     | done, progress, waiting, open, cancelled       |
-| Tag Filter       | Filter by `#tag`                               |
-| @person Filter   | Filter by `@person`                            |
-| Priority Filter  | Filter by `!` flag                             |
-| Due Date Filter  | Filter by overdue, within due date, etc.       |
-| Dynamic Filter   | Auto-collect values from buffer and filter     |
-| Parent Task Filter | Filter by parent task conditions             |
+| Filter             | Description                                |
+| ------------------ | ------------------------------------------ |
+| State Filter       | done, progress, waiting, open, cancelled   |
+| Tag Filter         | Filter by `#tag`                           |
+| @person Filter     | Filter by `@person`                        |
+| Priority Filter    | Filter by `!` flag                         |
+| Due Date Filter    | Filter by overdue, within due date, etc.   |
+| Dynamic Filter     | Auto-collect values from buffer and filter |
+| Parent Task Filter | Filter by parent task conditions           |
 
 
 ### Compound Conditions
@@ -54,11 +54,11 @@ Reasons:
 
 ### Alternative Options and Rejection Reasons
 
-| Method                       | Rejection Reason                                |
-|------------------------------|-------------------------------------------------|
-| `keep-lines` / `flush-lines` | Destructive (deletes buffer contents)           |
+| Method                       | Rejection Reason                                      |
+| ---------------------------- | ----------------------------------------------------- |
+| `keep-lines` / `flush-lines` | Destructive (deletes buffer contents)                 |
 | `occur-mode`                 | Displays in separate buffer (doesn't change original) |
-| text property                | Subject to undo/redo                            |
+| text property                | Subject to undo/redo                                  |
 
 
 ### Performance Requirements
@@ -107,17 +107,15 @@ Reasons:
 
 ### DSL Compiler Specification
 
-`altodo--compile-filter-predicate`: Generate predicate function from DSL expression
+`altodo--compile-filter-predicate`: Generate a predicate function from a filter entry (plist).
 
-**Example**:
-```elisp
-;; Input
-(state done)
+- When `:type` is `search-lambda`: return the function in `:pattern` as it is
+- When `:type` is `search-simple`: compile the string in `:pattern` with `altodo--compile-simple-pattern`
+- Otherwise: return a function that always returns `nil`
 
-;; Output
-(lambda ()
-  (altodo--line-done-p))
-```
+If compiling a string pattern fails (wrong syntax or unknown type), a message is displayed and a function that matches no line is returned. The pattern syntax is described in section 13.5.
+
+**Example**: From the pattern string `"and:open,priority"`, a function is generated that returns `t` for lines that are open and have a priority flag.
 
 
 ## 5. Architecture
@@ -147,6 +145,7 @@ altodo-filter
     ├── altodo--filter-mode          ; Filter mode
     └── altodo-sidebar--selected-filters ; Selected filters
 ```
+
 
 ### Data Flow
 
@@ -240,8 +239,8 @@ Hidden by buffer-invisibility-spec
 
 #### altodo--compile-filter-predicate
 
-**Description**: Generate predicate function from DSL expression
-**Input**: DSL s-expression
+**Description**: Generate a predicate function from a filter entry
+**Input**: Filter entry (plist)
 **Output**: predicate function
 
 
@@ -415,45 +414,34 @@ Layer 5: Non-clickable (comment lines, etc.)
 
 ### 6.7 User Commands
 
-| Command                             | Description                      |
-|-------------------------------------|----------------------------------|
-| `altodo-filter-clear`               | Clear all filters                |
-| `altodo-filter-show-done-only`      | Show only done tasks             |
-| `altodo-filter-show-progress-only`  | Show only progress tasks         |
-| `altodo-filter-show-waiting-only`   | Show only waiting tasks          |
-| `altodo-filter-show-open-only`      | Show only open tasks             |
-| `altodo-filter-show-cancelled-only` | Show only cancelled tasks        |
-| `altodo-filter-show-tag`            | Show tasks with specified tag    |
-| `altodo-filter-show-priority`       | Show tasks with priority flag    |
-| `altodo-filter-show-star`           | Show tasks with star flag        |
-| `altodo-filter-show-overdue`        | Show overdue tasks               |
-| `altodo-filter-show-person`         | Show tasks for specified person  |
-| `altodo-filter-and`                 | Switch to AND mode               |
-| `altodo-filter-or`                  | Switch to OR mode                |
-| `altodo-filter-not`                 | Apply NOT condition              |
+| Command                              | Description                     |
+| ------------------------------------ | ------------------------------- |
+| `altodo-filter-clear`                | Clear all filters               |
+| `altodo-filter-show-done-only`       | Show only done tasks            |
+| `altodo-filter-show-progress-only`   | Show only progress tasks        |
+| `altodo-filter-show-waiting-only`    | Show only waiting tasks         |
+| `altodo-filter-show-open-only`       | Show only open tasks            |
+| `altodo-filter-show-cancelled-only`  | Show only cancelled tasks       |
+| `altodo-filter-show-tag`             | Show tasks with specified tag   |
+| `altodo-filter-show-priority`        | Show tasks with priority flag   |
+| `altodo-filter-show-star`            | Show tasks with star flag       |
+| `altodo-filter-show-overdue`         | Show overdue tasks              |
+| `altodo-filter-show-person`          | Show tasks for specified person |
+| `altodo-sidebar-set-and-mode`        | Switch to AND mode              |
+| `altodo-sidebar-set-or-mode`         | Switch to OR mode               |
+| `altodo-sidebar-toggle-combine-mode` | Toggle AND/OR                   |
 
 
 ## 7. Sidebar Integration
 
 ### Filter Entry Structure
 
-```elisp
-(list
- :title "Filter Name"
- :predicate predicate-function
- :action filter-action
- :type nil  ; nil, "comment", "group-header", "dynamic"
- :nest 0
- :count-format nil
- :count-exclude-others t
- :face nil
- :face-rules nil)
-```
+A filter entry is a plist. The properties are described in section 13.3, and the types (`:type`) in section 13.4.
 
 
 ### Dynamic Filter
 
-**`:type "dynamic"`** entries auto-collect values on display:
+**`:type dynamic`** entries auto-collect values on display:
 
 - `@person` - List of assignees
 - `#tag` - List of tags
@@ -463,7 +451,7 @@ Layer 5: Non-clickable (comment lines, etc.)
 
 ### Compound Condition Filter
 
-**`:type nil`** entries can be selected multiple:
+Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse button):
 
 - Switch AND/OR with `altodo-sidebar--combine-mode`
 - Combine predicates with `altodo--combine-predicates`
@@ -473,19 +461,27 @@ Layer 5: Non-clickable (comment lines, etc.)
 
 ### Filter Operations
 
-| Key       | Function             |
-|-----------|----------------------|
-| `C-c C-f` | Show filter menu     |
-| `C-c C-c` | Clear filter         |
+| Key           | Function        |
+| ------------- | --------------- |
+| `C-c C-v f c` | Clear filter    |
+| `C-c C-v s t` | Toggle sidebar  |
+| `C-c C-v s r` | Refresh sidebar |
+
 
 ### Sidebar Operations
 
-| Key       | Function             |
-|-----------|----------------------|
-| `C-SPC`   | Select/deselect filter |
-| `C-c C-a` | Switch to AND mode   |
-| `C-c C-o` | Switch to OR mode    |
-| `C-c C-t` | Toggle AND/OR        |
+| Key           | Function                   |
+| ------------- | -------------------------- |
+| `RET`, `SPC`  | Apply filter               |
+| `s`           | Select/deselect filter     |
+| `C-<mouse-1>` | Select/deselect filter     |
+| `c`           | Clear filter               |
+| `r`           | Refresh sidebar            |
+| `q`           | Close sidebar              |
+| `n`, `p`      | Move to next/previous line |
+| `C-c C-a`     | Switch to AND mode         |
+| `C-c C-o`     | Switch to OR mode          |
+| `C-c C-t`     | Toggle AND/OR              |
 
 
 ## 9. Mode Line Display
@@ -540,7 +536,7 @@ Default face based on entry `:type`
 
 ### Layer 5: Non-clickable
 
-Non-clickable entries (`"comment"`, `"group-header"`)
+Non-clickable entries (`comment`, `group-header`)
 
 
 ## 12. References
@@ -556,7 +552,7 @@ Non-clickable entries (`"comment"`, `"group-header"`)
 ### 13.1 Overview
 
 `altodo-filter-patterns` is a list defining filter patterns to display in sidebar.
-Set in `.altodo-locals.el` file or `altodo--default-filter-patterns` variable.
+Set in `.altodo-locals.el` file or `altodo-default-filter-patterns` variable.
 
 
 ### 13.2 Entry Structure
@@ -570,39 +566,40 @@ Each filter entry is defined as plist (property list):
 
 ### 13.3 Common Properties
 
-| Property                | Required   | Description                                                 |
-|-------------------------|------------|-------------------------------------------------------------|
-| `:title`                | Required   | Title to display in sidebar. `%n` displays match count     |
-| `:type`                 | Required   | Entry type (described later)                                |
-| `:nest`                 | Optional   | Indent level (default: 0)                                   |
-| `:count-format`         | Optional   | `t` to replace `%n` with count (default: `t`)               |
-| `:face`                 | Optional   | Face to apply                                               |
-| `:face-count`           | Optional   | Face to apply to count part `%n`                            |
-| `:display-context`      | Optional   | Display context (see 13.3.1)                                |
-| `:count-exclude-others` | Optional   | Count target (see 13.3.2, default: `t`)                     |
+| Property                | Required | Description                                                         |
+| ----------------------- | -------- | ------------------------------------------------------------------- |
+| `:title`                | Required | Title to display in sidebar. `%n` displays match count              |
+| `:type`                 | Required | Entry type (described later)                                        |
+| `:nest`                 | Optional | Indent level (default: 0)                                           |
+| `:count-format`         | Optional | `t` to replace `%n` with count (default: `t`)                       |
+| `:face`                 | Optional | Face to apply                                                       |
+| `:face-count`           | Optional | Face to apply to count part `%n`                                    |
+| `:display-context`      | Optional | Display context (see 13.3.1)                                        |
+| `:multiline-comment`    | Optional | `nil` hides the multi-line comments of matched lines (default: `t`) |
+| `:count-exclude-others` | Optional | Count target (see 13.3.2, default: `t`)                             |
 
 
 #### 13.3.1 `:display-context` - Display Context
 
-Controls the range of lines to display when filter matches.
+Controls which lines are displayed in addition to the matched lines when a filter is applied. The default is `'heading-only`.
 
-| Value | Description |
-|-------|-------------|
-| `'all` | Display matched lines and surrounding headings (default) |
-| `'heading-only` | Display headings only |
-| `'none` | Display matched lines only |
+| Value           | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| `'heading-only` | Matched lines and their headings (default)                                  |
+| `'all`          | Matched lines, their headings, and the multi-line comments of matched lines |
+| `'none`         | Matched lines only                                                          |
 
 **Examples**:
 
 ```elisp
-;; Display matched lines and headings
-(:title "Open - %n" :type search-simple :pattern "open" :display-context 'all)
+;; Show matched lines and headings (default)
+(:title "Open - %n" :type search-simple :pattern "open" :display-context 'heading-only)
 
-;; Display headings only
-(:title "Sections - %n" :type search-simple :pattern "heading" :display-context 'heading-only)
+;; Show matched lines, headings, and multi-line comments
+(:title "Open (all) - %n" :type search-simple :pattern "open" :display-context 'all)
 
-;; Display matched lines only
-(:title "Tasks - %n" :type search-simple :pattern "open" :display-context 'none)
+;; Show matched lines only
+(:title "Open (lines only) - %n" :type search-simple :pattern "open" :display-context 'none)
 ```
 
 
@@ -610,10 +607,10 @@ Controls the range of lines to display when filter matches.
 
 Controls which types of lines to include when counting. When both task lines and comment lines exist, specify which should be counted.
 
-| Value | Description | Use Case |
-|-------|-------------|----------|
+| Value | Description                                             | Use Case                                                |
+| ----- | ------------------------------------------------------- | ------------------------------------------------------- |
 | `t`   | Count only task lines (exclude comment lines) (default) | Normal filtering. Multi-line comment lines are excluded |
-| `nil` | Count all lines (both task lines and comment lines) | When you want to include comment lines in the count |
+| `nil` | Count all lines (both task lines and comment lines)     | When you want to include comment lines in the count     |
 
 **Concrete Example**:
 
@@ -642,56 +639,56 @@ Given the following file:
 
 ### 13.4 Entry Types (`:type`)
 
-#### `"comment"` or `nil` (Comment Line)
+#### `comment` or `nil` (Comment Line)
 
 Not clickable, no filter applied. Used for visual separators or explanatory text.
 
-| Property                | Required/Optional | Description                    |
-|-------------------------|-------------------|--------------------------------|
-| `:face`                 | Optional          | Face to apply                  |
-| `:count-exclude-others` | Optional          | `t` to count only task lines   |
+| Property                | Required/Optional | Description                  |
+| ----------------------- | ----------------- | ---------------------------- |
+| `:face`                 | Optional          | Face to apply                |
+| `:count-exclude-others` | Optional          | `t` to count only task lines |
 
 
-#### `"group-header"` (Group Header)
+#### `group-header` (Group Header)
 
 Not clickable, visual separator
 
-| Property | Required/Optional | Description                  |
-|----------|-------------------|------------------------------|
-| None     | -                 | Doesn't function as filter   |
+| Property | Required/Optional | Description                |
+| -------- | ----------------- | -------------------------- |
+| None     | -                 | Doesn't function as filter |
 
 
-#### `"dynamic"` (Dynamic Filter)
+#### `dynamic` (Dynamic Filter)
 
 Auto-collect values on display
 
-| Property             | Required/Optional | Description                                         |
-|----------------------|-------------------|-----------------------------------------------------|
-| `:dynamic-type`      | Required          | Collection target (`person`, `tag`, `due`, `start`) |
+| Property             | Required/Optional | Description                                                  |
+| -------------------- | ----------------- | ------------------------------------------------------------ |
+| `:dynamic-type`      | Required          | Collection target (`person`, `tag`, `due`, `start`)          |
 | `:tag-mode`          | Optional          | Tag extraction mode (`"all"`, `"name-only"`, `"with-value"`) |
-| `:exclude-person`    | Optional          | List of `@person` to exclude                        |
-| `:exclude-tag`       | Optional          | List of `#tag` to exclude                           |
-| `:exclude-tag-value` | Optional          | List of `#tag:value` to exclude                     |
-| `:sort`              | Optional          | Sort method (`alpha`, `count`, `reverse-count`)     |
-| `:limit`             | Optional          | Display limit (default: nil = unlimited)            |
+| `:exclude-person`    | Optional          | List of `@person` to exclude                                 |
+| `:exclude-tag`       | Optional          | List of `#tag` to exclude                                    |
+| `:exclude-tag-value` | Optional          | List of `#tag:value` to exclude                              |
+| `:sort`              | Optional          | Sort method (`alpha`, `count`, `reverse-count`)              |
+| `:limit`             | Optional          | Display limit (default: nil = unlimited)                     |
 
 **`:tag-mode` Description**:
 
-| Mode | Description | Example |
-|------|-------------|---------|
-| `"all"` | Extract both tags without values and tags with values | `#java`, `#priority:high` → `["java", "priority:high"]` |
-| `"name-only"` | Extract tag names only (default) | `#java`, `#priority:high` → `["java", "priority"]` |
-| `"with-value"` | Extract only tags with values | `#priority:high` → `["priority:high"]` |
+| Mode           | Description                                           | Example                                                  |
+| -------------- | ----------------------------------------------------- | -------------------------------------------------------- |
+| `"all"`        | Extract both tags without values and tags with values | `#java`, `#priority:high` → `["java", "priority:high"]` |
+| `"name-only"`  | Extract tag names only (default)                      | `#java`, `#priority:high` → `["java", "priority"]`      |
+| `"with-value"` | Extract only tags with values                         | `#priority:high` → `["priority:high"]`                  |
 
 **Note**: `:tag-ignore-value` is deprecated. Use `:tag-mode` instead.
 
 
-#### `"search-simple"` (Simple Search)
+#### `search-simple` (Simple Search)
 
 DSL pattern match. Describe filter condition with DSL pattern string. See "13.5 DSL Syntax" for details
 
 | Property   | Required/Optional | Description        |
-|------------|-------------------|--------------------|
+| ---------- | ----------------- | ------------------ |
 | `:pattern` | Required          | DSL pattern string |
 
 **DSL Pattern Examples**:
@@ -706,18 +703,18 @@ DSL pattern match. Describe filter condition with DSL pattern string. See "13.5 
 ;; Compound condition (AND)
 (:title "Open + Priority - %n"
  :type search-simple
- :pattern "(and open priority)"
+ :pattern "and:open,priority"
  :count-format t
  :nest 1)
 ```
 
 
-#### `"search-lambda"` (Lambda Search)
+#### `search-lambda` (Lambda Search)
 
 Directly specify predicate function. Lambda function is evaluated on current line with no arguments, returns t to show, nil to hide.
 
 | Property   | Required/Optional | Description     |
-|------------|-------------------|-----------------|
+| ---------- | ----------------- | --------------- |
 | `:pattern` | Required          | Lambda function |
 
 **Example**:
@@ -728,7 +725,7 @@ Directly specify predicate function. Lambda function is evaluated on current lin
  :type search-lambda
  :pattern (lambda ()
             (and (altodo--due-date-matches-p 'today)
-                 (altodo--line-has-flag-p)))
+                 (altodo--line-has-priority-p)))
  :count-format t
  :nest 1)
 ```
@@ -739,21 +736,21 @@ Directly specify predicate function. Lambda function is evaluated on current lin
 - Return value: `t` (show) or `nil` (hide)
 
 
-#### `"separator"` (Separator Line)
+#### `separator` (Separator Line)
 
 Visual separator
 
-| Property   | Required/Optional | Description                    |
-|------------|-------------------|--------------------------------|
+| Property   | Required/Optional | Description                       |
+| ---------- | ----------------- | --------------------------------- |
 | `:pattern` | Optional          | Character to display in separator |
 
 
-#### `"command"` (Command Execution)
+#### `command` (Command Execution)
 
 Execute specified command on click
 
-| Property   | Required/Optional | Description        |
-|------------|-------------------|--------------------|
+| Property   | Required/Optional | Description         |
+| ---------- | ----------------- | ------------------- |
 | `:command` | Required          | Function to execute |
 
 
@@ -774,71 +771,93 @@ Execute specified command on click
 
 ### 13.5 DSL Pattern Specification
 
-#### 13.5.1 Simple Patterns
+#### 13.5.1 Pattern Syntax
 
-Specify directly with string:
+A pattern is a string. There are three kinds.
 
-| Pattern                   | Description                |
-|---------------------------|----------------------------|
-| `"done"`                  | Done tasks                 |
-| `"progress"`              | In-progress tasks          |
-| `"waiting"`               | Waiting tasks              |
-| `"open"`                  | Open tasks                 |
-| `"cancelled"`             | Cancelled tasks            |
-| `"priority"`              | With priority flag         |
-| `"star"`                  | With star flag             |
-| `"has-multiline-comment"` | With multiline comment     |
+- Simple pattern: a name only. Example: `"done"`
+- Pattern with an argument: `type:argument`. Example: `"tag:java"`
+- Logical operation pattern: `operation:pattern,pattern,...`. Example: `"and:open,priority"`
+
+A pattern with a syntax error or an unknown type matches no line.
 
 
-#### 13.5.2 Patterns with Arguments
+#### 13.5.2 Simple Patterns
 
-Specify in `(type value)` format:
-
-| Type                         | Format                                   | Description                          |
-|------------------------------|------------------------------------------|--------------------------------------|
-| `tag`                        | `(tag "TAGNAME")`                        | Tasks with specified tag             |
-| `person`                     | `(person "NAME")`                        | Tasks with specified assignee        |
-| `text`                       | `(text "STRING")`                        | Tasks containing text                |
-| `regexp`                     | `(regexp "PATTERN")`                     | Match regex                          |
-| `level`                      | `(level N)`                              | Nest level N                         |
-| `heading`                    | `(heading "PATTERN")`                    | Exists within heading                |
-| `due-date`                   | `(due-date CONDITION)`                   | Filter by due date                   |
-| `start-date`                 | `(start-date CONDITION)`                 | Filter by start date                 |
-| `tag-value`                  | `(tag-value "KEY VALUE")`                | Filter by tag value                  |
-| `parent-task-regexp`         | `(parent-task-regexp "PATTERN")`         | Parent task matches pattern          |
-| `root-task-regexp`           | `(root-task-regexp "PATTERN")`           | Root parent task matches pattern     |
-| `multiline-comment-contains` | `(multiline-comment-contains "PATTERN")` | Multiline comment contains pattern   |
+| Pattern                   | Description             |
+| ------------------------- | ----------------------- |
+| `"done"`                  | Completed tasks         |
+| `"progress"`              | In-progress tasks       |
+| `"waiting"`               | Waiting tasks           |
+| `"open"`                  | Open tasks              |
+| `"cancelled"`             | Cancelled tasks         |
+| `"priority"`              | With priority flag      |
+| `"star"`                  | With star flag          |
+| `"has-multiline-comment"` | With multi-line comment |
 
 
-#### 13.5.3 Date Conditions (due-date / start-date)
+#### 13.5.3 Patterns with Arguments
 
-| Condition               | Description | Example                                      |
-|-------------------------|-------------|----------------------------------------------|
-| `'overdue`              | Overdue     | `(due-date 'overdue)`                        |
-| `'today`                | Due today   | `(due-date 'today)`                          |
-| `'this-week`            | Due this week | `(due-date 'this-week)`                    |
-| `'this-month`           | Due this month | `(due-date 'this-month)`                  |
-| `after:DATE`            | After DATE  | `(due-date "after:2024-01-01")`              |
-| `before:DATE`           | Before DATE | `(due-date "before:2024-12-31")`             |
-| `between:START:END`     | Within range | `(due-date "between:2024-01-01:2024-12-31")` |
+| Type                         | Syntax                              | Description                                       |
+| ---------------------------- | ----------------------------------- | ------------------------------------------------- |
+| `tag`                        | `tag:NAME`                          | Lines with the specified tag                      |
+| `person`                     | `person:NAME`                       | Lines with the specified person                   |
+| `text`                       | `text:STRING`                       | Lines containing the string                       |
+| `regexp`                     | `regexp:REGEXP`                     | Lines matching the regular expression             |
+| `level`                      | `level:N`                           | Lines at nest level N                             |
+| `heading`                    | `heading:REGEXP`                    | Task lines within the range of a heading          |
+| `due-date`                   | `due-date:CONDITION`                | Filter by due date                                |
+| `start-date`                 | `start-date:CONDITION`              | Filter by start date                              |
+| `tag-value`                  | `tag-value:KEY VALUE`               | Filter by tag value                               |
+| `parent-task-regexp`         | `parent-task-regexp:REGEXP`         | Parent task matches the regular expression        |
+| `root-task-regexp`           | `root-task-regexp:REGEXP`           | Root parent task matches the regular expression   |
+| `multiline-comment-contains` | `multiline-comment-contains:REGEXP` | Multi-line comment matches the regular expression |
 
-
-#### 13.5.4 Logical Operations
-
-| Operation | Format                | Description      |
-|-----------|-----------------------|------------------|
-| `and`     | `(and PAT1 PAT2 ...)` | Match all        |
-| `or`      | `(or PAT1 PAT2 ...)`  | Match any        |
-| `not`     | `(not PAT)`           | Don't match      |
+The arguments of a logical operation are split at commas. Therefore, an argument that contains a comma cannot be written inside a logical operation.
 
 
-#### 13.5.5 Tag Value Conditions (tag-value)
+#### 13.5.4 Date Conditions (due-date / start-date)
 
-| Format                                  | Description                     |
-|-----------------------------------------|---------------------------------|
-| `(tag-value "key" "value")`             | Exact match                     |
-| `(tag-value "key" ("value1" "value2"))` | Multiple values (OR)            |
-| `(tag-value "key" (> 5))`               | Numeric comparison (>, <, =, >=, <=) |
+`CONDITION` of `due-date:CONDITION` is as follows. The format of `DATE` follows `altodo-date-format`.
+
+| Condition           | Description                | Example                                  |
+| ------------------- | -------------------------- | ---------------------------------------- |
+| `overdue`           | Past the due date          | `due-date:overdue`                       |
+| `today`             | Due today                  | `due-date:today`                         |
+| `tomorrow`          | Due tomorrow               | `due-date:tomorrow`                      |
+| `this-week`         | Due this week              | `due-date:this-week`                     |
+| `this-month`        | Due this month             | `due-date:this-month`                    |
+| `before:DATE`       | Before DATE                | `due-date:before:2024-12-31`             |
+| `after:DATE`        | After DATE                 | `due-date:after:2024-01-01`              |
+| `between:START:END` | Within the range           | `due-date:between:2024-01-01:2024-12-31` |
+| `within:N`          | Within N days from today   | `due-date:within:7`                      |
+| `past:N`            | N or more days ago         | `due-date:past:3`                        |
+| `DATE`              | Matches the specified date | `due-date:2024-06-30`                    |
+
+For `start-date:CONDITION`, use `passed` (the start date is in the past) and `not-yet` (the start date is in the future) instead of `overdue`. The other conditions are the same.
+
+
+#### 13.5.5 Logical Operations
+
+| Operation | Syntax          | Description                                     |
+| --------- | --------------- | ----------------------------------------------- |
+| `and`     | `and:P1,P2,...` | Matches all                                     |
+| `or`      | `or:P1,P2,...`  | Matches any                                     |
+| `not`     | `not:P`         | Does not match (only the first pattern is used) |
+
+- `not` also applies to lines other than task lines (headings and normal text)
+- Nesting is limited to one level. A split is possible only when there are multiple operators at the same level. Example: `or:and:open,priority,and:progress,star` means "open and with priority" or "in progress and with star". Nesting of two or more levels is not supported
+
+
+#### 13.5.6 Tag Value Conditions (tag-value)
+
+| Syntax                  | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `tag-value:KEY VALUE`   | Exact match                                    |
+| `tag-value:KEY (V1 V2)` | Matches any of the values (OR)                 |
+| `tag-value:KEY (OP N)`  | Numeric comparison (`>`, `<`, `=`, `>=`, `<=`) |
+
+Example: `tag-value:priority (> 5)`
 
 
 ### 13.6 face-rules and count-face-rules Specification
@@ -936,7 +955,7 @@ If no match in face-rules, fallback to face specified by `:face`. If `:face` is 
    ;; Compound condition example
    (:title "Open + Priority - %n"
            :type search-simple
-           :pattern "(and open priority)"
+           :pattern "and:open,priority"
            :count-format t :nest 1
            :count-exclude-others t
            :face-rules ((>= 3 warning)))
@@ -949,4 +968,3 @@ If no match in face-rules, fallback to face specified by `:face`. If `:face` is 
    ))
 )
 ```
-

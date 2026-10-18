@@ -6,7 +6,7 @@
 ;; Maintainer: twofaults
 ;; Created: January 27, 2026
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "26.1") (markdown-mode "2.0"))
+;; Package-Requires: ((emacs "29.1") (markdown-mode "2.0"))
 ;; Keywords: text, todo, markdown
 
 ;; This file is not part of GNU Emacs.

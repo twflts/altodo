@@ -22,11 +22,6 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 - __Utility Functions__ - 補助関数
 
 
-### 拡張モジュール
-
-- __altodo-enhanced.el__ - 進捗可視化・統計機能 (WIP)
-
-
 ### 実装方針
 
 #### プレーンテキスト重視
@@ -52,7 +47,7 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 #### Font-lock
 
 - 5段階の Layer 処理（タスクブラケット → ベース → 部分要素 → 強調要素 → 最優先）
-- 29個の face 定義（全タスク状態、フラグ、タグ、コメント、日付ベース）
+- 50 個の face 定義（全タスク状態、フラグ、タグ、コメント、日付ベース）
 - 統合処理による効率化
 
 
@@ -120,7 +115,7 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 
 #### その他
 
-- `altodo-toggle-comment` コマンド
+- `altodo-toggle-comment` のキー割り当て（コマンド自体は実装済み）
 - `#group-start`, `#group-due` タグ
 
 
@@ -152,71 +147,16 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 
 #### 正規表現定義
 
-##### タスク行正規表現
+実装が定義する定数は次のとおり。
 
-```elisp
-(defconst altodo-task-regex
-  (concat "^\\([ \t]*\\)"
-          "\\(\\[\\([~xw@ ]\\)\\]\\)"  ; タスク状態ブラケット
-          "\\(?: \\(.*\\)\\)?$")        ; タスク本文（オプション）
-  "Regex matching a task line.")
-```
+- `altodo-task-regex`: タスク行。値は `^\([ ]*\)\[\([x@w~ ]?\)\]\(.*\)$`。グループ 1 は行頭のインデント、グループ 2 は状態文字、グループ 3 は状態マークより後ろの文字列
+- `altodo-comment-regex`: 一行コメント行。値は `^\([ \t]*\)/// \(.*\)$`
+- `altodo-tag-with-value-regex`: 値付きタグ。値は `\(?:^\|[ \t]\)\(#[a-zA-Z0-9_-]+\):\("[^"]*"\|[^[:space:]]+\)`。値はダブルクオートで囲める
+- `altodo-tag-without-value-regex`: 値なしタグ。値は `\(?:^\|[ \t]\)\(#[a-zA-Z0-9_-]+\)\b`
+- `altodo-person-tag-regex`: @person タグ。値は `\(?:^\|[[:space:]]\)\(@[^[:space:]]+\)`
+- `altodo-special-tag-regex`: 特殊タグ。`altodo-special-tag-names` から生成する
 
-**構成**:
-- `^` - 行頭
-- `[ \t]*` - 先頭の空白（インデント）
-- `\\[[~xw@ ]\\]` - タスク状態ブラケット（`[ ]`, `[@]`, `[w]`, `[x]`, `[~]`）
-- `\\(?: \\(.*\\)\\)?$` - タスク本文（オプション）
-
-
-##### コメント行正規表現
-
-```elisp
-(defconst altodo-comment-regex
-  (format "^\\([ \t]*\\)%s \\(.*\\)$"
-          (regexp-quote altodo-comment-marker))
-  "Regex matching a comment line.")
-```
-
-**構成**:
-- `^` - 行頭
-- `[ \t]*` - 先頭の空白（インデント）
-- `/// ` - コメントマーカー
-- `\\(.*\\)$` - コメント本文
-
-
-##### タグ正規表現
-
-```elisp
-(defconst altodo-tag-regex
-  (concat "\\(?:^\\|[ \t]\\)"        ; 行頭または空白後
-          "\\(#\\)"                  ; # タグ開始
-          "\\(" altodo-tag-name-regex "\\)"  ; タグ名
-          "\\(?::\\([^ \t\n]*\\)\\)?")      ; 値（オプション）
-  "Regex matching a tag.")
-```
-
-**構成**:
-- `\\(?:^\\|[ \t]\\)` - 行頭または空白後
-- `#` - タグ開始
-- タグ名（`altodo-tag-name-regex`）
-- `:値`（オプション）
-
-
-##### 日付正規表現
-
-```elisp
-(defconst altodo-date-regex
-  (concat "\\([0-9]\\{4\\}[-/][0-9]\\{2\\}[-/][0-9]\\{2\\}\\)"  ; 日付
-          "\\(?: -> \\)?"                                        ; 矢印（オプション）
-          "\\(?:\\([0-9]\\{4\\}[-/][0-9]\\{2\\}[-/][0-9]\\{2\\}\\)\\)?")  ; 終了日
-  "Regex matching a date range.")
-```
-
-**構成**:
-- `YYYY-MM-DD` または `YYYY/MM/DD` 形式の日付
-- ` -> ` 矢印（オプション）
-- 終了日（オプション）
+日付の正規表現は定数ではない。`altodo-date-format`（既定値 `nil` は `YYYY-MM-DD`）から、実行時に `altodo--date-regex-info` が生成する。
 
 
 #### タスク状態文字リスト
@@ -233,19 +173,26 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 
 ### 4.2 カスタマイズ変数
 
-| 変数名                                | デフォルト            | 説明                               |
-|---------------------------------------|-----------------------|------------------------------------|
-| `altodo-indent-size`                  | 4                     | インデントサイズ                   |
-| `altodo-auto-save`                    | t                     | 自動保存の有効/無効                |
-| `altodo-font-lock-maximum-decoration` | t                     | フォントロック装飾の最大化         |
-| `altodo-done-tag-format`              | `"%Y-%m-%d_%H:%M:%S"` | 完了タグのタイムスタンプ形式       |
-| `altodo-due-warning-days`             | 7                     | 期限警告開始日数                   |
-| `altodo-due-urgent-days`              | 2                     | 期限緊急表示開始日数               |
-| `altodo-date-patterns`                | YYYY-MM-DD 形式       | サポートする日付形式パターンリスト |
-| `altodo-done-file-prefix`             | `"_done"`             | done ファイルの prefix             |
-| `altodo-auto-move-enabled`            | t                     | 自動移動の有効/無効                |
-| `altodo-auto-move-interval`           | 3600                  | 自動移動の実行間隔（秒）           |
-| `altodo-auto-save-after-move`         | t                     | 移動後に元ファイルを自動保存       |
+| 変数名                                         | デフォルト     | 説明                                               |
+| ---------------------------------------------- | -------------- | -------------------------------------------------- |
+| `altodo-indent-size`                           | `4`            | インデントサイズ                                   |
+| `altodo-enable-markdown-in-multiline-comments` | `t`            | 複数行コメント内で Markdown 書式を有効化           |
+| `altodo-auto-save`                             | `nil`          | タスク状態の変更時にファイルを自動保存             |
+| `altodo-skk-wrap-newline`                      | `t`            | SKK 入力メソッドとの互換のため改行をラップ         |
+| `altodo-font-lock-maximum-decoration`          | `t`            | フォントロック装飾の最大化                         |
+| `altodo-done-tag-datetime-format`              | `nil`          | `#done` の時刻書式（`nil` は ISO 8601 の時差付き） |
+| `altodo-use-local-timezone`                    | `t`            | `#done` の時刻にローカルタイムゾーンを使用         |
+| `altodo-insert-id-format`                      | `'tiny-random` | `#id` の ID 形式                                   |
+| `altodo-date-format`                           | `nil`          | 日付書式（`nil` は `YYYY-MM-DD`）                  |
+| `altodo-week-start-day`                        | `1`            | 週の開始日（0 は日曜日、1 は月曜日）               |
+| `altodo-done-file-prefix`                      | `"_done"`      | done ファイル名に付ける文字列                      |
+| `altodo-move-single-line-comments-manually`    | `t`            | 1 行コメントの手動移動を有効化                     |
+| `altodo-auto-move-interval`                    | `3600`         | 自動移動の実行間隔（秒）                           |
+| `altodo-auto-save-after-move`                  | `nil`          | 移動後に元ファイルを自動保存                       |
+| `altodo-auto-move-skip-done-files`             | `t`            | 自動移動で done ファイルを対象外にする             |
+| `altodo-show-auto-move-in-mode-line`           | `t`            | モードラインに自動移動の状態を表示                 |
+
+サイドバーとデバッグの変数は、`README.md` の「設定」を参照する。
 
 
 ### 4.3 Face 定義
@@ -253,52 +200,57 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 #### タスク状態 Face
 
 | Face                         | 説明             |
-|------------------------------|------------------|
+| ---------------------------- | ---------------- |
 | `altodo-task-open-face`      | オープンタスク用 |
 | `altodo-task-done-face`      | 完了タスク用     |
-| `altodo-task-progress-face`  | 進行中タスク用   |
+| `altodo--task-progress-face` | 進行中タスク用   |
 | `altodo-task-waiting-face`   | 待機タスク用     |
 | `altodo-task-cancelled-face` | 廃止タスク用     |
+
 
 #### タスク本文 Face
 
 | Face                              | 説明                                   |
-|-----------------------------------|----------------------------------------|
+| --------------------------------- | -------------------------------------- |
 | `altodo-task-open-text-face`      | オープンタスク本文用（ライトグリーン） |
 | `altodo-task-done-text-face`      | 完了タスク本文用（斜線）               |
-| `altodo-task-progress-text-face`  | 進行中タスク本文用（マゼンタ）         |
+| `altodo--task-progress-text-face` | 進行中タスク本文用（マゼンタ）         |
 | `altodo-task-waiting-text-face`   | 待機タスク本文用（ライトグレイ）       |
 | `altodo-task-cancelled-text-face` | 廃止タスク本文用（斜線）               |
+
 
 #### コメント Face
 
 | Face                            | 説明                       |
-|---------------------------------|----------------------------|
+| ------------------------------- | -------------------------- |
 | `altodo-comment-face`           | 1行コメント用（赤色）      |
 | `altodo-multiline-comment-face` | 複数行コメント用（グレー） |
+
 
 #### フラグ Face
 
 | Face                         | 説明                        |
-|------------------------------|-----------------------------|
+| ---------------------------- | --------------------------- |
 | `altodo-flag-star-face`      | スターフラグ用（金色太字）  |
 | `altodo-flag-priority1-face` | 優先度1フラグ用（赤色）     |
 | `altodo-flag-priority2-face` | 優先度2フラグ用（赤色太字） |
 | `altodo-flag-priority3-face` | 優先度3フラグ用（赤色太字） |
 
+
 #### タグ・日付 Face
 
 | Face                      | 説明                       |
-|---------------------------|----------------------------|
+| ------------------------- | -------------------------- |
 | `altodo-tag-face`         | 一般タグ用（紫色）         |
 | `altodo-tag-value-face`   | タグ値用（濃紫太字）       |
 | `altodo-special-tag-face` | 特殊タグ用（マゼンタ太字） |
 | `altodo-date-face`        | 日付用（青色）             |
 
+
 #### 依存関係 Face
 
 | Face                           | 説明                         |
-|--------------------------------|------------------------------|
+| ------------------------------ | ---------------------------- |
 | `altodo-dep-blocked-text-face` | 依存関係ブロック中用（赤色） |
 | `altodo-dep-blocked-tag-face`  | 依存タグブロック中用（赤色） |
 | `altodo-dep-ready-tag-face`    | 依存タグ実施可能用（緑色）   |
@@ -307,27 +259,29 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 
 ### 4.4 キーマップ
 
-| キー        | 機能               | 関数名                            | 説明                                                        |
-|-------------|--------------------|-----------------------------------|-------------------------------------------------------------|
-| `TAB`       | インデント操作     | `altodo-indent-line`              | サブタスク化・解除                                          |
-| `RET`       | 改行・新規タスク   | `altodo-enter`                    | 文脈に応じた改行処理                                        |
-| `C-c C-x`   | タスク状態トグル   | `altodo-toggle-task-state`        | オープン ↔ 完了のトグル                                    |
-| `C-c C-t o` | オープンタスク     | `altodo-set-task-open`            | `[ ]` に変更                                                |
-| `C-c C-t x` | 完了タスク         | `altodo-set-task-done`            | `[x]` に変更                                                |
-| `C-c C-t @` | 進行中タスク       | `altodo-set-task-progress`        | `[@]` に変更                                                |
-| `C-c C-t w` | 保留タスク         | `altodo-set-task-waiting`         | `[w]` に変更                                                |
-| `C-c C-t ~` | 廃止タスク         | `altodo-set-task-cancelled`       | `[~]` に変更                                                |
-| `C-c C-t d` | 終了タスク移動     | `altodo-move-done-tasks-at-point` | カーソル位置/リージョン内の終了タスクを done ファイルに移動 |
-| `C-c C-a`   | タスク追加         | `altodo-add-task`                 | サブタスクまたは新規タスクを追加                            |
-| `C-c C-m`   | 複数行コメント開始 | `altodo-start-multiline-comment`  | 複数行コメントを開始                                        |
-| `C-c C-s`   | スターフラグトグル | `altodo-toggle-star-flag`         | `+` フラグのトグル                                          |
-| `C-c C-f 1` | 優先度1設定        | `altodo-set-priority-1`           | `!` フラグを設定                                            |
-| `C-c C-f 2` | 優先度2設定        | `altodo-set-priority-2`           | `!!` フラグを設定                                           |
-| `C-c C-f 3` | 優先度3設定        | `altodo-set-priority-3`           | `!!!` フラグを設定                                          |
-| `C-c C-v f c` | フィルタクリア   | `altodo-filter-clear`             | 全てのフィルタを解除                                        |
-| `C-c C-v s t` | サイドバートグル | `altodo-sidebar-toggle`           | サイドバーの表示/非表示を切り替え                           |
-| `C-c C-v s r` | サイドバー更新   | `altodo-sidebar-refresh`          | サイドバーの内容を更新                                      |
-| `C-c =`     | コメント切り替え   | `altodo-toggle-comment`           | タスク ↔ コメントのトグル                                  |
+タスク行・一行コメント行以外では、各キーは `markdown-mode` の割り当てを呼び出す。
+
+| キー                            | 関数名                                                                 | 機能                             |
+| ------------------------------- | ---------------------------------------------------------------------- | -------------------------------- |
+| `TAB`                           | `altodo-indent-line`                                                   | サブタスク化・解除               |
+| `RET`                           | `altodo-enter`                                                         | 文脈に応じた改行処理             |
+| `<backtab>`                     | `outline-cycle`                                                        | アウトラインの循環               |
+| `C-c C-x`                       | `altodo-toggle-task-state`                                             | オープン ↔ 完了のトグル         |
+| `C-c C-t o`、`x`、`@`、`w`、`~` | `altodo-set-task-open`、`-done`、`-progress`、`-waiting`、`-cancelled` | 状態の設定                       |
+| `C-c C-t d`                     | `altodo-move-done-tasks-at-point`                                      | 終了タスクを done ファイルへ移動 |
+| `C-c C-a`                       | `altodo-add-task`                                                      | タスクの追加                     |
+| `M-RET`                         | `altodo-add-subtask`                                                   | サブタスクの追加                 |
+| `C-c C-m`                       | `altodo-start-multiline-comment`                                       | 複数行コメントの開始             |
+| `C-c C-s`                       | `altodo-toggle-star-flag`                                              | スターフラグのトグル             |
+| `C-c C-f 1`、`2`、`3`           | `altodo-set-priority-1`、`-2`、`-3`                                    | 優先度の設定                     |
+| `C-c C-i`                       | `altodo-insert-id`                                                     | `#id` の挿入                     |
+| `C-c C-j`                       | `altodo-goto-dependency`                                               | 依存先タスクへジャンプ           |
+| `M-<right>`、`M-<left>`         | `altodo-indent-increase`、`altodo-indent-decrease`                     | インデントの増減                 |
+| `C-c C-v f c`                   | `altodo-filter-clear`                                                  | フィルタクリア                   |
+| `C-c C-v s t`                   | `altodo-sidebar-toggle`                                                | サイドバーの表示切替             |
+| `C-c C-v s r`                   | `altodo-sidebar-refresh`                                               | サイドバーの更新                 |
+
+`altodo-toggle-comment`（タスク ↔ コメントのトグル）は、キーに割り当てていない。`M-x` で実行する。
 
 
 ## 4. 設定ファイル（.altodo-locals.el）
@@ -375,11 +329,11 @@ alist 形式で複数の変数を指定可能：
 `.altodo-locals.el` は alist 形式で任意の変数を指定可能。実装はファイルを Lisp データとして読み込むだけなので、制限はない。
 
 | 変数名                      | 説明                                        |
-|-----------------------------|---------------------------------------------|
+| --------------------------- | ------------------------------------------- |
 | `altodo-filter-patterns`    | サイドバーフィルタパターンリスト            |
 | `altodo-sidebar-face-alist` | サイドバー用 face 定義                      |
 | `altodo-sidebar-position`   | サイドバー表示位置（`left` または `right`） |
-| `altodo-sidebar-size`       | サイドバー幅（文字数）                      |
+| `altodo-sidebar-size`       | サイドバー幅（ウィンドウ幅に対する比率）    |
 | `altodo-sidebar-indent`     | サイドバーインデント幅                      |
 
 **例**:
@@ -389,7 +343,7 @@ alist 形式で複数の変数を指定可能：
  (altodo-filter-patterns . (...))
  (altodo-sidebar-face-alist . (...))
  (altodo-sidebar-position . right)
- (altodo-sidebar-size . 30)
+ (altodo-sidebar-size . 0.3)
  )
 ```
 
@@ -398,7 +352,7 @@ alist 形式で複数の変数を指定可能：
 
 ファイルが存在しない場合は以下のデフォルト値を使用：
 
-- `altodo-filter-patterns` → `altodo--default-filter-patterns` 変数
+- `altodo-filter-patterns` → `altodo-default-filter-patterns` 変数
 - サイドバー face → デフォルト face
 
 
@@ -409,7 +363,7 @@ alist 形式で複数の変数を指定可能：
 5つのタスク状態：
 
 | 状態     | マーク | 説明                           |
-|----------|--------|--------------------------------|
+| -------- | ------ | ------------------------------ |
 | オープン | `[ ]`  | 実行前タスク                   |
 | 進行中   | `[@]`  | 現在、進行・対応中のタスク     |
 | 待機     | `[w]`  | 保留（待ち状態）のタスク       |
@@ -426,6 +380,12 @@ alist 形式で複数の変数を指定可能：
 - 例: `[ ] + スターフラグの付いたタスク`
 
 
+#### フラグを付与できる行
+
+- フラグは、タスク行のタスク状態マークの直後、および1行コメント行の `///` の直後に置く
+- フラグの後に半角スペースが必要
+
+
 #### 優先度フラグ
 
 - フラグ: `!`, `!!`, `!!!`
@@ -438,45 +398,29 @@ alist 形式で複数の変数を指定可能：
 #### 1行コメント
 
 - マーカー: `///`
+- 用途: タスクの一部ではない、分離した注記（補足、レビューメモ）
 - 例: `/// これは一行コメント行`
+- フラグ（`+`、`!`）を付与できる。例: `/// ! 重要な注記`
 
 
 #### 複数行コメント
 
-- タスク行または1行コメント行の直後のインデント行
-- インデント規則: 親行のインデント + 4 スペース
-- 空行（インデントなし）で終了
+- 付随先: 直前のタスク行または1行コメント行
+- 用途: タスクの説明など、タスクの一部
+- 例: `[ ] タスク` の次の行 `    タスクの説明`
 
 
-#### 複数行コメントの終了判定
+#### 複数行コメントの判定規則
 
-複数行コメントは**空行（インデントなし）**で終了する。
+仕様の詳細は `doc/altodo_spec.md` の 3.2.3 に従う。判定規則は次のとおり。
 
-**判定ロジック**:
+- 開始の行は、直前のタスク行・1行コメント行のインデント + 4 スペースで始まる。例外はない
+- 開始の行と同じインデントの行のうち、タスク行以外は全て本文である。Markdown のリスト、リンク、フェンス付きコードブロックを含む
+- 続きの行は、前行の複数行コメントと同じインデントである。インデントを保った、スペースだけの行も本文である
+- インデントが異なる行（浅い行と深い行）、および完全な空行（0 文字）で終了する。入れ子の Markdown リストのように、深いインデントの行は本文にならない
+- タスク状態マークで始まる行は、常にタスク行である
 
-```elisp
-(defun altodo--multiline-comment-p ()
-  "Check if current line is part of a multiline comment.
-Returns t if in multiline comment, nil otherwise."
-  (save-excursion
-    (beginning-of-line)
-    (let ((indent (current-indentation)))
-      (cond
-       ;; 1行コメント行は複数行コメントではない
-       ((looking-at-p (format "^%s[ \t]*$"
-                             (regexp-quote altodo-comment-marker)))
-        nil)
-       ;; インデントなしは複数行コメントの終了
-       ((= indent 0)
-        nil)
-       ;; インデントありは複数行コメントの継続
-       (t t)))))
-```
-
-**処理**:
-1. 現在の行が1行コメント行（`///` のみ）の場合は終了
-2. 現在の行がインデントなしの場合は終了
-3. 現在の行がインデントありの場合は継続
+判定は、バッファの行ごとに、正規表現と直前の行の状態で行う。インデント付きの行を Markdown のインデント付きコードブロックとして扱わない（6.0 節）。
 
 
 ### 5.4 タグ
@@ -496,12 +440,13 @@ Returns t if in multiline comment, nil otherwise."
 #### 特殊タグ
 
 | タグ                | 説明                         |
-|---------------------|------------------------------|
+| ------------------- | ---------------------------- |
 | `#id:value`         | ユニーク識別子               |
 | `#dep:value`        | 依存関係（参照先 ID を指定） |
 | `#group-start:date` | グループのタスクの開始日     |
 | `#group-due:date`   | グループのタスクの期日       |
 | `#done:timestamp`   | タスクが完了・廃止された時刻 |
+| `#seq-tasks`        | 子タスクを上から順に実行     |
 
 
 #### @person タグ
@@ -564,6 +509,12 @@ Returns t if in multiline comment, nil otherwise."
 - prefix: `altodo-done-file-prefix` で設定可能
 
 
+#### 制約
+
+- 現在のバージョンは、タスクのネスト（ツリー）構造を維持しない。完了・廃止したタスクの行と、その複数行コメントだけを、見出しの下に移動する。子タスクは元のバッファに残る
+- 将来、子タスクを含めて移動するよう改善する予定である
+
+
 ### 5.8 フィルタリング機能
 
 #### 親タスク正規表現フィルタ
@@ -582,7 +533,7 @@ Returns t if in multiline comment, nil otherwise."
 
 - `:title` に `%n` プレースホルダーでマッチ数を表示
 - `:count-format` オプション: カウント処理の有効/無効
-- `:type` オプション: フィルタタイプの指定（nil, "comment", "group-header", "dynamic"）
+- `:type` オプション: フィルタタイプの指定（`nil`、`comment`、`group-header`、`separator`、`command`、`dynamic`、`search-simple`、`search-lambda`）
 
 
 ## 6. Font-lock 設計
@@ -647,6 +598,7 @@ Only targets fenced code blocks (``` or ~~~), not indented code blocks."
 - フェンスドコードブロック内の altodo face が markdown face で上書きされる
 - インデント済みコメント行（複数行コメント）は対象外（text property がないため）
 
+
 ### 6.1 処理順序（Layer 構造）
 
 ```
@@ -687,17 +639,17 @@ Layer 5: 最優先（コメント全体、斜線）
 
 **注**: markdown-pre 対策により、altodo-mode バッファ内で `markdown-match-pre-blocks` が font-lock-keywords から除外される。そのため `markdown-pre-face` は適用されない。また、フェンスドコードブロック内の altodo face は `altodo--restore-code-block-faces` で markdown face に上書きされる。
 
-| Layer | 要素                     | Override フラグ | 理由                                                       |
-|-------|--------------------------|-----------------|-----------------------------------------------------------|
-| 1     | ブラケット・状態文字     | `t`             | ブラケットと状態文字の face を確定させる                   |
-| 2     | 本文全体                 | `append`        | markdown-mode の face を優先し、altodo-mode の face を追加 |
-| 3     | （空）                   | -               | タグは Layer 4 に移動                                      |
-| 4     | 日付ベーステキスト       | `prepend`       | 複数の face を重ねる                                       |
-| 4     | フラグ（記号部分）       | `t`             | フラグ記号の face を確定させる                             |
-| 4     | フラグ（本文部分）       | `prepend`       | 複数の face を重ねる                                       |
-| 4     | タグ・日付               | `t`             | タグと日付の face を確定させる                             |
-| 5     | コメント                 | `prepend`       | 複数の face を重ねる                                       |
-| 5     | 斜線                     | `t`             | 斜線の face を確定させる                                   |
+| Layer | 要素                 | Override フラグ | 理由                                                       |
+| ----- | -------------------- | --------------- | ---------------------------------------------------------- |
+| 1     | ブラケット・状態文字 | `t`             | ブラケットと状態文字の face を確定させる                   |
+| 2     | 本文全体             | `append`        | markdown-mode の face を優先し、altodo-mode の face を追加 |
+| 3     | （空）               | -               | タグは Layer 4 に移動                                      |
+| 4     | 日付ベーステキスト   | `prepend`       | 複数の face を重ねる                                       |
+| 4     | フラグ（記号部分）   | `t`             | フラグ記号の face を確定させる                             |
+| 4     | フラグ（本文部分）   | `prepend`       | 複数の face を重ねる                                       |
+| 4     | タグ・日付           | `t`             | タグと日付の face を確定させる                             |
+| 5     | コメント             | `prepend`       | 複数の face を重ねる                                       |
+| 5     | 斜線                 | `t`             | 斜線の face を確定させる                                   |
 
 
 ### 6.3 seq-tasks 実装
@@ -878,4 +830,3 @@ Layer 5: 最優先（コメント全体、斜線）
 - `doc/design.md.backup_*` - 詳細設計（削除前のバージョン）
 - `doc/tmp_design.md` - 実装詳細セクション（詳細設計用）
 - `.kiro/memo/` - 開発メモ
-
