@@ -6,10 +6,10 @@
              (file-name-directory (or load-file-name buffer-file-name)))
 (require 'altodo-test-helper)
 
-;;; Test: Verify dolist is executed in sidebar--render
+;;; Test: Verify dolist is executed in altodo-sidebar--render
 
 (ert-deftest altodo-test-phase2-1-mcp-dolist-execution ()
-  "Test that dolist is executed in sidebar--render."
+  "Test that dolist is executed in altodo-sidebar--render."
   (let ((test-file (altodo-test-file "testfiles/test-sample-project.altodo")))
     (should (file-exists-p test-file))
     

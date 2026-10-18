@@ -14,7 +14,7 @@
                    :face-rules ((>= 10 face-high) (>= 1 face-mid)))))
       ;; Simulate selection mode
       (setq-local altodo-sidebar--selected-filters (list entry))
-      (should (eq (sidebar--get-face entry nil (current-buffer))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer))
                   'altodo-sidebar-selected-filter-face)))))
 
 (ert-deftest test-layer-active-overrides-face-rules ()
@@ -27,7 +27,7 @@
                    :face-rules ((>= 10 face-high) (>= 1 face-mid)))))
       ;; Simulate active mode
       (setq-local altodo-sidebar--active-entries (list entry))
-      (should (eq (sidebar--get-face entry nil (current-buffer))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer))
                   'altodo-sidebar-active-filter-face)))))
 
 ;;; Test 2: Face-rules overrides static face
@@ -41,7 +41,7 @@
                    :face bold
                    :face-rules ((>= 10 face-high) (>= 1 face-mid)))))
       ;; face-rules should match (count=15 >= 10)
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'face-high)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'face-high)))))
 
 ;;; Test 3: Static face used when face-rules doesn't match
 (ert-deftest test-layer-static-face-fallback ()
@@ -54,7 +54,7 @@
                    :face bold
                    :face-rules ((>= 10 face-high)))))
       ;; face-rules doesn't match (count=3 < 10), should use :face
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'bold)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'bold)))))
 
 ;;; Test 4: Default face used when no rules match and no static face
 (ert-deftest test-layer-default-face-fallback ()
@@ -66,7 +66,7 @@
                    :count-format t
                    :face-rules ((>= 10 face-high)))))
       ;; face-rules doesn't match, no :face, should use default
-      (let ((result (sidebar--get-face entry nil (current-buffer))))
+      (let ((result (altodo-sidebar--get-face entry nil (current-buffer))))
         (should result)
         (should (not (eq result 'face-high)))))))
 
@@ -81,11 +81,11 @@
                    :face bold
                    :face-rules ((>= 10 face-high) (>= 1 face-mid)))))
       ;; Without selection: face-rules should apply
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'face-high))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'face-high))
       
       ;; With selection: selection mode should override
       (setq-local altodo-sidebar--selected-filters (list entry))
-      (should (eq (sidebar--get-face entry nil (current-buffer))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer))
                   'altodo-sidebar-selected-filter-face)))))
 
 ;;; Test 6: Face-rules with multiple conditions
@@ -101,7 +101,7 @@
                                 (>= 1 face-mid)
                                 (= 0 face-zero)))))
       ;; count=5, should match (>= 5 face-high)
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'face-high)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'face-high)))))
 
 ;;; Test 7: Face-rules with zero count
 (ert-deftest test-layer-face-rules-zero-count ()
@@ -115,7 +115,7 @@
                                 (>= 1 face-mid)
                                 (= 0 face-zero)))))
       ;; count=0 (no done tasks), should match (= 0 face-zero)
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'face-zero)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'face-zero)))))
 
 ;;; Test 8: Count-face-rules doesn't affect title face
 (ert-deftest test-layer-count-face-rules-independent ()
@@ -128,7 +128,7 @@
                    :face-rules ((>= 10 face-high))
                    :count-face-rules ((>= 10 face-count-high)))))
       ;; Title should get face-high from :face-rules
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'face-high))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'face-high))
       
       ;; Count portion should be formatted with count value
       (let ((formatted (altodo--format-sidebar-title entry (current-buffer))))
@@ -147,7 +147,7 @@
                    :count-face-rules ((>= 10 face-count-high)))))
       ;; With selection: selection mode should override
       (setq-local altodo-sidebar--selected-filters (list entry))
-      (should (eq (sidebar--get-face entry nil (current-buffer))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer))
                   'altodo-sidebar-selected-filter-face)))))
 
 ;;; Test 10: Face spec (not just symbol) in face-rules
@@ -160,7 +160,7 @@
                    :count-format t
                    :face-rules ((>= 10 (:foreground "red" :weight bold))))))
       ;; Should return the face spec
-      (let ((result (sidebar--get-face entry nil (current-buffer))))
+      (let ((result (altodo-sidebar--get-face entry nil (current-buffer))))
         (should result)
         (should (listp result))))))
 
@@ -178,10 +178,10 @@
                         :count-format t
                         :face-rules ((>= 5 face-high)))))
       ;; Done: count=15, should match (>= 10 face-high)
-      (should (eq (sidebar--get-face done-entry nil (current-buffer)) 'face-high))
+      (should (eq (altodo-sidebar--get-face done-entry nil (current-buffer)) 'face-high))
       
       ;; Open: count=3, should not match (>= 5)
-      (should (not (eq (sidebar--get-face open-entry nil (current-buffer)) 'face-high))))))
+      (should (not (eq (altodo-sidebar--get-face open-entry nil (current-buffer)) 'face-high))))))
 
 ;;; Test 12: Fallback chain - face-rules -> static face -> default
 (ert-deftest test-layer-fallback-chain ()
@@ -195,7 +195,7 @@
                    :face-rules ((>= 10 face-high)))))
       ;; face-rules doesn't match (count=3 < 10)
       ;; should fall back to :face (bold)
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'bold)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'bold)))))
 
 ;;; Test 13: No face-rules, only static face
 (ert-deftest test-layer-no-face-rules-only-static ()
@@ -207,7 +207,7 @@
                    :count-format t
                    :face bold)))
       ;; No face-rules, should use :face
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'bold)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'bold)))))
 
 ;;; Test 14: No face-rules, no static face, only default
 (ert-deftest test-layer-no-face-rules-no-static ()
@@ -218,7 +218,7 @@
     (let ((entry '(:title "Done %n" :type search-simple :pattern "done"
                    :count-format t)))
       ;; No face-rules, no :face, should use default
-      (let ((result (sidebar--get-face entry nil (current-buffer))))
+      (let ((result (altodo-sidebar--get-face entry nil (current-buffer))))
         (should result)))))
 
 ;;; Test 15: Active mode with static face
@@ -232,7 +232,7 @@
                    :face bold)))
       ;; With active mode: should use active-filter-face, not :face
       (setq-local altodo-sidebar--active-entries (list entry))
-      (should (eq (sidebar--get-face entry nil (current-buffer))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer))
                   'altodo-sidebar-active-filter-face)))))
 
 (provide 'phase2-5-complex-layer-test)

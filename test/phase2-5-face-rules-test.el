@@ -79,7 +79,7 @@
       ;; count-pattern-simple "open" matches 2 lines, not "done" (1 line)
       (should (= (altodo--get-entry-count entry (current-buffer)) 2)))))
 
-;;; sidebar--get-face with :face-rules tests
+;;; altodo-sidebar--get-face with :face-rules tests
 
 (ert-deftest test-get-face-face-rules-high-count ()
   "face-rules returns high-count face when count >= 10."
@@ -89,7 +89,7 @@
     (let ((entry '(:title "Done %n" :type search-simple :pattern "done"
                    :count-format t
                    :face-rules ((>= 10 face-high) (>= 1 face-mid) (= 0 face-zero)))))
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'face-high)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'face-high)))))
 
 (ert-deftest test-get-face-face-rules-mid-count ()
   "face-rules returns mid face when 1 <= count < 10."
@@ -99,7 +99,7 @@
     (let ((entry '(:title "Done %n" :type search-simple :pattern "done"
                    :count-format t
                    :face-rules ((>= 10 face-high) (>= 1 face-mid) (= 0 face-zero)))))
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'face-mid)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'face-mid)))))
 
 (ert-deftest test-get-face-face-rules-zero-count ()
   "face-rules returns zero face when count = 0."
@@ -109,7 +109,7 @@
     (let ((entry '(:title "Done %n" :type search-simple :pattern "done"
                    :count-format t
                    :face-rules ((>= 10 face-high) (>= 1 face-mid) (= 0 face-zero)))))
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'face-zero)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'face-zero)))))
 
 (ert-deftest test-get-face-face-rules-no-match-fallback-to-face ()
   "Falls back to :face when no rule matches."
@@ -120,7 +120,7 @@
                    :count-format t
                    :face bold
                    :face-rules ((>= 10 face-high)))))
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'bold)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'bold)))))
 
 (ert-deftest test-get-face-face-rules-no-match-fallback-to-default ()
   "Falls back to type default when no rule matches and no :face."
@@ -130,7 +130,7 @@
     (let ((entry '(:title "D %n" :type search-simple :pattern "done"
                    :count-format t
                    :face-rules ((>= 10 face-high)))))
-      (should (eq (sidebar--get-face entry nil (current-buffer))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer))
                   'altodo-sidebar-search-simple-face)))))
 
 (ert-deftest test-get-face-face-rules-requires-count-format ()
@@ -141,7 +141,7 @@
     (let ((entry '(:title "Done" :type search-simple :pattern "done"
                    :face bold
                    :face-rules ((>= 1 face-high)))))
-      (should (eq (sidebar--get-face entry nil (current-buffer)) 'bold)))))
+      (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'bold)))))
 
 (ert-deftest test-get-face-face-rules-with-face-spec ()
   "face-rules works with face spec (plist)."
@@ -151,7 +151,7 @@
     (let ((entry `(:title "D %n" :type search-simple :pattern "done"
                    :count-format t
                    :face-rules ((>= 1 (:foreground "red" :weight bold))))))
-      (should (equal (sidebar--get-face entry nil (current-buffer))
+      (should (equal (altodo-sidebar--get-face entry nil (current-buffer))
                      '(:foreground "red" :weight bold))))))
 
 ;;; altodo--format-sidebar-title with :count-face-rules tests
@@ -230,7 +230,7 @@
                     :count-format t
                     :face-rules ((>= 1 face-title))
                     :count-face-rules ((>= 1 face-count))))
-           (title-face (sidebar--get-face entry nil (current-buffer)))
+           (title-face (altodo-sidebar--get-face entry nil (current-buffer)))
            (result (altodo--format-sidebar-title entry (current-buffer)))
            (pos (string-match "[0-9]" result)))
       (should (eq title-face 'face-title))
@@ -245,7 +245,7 @@
                     :count-format t
                     :face-rules ((>= 10 face-title-high) (>= 1 face-title-low))
                     :count-face-rules ((>= 5 face-count-high) (>= 1 face-count-low))))
-           (title-face (sidebar--get-face entry nil (current-buffer)))
+           (title-face (altodo-sidebar--get-face entry nil (current-buffer)))
            (result (altodo--format-sidebar-title entry (current-buffer)))
            (pos (string-match "[0-9]" result)))
       ;; count=7: face-rules >= 10 no, >= 1 yes -> face-title-low

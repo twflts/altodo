@@ -1,0 +1,3 @@
+byte-compile 0
+checkdoc 0
+package-lint 5

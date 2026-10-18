@@ -219,6 +219,9 @@ altodo-mode は markdown-mode を継承しているため、markdown-mode のキ
 - 見出し（セクション）ごとにグループ化
 - マルチラインコメントも一緒に移動
 - 空行は保持
+- 次の場合は、何も移動せずエラーにする: バッファが読み取り専用、done ファイルが書き込めない（ディレクトリである、親ディレクトリに書き込めない）
+- done ファイルを開いているバッファがある場合は、そのバッファに追記する。未保存の変更がなければ保存し、あれば保存せずメッセージで知らせる
+- 自動移動で、あるバッファの移動に失敗した場合は、メッセージを表示し、他のバッファの移動を続ける。読み取り専用のバッファは、移動せずメッセージを表示する
 
 
 #### 自動移動タイマー
@@ -231,7 +234,7 @@ M-x altodo-toggle-auto-move-timer
 M-x altodo-start-auto-move-timer
 M-x altodo-stop-auto-move-timer
 
-;; 実行間隔を変更（デフォルト: 3600 秒 = 1 時間）
+;; 実行間隔を変更（デフォルト: 3600 秒 = 1 時間。正の数）
 (setq altodo-auto-move-interval 1800)  ; 30 分
 
 ;; 自動保存を有効化（デフォルト: nil）
@@ -279,6 +282,8 @@ M-x altodo-stop-auto-move-timer
 | `altodo-sidebar-auto-resize`            | サイドバーを自動リサイズ                    | `nil`                |
 | `altodo-sidebar-hide-mode-line`         | サイドバーのモードラインを非表示            | `nil`                |
 | `altodo-sidebar-hide-line-numbers`      | サイドバーの行番号を非表示                  | `t`                  |
+| `altodo-locals-code-policy`             | `.altodo-locals.el` のコードの実行方針      | `'deny`              |
+| `altodo-trusted-locals`                 | 承認した `.altodo-locals.el` の SHA-256     | `nil`                |
 
 
 #### 日付・ID 設定
@@ -410,6 +415,40 @@ M-x altodo-stop-auto-move-timer
 ```
 
 
+#### 設定ファイル（`.altodo-locals.el`）のコードの実行
+
+altodo ファイルと同じディレクトリに `.altodo-locals.el` を置くと、そのディレクトリのサイドバーのフィルターパターンなどを変更できる（形式は `doc/design.md` の 4 節）。この設定ファイルに書いた次のコードは、既定では実行しない。他人から受け取ったディレクトリの設定ファイルで、意図しないコードが実行されることを防ぐためである。
+
+- `:type search-lambda` の `:pattern`（lambda）と `:count-pattern-lambda`
+- `:command` に指定した、名前が altodo- で始まらないコマンド（`altodo-filter-clear` などは常に実行する）
+
+最小の設定ファイルの例（`search-simple` は、コードを含まないため、そのまま使える）:
+
+```elisp
+((altodo-filter-patterns .
+  ((:title "Open - %n" :type search-simple :pattern "open" :count-format t)
+   (:title "Done - %n" :type search-simple :pattern "done" :count-format t)))
+ (altodo-sidebar-position . right))
+```
+
+実行しない項目も、サイドバーには表示する。件数は `?` と表示し、項目を選ぶと実行しない旨のメッセージを表示する。
+
+`altodo-locals-code-policy` で、実行の方針を選ぶ。
+
+| 値        | 動作                                                                                            |
+| --------- | ----------------------------------------------------------------------------------------------- |
+| `deny`    | 既定。実行しない                                                                                |
+| `confirm` | 項目を選んだときに、ファイルの内容（SHA-256）を承認するか確認する。承認したファイルだけ実行する |
+| `allow`   | 常に実行する。信頼できるディレクトリだけで使う                                                  |
+
+`confirm` で承認すると、ファイルのパスと SHA-256 を `altodo-trusted-locals` に保存する。ファイルの内容を変更すると、承認は無効になり、再度確認する。`altodo-default-filter-patterns`（Emacs の設定）に書いたコードは、常に実行する。
+
+```elisp
+;; 承認したファイルだけ、設定ファイルのコードを実行する
+(setq altodo-locals-code-policy 'confirm)
+```
+
+
 #### 設定例
 
 ```elisp
@@ -442,8 +481,16 @@ M-x altodo-stop-auto-move-timer
 ### インストール
 
 - Emacs 29.1 以上（Emacs 29.3 と markdown-mode 2.6 で動作を確認している）
-- markdown-mode の導入
-    - altodo.el がリリースされた時点でのバージョンで検証・開発をしている
+- markdown-mode の導入（`Package-Requires` は 2.0 以上。2.6 で動作を確認している）
+    - 導入手順は、[markdown-mode の README](https://github.com/jrblevin/markdown-mode) の「Installation」に従う。そこでは MELPA Stable を推奨している
+    - `M-x package-install RET markdown-mode RET`（パッケージのアーカイブに MELPA Stable を追加した後）
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives
+             '("melpa-stable" . "https://stable.melpa.org/packages/"))
+(package-initialize)
+```
 
 
 altodo.el を適当なディレクトリに配置し、以下のように init.el に追加する。

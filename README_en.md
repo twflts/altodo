@@ -213,6 +213,9 @@ Automatically move completed (`[x]`) or cancelled (`[~]`) tasks to separate file
 - Grouped by heading (section)
 - Multi-line comments move with task
 - Blank lines preserved
+- Nothing is moved, and an error is signaled, if the buffer is read-only or the done file cannot be written (it is a directory, or its parent directory is not writable)
+- If a buffer visits the done file, the task is appended to that buffer. The buffer is saved if it had no unsaved changes; otherwise it is not saved and a message says so
+- In the automatic move, if the move fails in one buffer, a message is shown and the other buffers are still moved. A read-only buffer is not moved, and a message is shown
 
 
 #### Auto-move Timer
@@ -225,7 +228,7 @@ M-x altodo-toggle-auto-move-timer
 M-x altodo-start-auto-move-timer
 M-x altodo-stop-auto-move-timer
 
-;; Change execution interval (default: 3600 seconds = 1 hour)
+;; Change execution interval (default: 3600 seconds = 1 hour; a positive number)
 (setq altodo-auto-move-interval 1800)  ; 30 minutes
 
 ;; Enable auto-save after move (default: nil)
@@ -273,6 +276,8 @@ M-x altodo-stop-auto-move-timer
 | `altodo-sidebar-auto-resize`            | Auto-resize sidebar                            | `nil`                |
 | `altodo-sidebar-hide-mode-line`         | Hide sidebar mode line                         | `nil`                |
 | `altodo-sidebar-hide-line-numbers`      | Hide sidebar line numbers                      | `t`                  |
+| `altodo-locals-code-policy`             | Policy for code in `.altodo-locals.el`         | `'deny`              |
+| `altodo-trusted-locals`                 | SHA-256 of trusted `.altodo-locals.el` files   | `nil`                |
 
 
 #### Date/ID Settings
@@ -404,6 +409,40 @@ ID tag format for `C-c C-i` insertion.
 ```
 
 
+#### Code in the Configuration File (`.altodo-locals.el`)
+
+A `.altodo-locals.el` in the same directory as an altodo file changes the sidebar filter patterns and other settings of that directory (see section 4 of `doc/design_en.md` for the format). The following code in this file does not run by default. This prevents unintended code from running when the file comes from a directory received from someone else.
+
+- The `:pattern` (lambda) of `:type search-lambda`, and `:count-pattern-lambda`
+- A `:command` whose name does not start with altodo- (commands such as `altodo-filter-clear` always run)
+
+A minimal configuration file (`search-simple` has no code, so it works as it is):
+
+```elisp
+((altodo-filter-patterns .
+  ((:title "Open - %n" :type search-simple :pattern "open" :count-format t)
+   (:title "Done - %n" :type search-simple :pattern "done" :count-format t)))
+ (altodo-sidebar-position . right))
+```
+
+Entries whose code does not run are still shown in the sidebar. The count is shown as `?`, and selecting such an entry shows a message that the code does not run.
+
+Choose the policy with `altodo-locals-code-policy`.
+
+| Value     | Behavior                                                                                  |
+| --------- | ----------------------------------------------------------------------------------------- |
+| `deny`    | Default. The code does not run                                                            |
+| `confirm` | Asks when you select an entry whether to trust the file (SHA-256). Only trusted files run |
+| `allow`   | Always runs. Use only in directories you trust                                            |
+
+Trusting a file under `confirm` saves its path and SHA-256 to `altodo-trusted-locals`. Changing the content of the file ends the trust, and you are asked again. Code in `altodo-default-filter-patterns` (the Emacs configuration) always runs.
+
+```elisp
+;; Run the code in the configuration file only for trusted files
+(setq altodo-locals-code-policy 'confirm)
+```
+
+
 #### Configuration Examples
 
 ```elisp
@@ -436,8 +475,16 @@ ID tag format for `C-c C-i` insertion.
 ### Installation
 
 - Emacs 29.1 or later (verified with Emacs 29.3 and markdown-mode 2.6)
-- markdown-mode installed
-    - altodo.el is tested and developed with the version available at release time
+- markdown-mode installed (`Package-Requires` says 2.0 or later; verified with 2.6)
+    - Follow "Installation" in the [markdown-mode README](https://github.com/jrblevin/markdown-mode), which recommends MELPA Stable
+    - `M-x package-install RET markdown-mode RET` (after adding MELPA Stable to the package archives)
+
+```elisp
+(require 'package)
+(add-to-list 'package-archives
+             '("melpa-stable" . "https://stable.melpa.org/packages/"))
+(package-initialize)
+```
 
 
 Place altodo.el in a suitable directory and add to init.el:

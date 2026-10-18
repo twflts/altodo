@@ -41,9 +41,9 @@
               (message "Face result: %s" face)
               (should (not (null face)))))
           
-          ;; Test sidebar--get-face
-          (let ((face (sidebar--get-face target-entry config (current-buffer))))
-            (message "sidebar--get-face result: %s" face)
+          ;; Test altodo-sidebar--get-face
+          (let ((face (altodo-sidebar--get-face target-entry config (current-buffer))))
+            (message "altodo-sidebar--get-face result: %s" face)
             (should (not (null face))))
           
           ;; Test format-sidebar-title

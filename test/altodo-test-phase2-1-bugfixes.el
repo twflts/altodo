@@ -4,7 +4,7 @@
 (require 'altodo)
 
 (ert-deftest altodo-test-phase2-1-sidebar-get-face-current-buffer ()
-  "Test sidebar--get-face uses current-buffer correctly."
+  "Test altodo-sidebar--get-face uses current-buffer correctly."
   (let ((source-buffer (generate-new-buffer "test.altodo")))
     (unwind-protect
         (with-current-buffer source-buffer

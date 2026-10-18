@@ -130,7 +130,7 @@
     (let ((str (altodo-sidebar--get-mode-line-string)))
       (should (string-match "Multiple: 2 filters, OR" str)))))
 
-;;; Test: sidebar--get-face with multiple selection
+;;; Test: altodo-sidebar--get-face with multiple selection
 
 (ert-deftest test-sidebar-get-face-selected-filter ()
   "Test face for selected filter in multiple selection mode."
@@ -138,7 +138,7 @@
     (with-current-buffer (get-buffer-create "*altodo-filters*")
       (setq-local altodo-sidebar--selected-filters (list entry))
       (setq-local altodo-sidebar--active-entries nil)
-      (let ((face (sidebar--get-face entry nil)))
+      (let ((face (altodo-sidebar--get-face entry nil)))
         (should (eq face 'altodo-sidebar-selected-filter-face))))))
 
 (ert-deftest test-sidebar-get-face-active-filter ()
@@ -147,7 +147,7 @@
     (with-current-buffer (get-buffer-create "*altodo-filters*")
       (setq-local altodo-sidebar--selected-filters nil)
       (setq-local altodo-sidebar--active-entries (list entry))
-      (let ((face (sidebar--get-face entry nil)))
+      (let ((face (altodo-sidebar--get-face entry nil)))
         (should (eq face 'altodo-sidebar-active-filter-face))))))
 
 (ert-deftest test-sidebar-get-face-selected-over-active ()
@@ -156,7 +156,7 @@
     (with-current-buffer (get-buffer-create "*altodo-filters*")
       (setq-local altodo-sidebar--selected-filters (list entry))
       (setq-local altodo-sidebar--active-entries (list entry))
-      (let ((face (sidebar--get-face entry nil)))
+      (let ((face (altodo-sidebar--get-face entry nil)))
         (should (eq face 'altodo-sidebar-selected-filter-face))))))
 
 ;;; Run tests

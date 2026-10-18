@@ -27,8 +27,8 @@
           (let ((title (altodo--format-sidebar-title target-entry (current-buffer))))
             (should (string-match "[0-9]+" title)))
           
-          ;; Test sidebar--get-face
-          (let ((face (sidebar--get-face target-entry config (current-buffer))))
+          ;; Test altodo-sidebar--get-face
+          (let ((face (altodo-sidebar--get-face target-entry config (current-buffer))))
             (should (not (null face)))))))))
 
 (ert-deftest test-face-rules-debug-count-face-rules ()
@@ -77,8 +77,8 @@
           (let ((title (altodo--format-sidebar-title target-entry (current-buffer))))
             (should (string-match "[0-9]+" title)))
           
-          ;; Test sidebar--get-face
-          (let ((face (sidebar--get-face target-entry config (current-buffer))))
+          ;; Test altodo-sidebar--get-face
+          (let ((face (altodo-sidebar--get-face target-entry config (current-buffer))))
             (should (not (null face)))))))))
 
 (provide 'phase2-5-debug-test)

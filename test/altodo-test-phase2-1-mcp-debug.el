@@ -3,10 +3,10 @@
 (require 'ert)
 (require 'altodo)
 
-;;; Test 1: sidebar--get-face with current-buffer in sidebar
+;;; Test 1: altodo-sidebar--get-face with current-buffer in sidebar
 
 (ert-deftest altodo-test-phase2-1-mcp-sidebar-get-face-current-buffer ()
-  "Test sidebar--get-face uses current-buffer correctly in sidebar."
+  "Test altodo-sidebar--get-face uses current-buffer correctly in sidebar."
   (let ((source-buffer (generate-new-buffer "test.altodo")))
     (unwind-protect
         (with-current-buffer source-buffer
@@ -18,9 +18,9 @@
                           '((:title "Open" :pattern "state:open")))
               (setq-local altodo-sidebar--active-entries nil)
               
-              ;; Test that sidebar--get-face returns correct face
+              ;; Test that altodo-sidebar--get-face returns correct face
               (let ((entry '(:title "Open" :pattern "state:open")))
-                (should (eq (sidebar--get-face entry nil) 
+                (should (eq (altodo-sidebar--get-face entry nil) 
                            'altodo-sidebar-selected-filter-face))))
             
             (when (buffer-live-p sidebar-buffer)
@@ -109,10 +109,10 @@
       (when (buffer-live-p buffer2)
         (kill-buffer buffer2)))))
 
-;;; Test 5: sidebar--get-face with active-entries
+;;; Test 5: altodo-sidebar--get-face with active-entries
 
 (ert-deftest altodo-test-phase2-1-mcp-sidebar-get-face-active ()
-  "Test sidebar--get-face with active-entries."
+  "Test altodo-sidebar--get-face with active-entries."
   (let ((source-buffer (generate-new-buffer "test.altodo")))
     (unwind-protect
         (with-current-buffer source-buffer
@@ -125,7 +125,7 @@
                           '((:title "Done" :pattern "state:done")))
               
               (let ((entry '(:title "Done" :pattern "state:done")))
-                (should (eq (sidebar--get-face entry nil) 
+                (should (eq (altodo-sidebar--get-face entry nil) 
                            'altodo-sidebar-active-filter-face))))
             
             (when (buffer-live-p sidebar-buffer)
@@ -133,10 +133,10 @@
       (when (buffer-live-p source-buffer)
         (kill-buffer source-buffer)))))
 
-;;; Test 6: sidebar--get-face with no selection
+;;; Test 6: altodo-sidebar--get-face with no selection
 
 (ert-deftest altodo-test-phase2-1-mcp-sidebar-get-face-default ()
-  "Test sidebar--get-face returns default face when no selection."
+  "Test altodo-sidebar--get-face returns default face when no selection."
   (let ((source-buffer (generate-new-buffer "test.altodo")))
     (unwind-protect
         (with-current-buffer source-buffer
@@ -148,7 +148,7 @@
               (setq-local altodo-sidebar--active-entries nil)
               
               (let ((entry '(:title "Open" :pattern "state:open" :type search-simple)))
-                (let ((face (sidebar--get-face entry nil)))
+                (let ((face (altodo-sidebar--get-face entry nil)))
                   (should (or (eq face 'altodo-sidebar-search-simple-face)
                              (facep face)))))))
             

@@ -263,7 +263,7 @@
           (let ((config `(:source-buffer ,source-buffer
                           :indent 2
                           :entries ((:title "@%s [%n]" :type dynamic :dynamic-type "person" :count-format t)))))
-            (sidebar--render sidebar-buffer config)
+            (altodo-sidebar--render sidebar-buffer config)
             (with-current-buffer sidebar-buffer
               (let ((content (buffer-string)))
                 (should (string-match "@alice \\[2\\]" content))

@@ -4,7 +4,7 @@
 
 ## 使い方
 
-- 全体: 97 ファイル、877 テスト
+- 全体: 101 ファイル、923 テスト
 - 実行: `scripts/run-tests.sh [test/NAME.el]`。ベースラインとの差分だけを報告する
 - 関数に対応するテストを探す: `grep -l 'altodo--関数名' test/*.el`
 - 共通の道具: `test/altodo-test-helper.el`（`altodo-test-with-buffer`、`-with-temp-dir`、`-with-locals`、`-with-today`、`altodo-test-file`）
@@ -18,19 +18,19 @@
 |---|---|---|---|---|
 | `altodo-test-phase2-1-advanced` | 10 | Advanced tests for Phase 2-1 | `altodo-sidebar--get-or-create-buffer`、`altodo-sidebar--buffer-alist`、`altodo-sidebar--get-buffer` |  |
 | `altodo-test-phase2-1-bugfixes` | 5 | Tests for Phase 2-1 bugfixes | `altodo-sidebar--selected-filters`、`altodo-sidebar--get-or-create-buffer`、`altodo--get-sidebar-buffer` |  |
-| `altodo-test-phase2-1-mcp-debug` | 6 | MCP debug tests for Phase 2-1 | `sidebar--get-face`、`altodo-sidebar--get-or-create-buffer`、`altodo-sidebar--selection-mode` |  |
-| `altodo-test-phase2-1-mcp-dolist-debug` | 1 | Debug dolist execution | `sidebar--render`、`altodo-debug-mode`、`altodo-sidebar-show` |  |
+| `altodo-test-phase2-1-mcp-debug` | 6 | MCP debug tests for Phase 2-1 | `altodo-sidebar--get-face`、`altodo-sidebar--get-or-create-buffer`、`altodo-sidebar--selection-mode` |  |
+| `altodo-test-phase2-1-mcp-dolist-debug` | 1 | Debug dolist execution | `altodo-sidebar--render`、`altodo-debug-mode`、`altodo-sidebar-show` |  |
 | `altodo-test-phase2-1-mcp-real` | 3 | MCP real file tests for Phase 2-1 | `altodo-sidebar-show`、`altodo-sidebar--get-buffer`、`altodo-sidebar--source-buffer` |  |
 | `altodo-test-phase2-1` | 5 | Tests for Phase 2-1 Multiple Buffer Support | `altodo-sidebar--get-or-create-buffer`、`altodo-sidebar--get-buffer`、`altodo-sidebar--buffer-alist` |  |
-| `phase2-5-complex-layer-test` | 16 | Complex Layer interaction tests for Phase 2-5 | `sidebar--get-face`、`altodo-sidebar--selected-filters`、`altodo-sidebar--active-entries` |  |
-| `phase2-5-debug-comprehensive` | 1 | Comprehensive debug test | `sidebar--get-face`、`altodo--get-entry-count`、`altodo-sidebar-make-config` |  |
-| `phase2-5-debug-test` | 3 | Debug tests for Phase 2-5 face-rules | `sidebar--get-face`、`altodo-sidebar-make-config`、`altodo--format-sidebar-title` |  |
-| `phase2-5-face-rules-test` | 24 | Tests for Phase 2-5 face-rules | `altodo--evaluate-face-rules`、`sidebar--get-face`、`altodo--format-sidebar-title` |  |
-| `phase2-5-sidebar-test` | 1 | Sidebar rendering test for Phase 2-5 | `altodo-debug-mode`、`altodo-sidebar-make-config`、`sidebar--render` |  |
+| `phase2-5-complex-layer-test` | 16 | Complex Layer interaction tests for Phase 2-5 | `altodo-sidebar--get-face`、`altodo-sidebar--selected-filters`、`altodo-sidebar--active-entries` |  |
+| `phase2-5-debug-comprehensive` | 1 | Comprehensive debug test | `altodo-sidebar--get-face`、`altodo--get-entry-count`、`altodo-sidebar-make-config` |  |
+| `phase2-5-debug-test` | 3 | Debug tests for Phase 2-5 face-rules | `altodo-sidebar--get-face`、`altodo-sidebar-make-config`、`altodo--format-sidebar-title` |  |
+| `phase2-5-face-rules-test` | 24 | Tests for Phase 2-5 face-rules | `altodo--evaluate-face-rules`、`altodo-sidebar--get-face`、`altodo--format-sidebar-title` |  |
+| `phase2-5-sidebar-test` | 1 | Sidebar rendering test for Phase 2-5 | `altodo-debug-mode`、`altodo-sidebar-make-config`、`altodo-sidebar--render` |  |
 | `phase2-7-dynamic-count-test` | 13 | Tests for Phase 2-7 dynamic count calculation | `altodo--get-entry-count`、`altodo--compile-filter-predicate`、`altodo--combine-predicates` |  |
-| `sidebar-apply-filter-at-point-test` | 3 | Tests for sidebar--apply-filter-at-point | `sidebar--apply-filter-at-point`、`altodo-sidebar--apply-filter` |  |
-| `sidebar-blank-line-test` | 3 | Test for sidebar blank line issue | `sidebar--render` |  |
-| `sidebar-face-test` | 18 | Tests for sidebar face functions | `sidebar--default-face`、`sidebar--resolve-face`、`sidebar--get-face` |  |
+| `sidebar-apply-filter-at-point-test` | 3 | Tests for altodo-sidebar--apply-filter-at-point | `altodo-sidebar--apply-filter-at-point`、`altodo-sidebar--apply-filter` |  |
+| `sidebar-blank-line-test` | 3 | Test for sidebar blank line issue | `altodo-sidebar--render` |  |
+| `sidebar-face-test` | 18 | Tests for sidebar face functions | `altodo-sidebar--default-face`、`altodo-sidebar--resolve-face`、`altodo-sidebar--get-face` |  |
 | `sidebar-selection-commands-test` | 6 | Tests for the sidebar selection commands | `altodo-sidebar--combine-mode`、`altodo-sidebar-toggle-selection`、`altodo-sidebar-mouse-toggle-selection` |  |
 | `sidebar-test` | 10 | Test for altodo sidebar | `altodo--get-filter-patterns`、`altodo-sidebar-make-config`、`altodo--load-locals-file` |  |
 | `sidebar-title-expansion-test` | 27 | Tests for sidebar title expansion | `altodo--format-sidebar-title`、`altodo--line-done-p`、`altodo--line-has-priority-p` |  |
@@ -74,7 +74,9 @@
 
 | ファイル | 件数 | 内容 | 主な対象 | 備考 |
 |---|---|---|---|---|
+| `abnormal-cases-test` | 16 | Tests for the abnormal cases of the design review | `altodo--due-date-matches-p`、`altodo--find-line-with-tag`、`altodo--parse-date` |  |
 | `date-arrow-test` | 24 | Tests for date arrow face handling |  |  |
+| `date-dst-test` | 6 | Tests for dates in a time zone with summer time | `altodo--parse-date`、`altodo--days-diff`、`altodo--today-start` |  |
 | `date-format-test` | 12 | Tests for altodo-date-format handling | `altodo-date-format`、`altodo--parse-due-date-condition`、`altodo--parse-date` |  |
 | `date-range-test` | 3 | Tests for this-week and this-month conditions | `altodo-week-start-day`、`altodo--days-to-week-end`、`altodo--due-date-matches-p` |  |
 | `dsl-date-compile-test` | 4 | Tests for compiling date patterns | `altodo--parse-due-date-condition`、`altodo--compile-simple-pattern` |  |
@@ -87,6 +89,7 @@
 
 | ファイル | 件数 | 内容 | 主な対象 | 備考 |
 |---|---|---|---|---|
+| `done-file-abnormal-test` | 7 | Tests for abnormal cases of moving done tasks | `altodo-move-done-tasks-at-point`、`altodo-auto-save-after-move`、`altodo--auto-move-all-buffers` |  |
 | `done-file-test` | 13 | Tests for moving done tasks to the done file | `altodo-move-done-tasks-at-point`、`altodo-move-all-done-tasks`、`altodo--auto-move-timer` |  |
 | `helper-flag-test` | 4 | Tests for flag helper functions | `altodo--remove-star-from-string`、`altodo--has-star-flag-p`、`altodo--remove-priority-from-string` |  |
 | `move-task-test` | 5 | Tests for altodo move task functions | `altodo--is-done-or-cancelled-task`、`altodo--extract-task-line` |  |
@@ -100,7 +103,7 @@
 | `debug-messages-test` | 2 | Debug with messages output | `altodo--has-seq-tasks-tag`、`altodo--get-seq-tasks-status` |  |
 | `helper-dependency-test` | 2 | Tests for dependency helper functions | `altodo--check-all-deps-completed`、`altodo--check-circular-dependency` |  |
 | `helper-id-test` | 4 | Tests for ID helper functions | `altodo--generate-id`、`altodo--find-task-by-id`、`altodo--get-task-id` |  |
-| `id-generation-test` | 6 | Tests for ID generation functions | `altodo--generate-uuidv7`、`altodo--generate-custom-short-id`、`altodo--generate-short-id-sortable` |  |
+| `id-generation-test` | 6 | Tests for ID generation functions | `altodo--integer-to-base62`、`altodo--generate-tiny-id-sortable`、`altodo--generate-id` |  |
 | `id-test` | 2 | Tests for ID generation functions | `altodo--find-task-by-id`、`altodo--generate-id` |  |
 | `phase5-8-test` | 21 | Tests for seq-tasks implementation | `altodo--get-seq-tasks-status`、`altodo--line-seq-tasks-all-p`、`altodo--line-seq-tasks-ready-p` |  |
 | `seq-tasks-tag-test` | 5 | Tests for the #seq-tasks tag detection | `altodo--is-seq-tasks-child-blocked-p`、`altodo--has-seq-tasks-tag`、`altodo--get-seq-tasks-status` |  |
@@ -116,7 +119,7 @@
 | `display-context-test` | 4 | Tests for :display-context option | `altodo--compute-display-lines`、`altodo--compute-all-heading-ranges` |  |
 | `heading-filter-test` | 15 | Tests for heading filter functionality | `altodo--line-in-heading-range-p`、`altodo--line-in-heading-range-with-filter-p`、`altodo--find-heading-range` |  |
 | `heading-newline-test` | 3 | Test heading newline with 'all' display context | `altodo--compute-display-lines` |  |
-| `heading-range-compute-test` | 7 | 見出し範囲の一括計算のテスト | `altodo--heading-level`、`altodo--compute-all-heading-ranges` |  |
+| `heading-range-compute-test` | 12 | 見出し範囲の一括計算のテスト | `altodo--heading-level`、`altodo--compute-all-heading-ranges`、`altodo--compute-display-lines` |  |
 | `heading-spacing-debug` | 1 | Debug first heading spacing | `altodo--compute-display-lines` |  |
 | `heading-spacing-test` | 3 | Test first heading gets newline after only | `altodo--compute-display-lines` |  |
 | `heading-spacing-visual` | 1 | Visual test showing display lines | `altodo--compute-display-lines` |  |
@@ -155,6 +158,7 @@
 | `debug-test` | 6 | Tests for debug functions | `altodo-toggle-task-state`、`altodo-debug-enable`、`altodo-debug-disable` |  |
 | `flag-combination-test` | 7 | Tests for star and priority flags used together | `altodo--format-flags`、`altodo-toggle-star-flag`、`altodo--line-has-star-p` |  |
 | `helper-state-test` | 4 | Tests for state helper functions | `altodo-state-open`、`altodo--normalize-state`、`altodo--task-is-completed` |  |
+| `locals-code-policy-test` | 12 | Tests for the code policy of .altodo-locals.el | `altodo-locals-code-policy`、`altodo--entry-code-permitted-p`、`altodo--get-entry-count` |  |
 | `matcher-remaining-test` | 5 | Tests for remaining matcher functions | `altodo--dep-blocked-text-matcher`、`altodo--due-overdue-severe-text-matcher`、`altodo--start-not-yet-text-matcher` |  |
 | `task-operation-test` | 1 | Tests for task operation functions | `altodo-add-task` |  |
 | `user-command-remaining-test` | 4 | Tests for remaining user commands | `altodo-set-task-progress`、`altodo-set-task-waiting`、`altodo-set-task-cancelled` |  |

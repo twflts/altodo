@@ -99,6 +99,11 @@ altodo-mode でタスクやコメントを条件に基づいてフィルタリ�
 ```
 
 
+### predicate 関数のエラー
+
+predicate 関数が途中の行でエラーを出したときは、その実行で作成した overlay を全て削除し（フィルタを解除し）、メッセージを表示して、エラーを再送出する。一部の行だけが非表示のまま残ると、フィルタの結果と区別できないためである。
+
+
 ### ヘルパー関数の仕様
 
 **命名規則**: `altodo--line-*-p` - 現在行が条件に合うか判定
@@ -131,11 +136,11 @@ altodo-filter
 │   ├── altodo--filter-cleanup       ; 終了処理
 │   ├── altodo--compile-filter-predicate ; DSL コンパイル
 │   └── altodo--combine-predicates   ; 述語結合
-├── Sidebar Functions (sidebar--*)
-│   ├── sidebar--render              ; サイドバー描画
-│   ├── sidebar--insert-entry        ; エントリ挿入
-│   ├── sidebar--get-face            ; face 取得
-│   └── sidebar--apply-filter        ; フィルタ適用
+├── Sidebar Functions (altodo-sidebar--*)
+│   ├── altodo-sidebar--render       ; サイドバー描画
+│   ├── altodo-sidebar--insert-entry ; エントリ挿入
+│   ├── altodo-sidebar--get-face     ; face 取得
+│   └── altodo-sidebar--apply-filter ; フィルタ適用
 ├── User Commands (altodo-filter-*)
 │   ├── altodo-filter-clear          ; クリア
 │   ├── altodo-filter-show-done-only
@@ -159,7 +164,7 @@ altodo--compile-filter-predicate
     ↓
 predicate 関数
     ↓
-altodo--filter-lines / sidebar--apply-filter
+altodo--filter-lines / altodo-sidebar--apply-filter
     ↓
 各行を順番にチェック
     ↓
@@ -254,7 +259,7 @@ buffer-invisibility-spec により非表示
 
 ### 6.3 サイドバー描画処理
 
-#### sidebar--insert-entry
+#### altodo-sidebar--insert-entry
 
 **説明**: サイドバーにエントリを挿入
 **処理**:
@@ -276,7 +281,7 @@ buffer-invisibility-spec により非表示
 4. クリック不可の場合: テキストを挿入（ボタンなし）
 
 
-#### sidebar--get-face
+#### altodo-sidebar--get-face
 
 **説明**: エントリの face を決定（Layer 構造）
 
@@ -300,7 +305,7 @@ Layer 5: Non-clickable（コメント行など）
 - `:face` も指定されていない場合、デフォルト face を使用
 
 
-#### sidebar--apply-filter
+#### altodo-sidebar--apply-filter
 
 **説明**: フィルタを適用
 **処理**:
@@ -505,6 +510,7 @@ Layer 5: Non-clickable（コメント行など）
 1. **heading-range キャッシュ**: 見出し範囲をキャッシュする
 2. **行位置の相対移動**: 行番号の昇順に処理し、前回の位置から移動する。バッファの先頭から行を数え直さない（`altodo--goto-line`）
 3. **overlay の検索範囲の限定**: 対象行の範囲の overlay だけを調べる（`overlays-in`）
+4. **見出しの範囲と行番号の一括処理**: 見出しの範囲を 1 回の走査で求め、行番号に変換する。マッチした行ごとに全見出しを調べず、overlay の一覧の更新は終了時に 1 回で行う
 
 
 ### 測定
@@ -512,8 +518,9 @@ Layer 5: Non-clickable（コメント行など）
 `scripts/bench-filter.sh` で、行数、パターン、表示コンテキストごとの処理時間を測定する。
 
 - 目安: 5000 行のバッファで 1 秒以内、動的フィルタの更新で 100ms 以内。いずれも設計時の目安であり、上限ではない。処理時間は短いほどよい
-- 見出し範囲の計算（`altodo--compute-all-heading-ranges`）は、バッファを 1 回走査する（行数に比例する）。10,000 行（`tag:work`、表示コンテキストあり）の測定値は 2.99 秒から 1.51 秒に短縮した
-- 既知の課題: 5,000 行から 10,000 行にすると、処理時間は 3.6 倍（`tag:work`、表示コンテキストあり）になり、行数に比例する以上に増える。原因は未特定である。マッチした行ごとの overlay の削除（`altodo--filter-remove-overlay`）は、リストの走査を伴う
+- 見出し範囲の計算（`altodo--compute-all-heading-ranges`）は、バッファを 1 回走査する（行数に比例する）
+- 表示行の計算（`altodo--compute-display-lines`）は、見出しの範囲を行番号に変換し、マッチした行を昇順に走査して、行を含む見出しを求める。マッチした行ごとに全見出しを調べない。overlay の一覧（`altodo--filter-overlays`）からの削除は、`altodo--filter-lines` の終了時に 1 回で行う
+- 測定値（`tag:work`、表示コンテキストあり）: 10,000 行で 2.99 秒から 0.36 秒、20,000 行で 0.85 秒に短縮した。行数を 2 倍にすると、処理時間は約 2.4 倍になる
 
 
 ## 11. Face 適用優先度（Layer 構造）
@@ -719,6 +726,8 @@ DSL パターンマッチ。DSL パターン文字列でフィルタ条件を記
 | ---------- | --------------- | ----------- |
 | `:pattern` | 必須            | lambda 関数 |
 
+`.altodo-locals.el` に書いた lambda は、既定では実行しない（`altodo-locals-code-policy`。詳細は `doc/design.md` の 4.5）。`altodo-default-filter-patterns` に書いた lambda は、常に実行する。
+
 **例**:
 
 ```elisp
@@ -837,6 +846,8 @@ DSL パターンマッチ。DSL パターン文字列でフィルタ条件を記
 | `DATE`              | 指定日に一致      | `due-date:2024-06-30`                    |
 
 `start-date:CONDITION` は、`overdue` の代わりに `passed`（開始日が過去）、`not-yet`（開始日が未来）を使う。それ以外の条件は同じである。
+
+存在しない日付（`2026-02-30` など）を持つ行は、どの日付条件にも一致しない。条件に存在しない日付を書くと、エラーになる。相対的な条件（`today`、`overdue` など）は、`altodo-date-format` の設定によらず、実際の日付で判定する。
 
 
 #### 13.5.5 論理演算

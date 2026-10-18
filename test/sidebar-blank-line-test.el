@@ -23,7 +23,7 @@
     (unwind-protect
         (progn
           ;; Render sidebar
-          (sidebar--render buf config)
+          (altodo-sidebar--render buf config)
           
           ;; Check buffer content
           (with-current-buffer buf
@@ -51,7 +51,7 @@
     (unwind-protect
         (progn
           ;; Render sidebar
-          (sidebar--render buf config)
+          (altodo-sidebar--render buf config)
           
           ;; Check buffer content
           (with-current-buffer buf
@@ -79,7 +79,7 @@
     (unwind-protect
         (progn
           ;; Render sidebar
-          (sidebar--render buf config)
+          (altodo-sidebar--render buf config)
           
           ;; Check buffer content
           (with-current-buffer buf

@@ -99,6 +99,11 @@ Reasons:
 ```
 
 
+### Errors in the predicate Function
+
+If the predicate function signals an error on some line, all overlays created by that run are deleted (the filter is cleared), a message is shown, and the error is signaled again. Leaving only some lines hidden would look like a filter result.
+
+
 ### Helper Function Specification
 
 **Naming Convention**: `altodo--line-*-p` - Determine if current line matches condition
@@ -131,11 +136,11 @@ altodo-filter
 │   ├── altodo--filter-cleanup       ; Cleanup
 │   ├── altodo--compile-filter-predicate ; DSL compilation
 │   └── altodo--combine-predicates   ; Predicate combination
-├── Sidebar Functions (sidebar--*)
-│   ├── sidebar--render              ; Sidebar rendering
-│   ├── sidebar--insert-entry        ; Entry insertion
-│   ├── sidebar--get-face            ; Face retrieval
-│   └── sidebar--apply-filter        ; Filter application
+├── Sidebar Functions (altodo-sidebar--*)
+│   ├── altodo-sidebar--render       ; Sidebar rendering
+│   ├── altodo-sidebar--insert-entry ; Entry insertion
+│   ├── altodo-sidebar--get-face     ; Face retrieval
+│   └── altodo-sidebar--apply-filter ; Filter application
 ├── User Commands (altodo-filter-*)
 │   ├── altodo-filter-clear          ; Clear
 │   ├── altodo-filter-show-done-only
@@ -159,7 +164,7 @@ altodo--compile-filter-predicate
     ↓
 predicate function
     ↓
-altodo--filter-lines / sidebar--apply-filter
+altodo--filter-lines / altodo-sidebar--apply-filter
     ↓
 Check each line in order
     ↓
@@ -254,7 +259,7 @@ Hidden by buffer-invisibility-spec
 
 ### 6.3 Sidebar Rendering Process
 
-#### sidebar--insert-entry
+#### altodo-sidebar--insert-entry
 
 **Description**: Insert entry into sidebar
 **Process**:
@@ -276,7 +281,7 @@ Hidden by buffer-invisibility-spec
 4. If not clickable: Insert text (no button)
 
 
-#### sidebar--get-face
+#### altodo-sidebar--get-face
 
 **Description**: Determine entry face (Layer structure)
 
@@ -300,7 +305,7 @@ Layer 5: Non-clickable (comment lines, etc.)
 - If `:face` is not specified either, use default face
 
 
-#### sidebar--apply-filter
+#### altodo-sidebar--apply-filter
 
 **Description**: Apply filter
 **Process**:
@@ -505,6 +510,7 @@ Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse bu
 1. **heading-range cache**: Cache the heading ranges
 2. **Relative line movement**: Process line numbers in ascending order and move from the previous position, instead of counting lines from the beginning of the buffer (`altodo--goto-line`)
 3. **Narrowed overlay search**: Examine only the overlays in the range of the target line (`overlays-in`)
+4. **Batch processing of heading ranges and line numbers**: Find the heading ranges in one scan and convert them to line numbers. Do not check every heading for every matched line, and update the overlay list once at the end
 
 
 ### Measurement
@@ -512,8 +518,9 @@ Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse bu
 `scripts/bench-filter.sh` measures the processing time for each number of lines, pattern, and display context.
 
 - Guideline: within 1 second for a 5000-line buffer, and within 100ms for a dynamic filter update. Both are design-time guidelines, not upper limits. The shorter the processing time, the better
-- The calculation of heading ranges (`altodo--compute-all-heading-ranges`) scans the buffer once (proportional to the number of lines). For 10,000 lines (`tag:work`, with display context) the measured time dropped from 2.99 s to 1.51 s
-- Known issue: going from 5,000 to 10,000 lines multiplies the time by 3.6 (`tag:work`, with display context), which is more than proportional to the number of lines. The cause is not identified. Removing the overlay of each matched line (`altodo--filter-remove-overlay`) scans a list
+- The calculation of heading ranges (`altodo--compute-all-heading-ranges`) scans the buffer once (proportional to the number of lines).
+- The calculation of display lines (`altodo--compute-display-lines`) converts the heading ranges to line numbers and walks the matched lines in ascending order to find the headings that contain each line. It does not check every heading for every matched line. The overlays are removed from the list `altodo--filter-overlays` once at the end of `altodo--filter-lines`
+- Measured (`tag:work`, with display context): 10,000 lines went from 2.99 s to 0.36 s, and 20,000 lines take 0.85 s. Doubling the number of lines multiplies the time by about 2.4
 
 
 ## 11. Face Application Priority (Layer Structure)
@@ -721,6 +728,8 @@ Directly specify predicate function. Lambda function is evaluated on current lin
 | ---------- | ----------------- | --------------- |
 | `:pattern` | Required          | Lambda function |
 
+A lambda written in `.altodo-locals.el` does not run by default (`altodo-locals-code-policy`; see 4.5 of `doc/design.md`). A lambda written in `altodo-default-filter-patterns` always runs.
+
 **Example**:
 
 ```elisp
@@ -839,6 +848,8 @@ The arguments of a logical operation are split at commas. Therefore, an argument
 | `DATE`              | Matches the specified date | `due-date:2024-06-30`                    |
 
 For `start-date:CONDITION`, use `passed` (the start date is in the past) and `not-yet` (the start date is in the future) instead of `overdue`. The other conditions are the same.
+
+A line with a date that does not exist (such as `2026-02-30`) matches no date condition. Writing a date that does not exist in a condition is an error. Relative conditions (`today`, `overdue`, etc.) use the real date whatever `altodo-date-format` is.
 
 
 #### 13.5.5 Logical Operations

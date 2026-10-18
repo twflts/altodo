@@ -74,7 +74,7 @@
               (sidebar (generate-new-buffer " *altodo-test-sidebar*")))
           (unwind-protect
               (progn
-                (sidebar--render sidebar config)
+                (altodo-sidebar--render sidebar config)
                 (should (> (buffer-size sidebar) 0)))
             (kill-buffer sidebar)))))))
 

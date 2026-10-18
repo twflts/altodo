@@ -21,7 +21,7 @@
       (let ((sidebar-buf (get-buffer-create (plist-get config :name))))
         (with-current-buffer sidebar-buf
           ;; Render sidebar
-          (sidebar--render sidebar-buf config)
+          (altodo-sidebar--render sidebar-buf config)
           
           ;; Check if face-rules entry has face applied
           (goto-char (point-min))

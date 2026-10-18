@@ -8,38 +8,39 @@ altodo.el を手動で確認するためのサンプルファイルである。E
 1. altodo.el を読み込む。例: `emacs -L . -l altodo.el testfiles/test-comments.altodo`
 2. サイドバーを使うときは、設定ファイルを有効にする。`.altodo-locals.el_`（末尾の `_` で無効にしてある）を、同じディレクトリに `.altodo-locals.el` としてコピーする
     - `cp testfiles/.altodo-locals.el_ testfiles/.altodo-locals.el`
-    - 確認が終わったら `.altodo-locals.el` を削除する。設定ファイルの `search-lambda` は、サイドバーを表示すると評価される。信頼できるディレクトリでだけ有効にする
+    - 確認が終わったら `.altodo-locals.el` を削除する
+    - 設定ファイルの `search-lambda` と `:command` は、既定では実行しない（件数は `?` と表示する）。試すときは、`(setq altodo-locals-code-policy 'confirm)`（ファイルの内容を承認すると実行する）または `'allow`（常に実行する）を設定する。信頼できるディレクトリでだけ有効にする
 3. `M-x altodo-sidebar-show` でサイドバーを表示する
 4. 今日を基準にした日付のファイルと、大きなファイルは `scripts/gen-testfiles.sh` で `testfiles/generated/` に生成する（`--lines N` で行数を指定）。`generated/` と、done ファイル（`*_done.altodo`）は Git の対象外である
 
 
 ## 機能別のファイル
 
-| ファイル | 確認すること |
-|---|---|
-| `test-task-states.altodo` | 5 つの状態（`[ ]`、`[x]`、`[@]`、`[w]`、`[~]`）の色。`C-c C-x`（トグル）、`C-c C-t o/x/@/w/~` |
-| `test-flags.altodo` | スター（`+`）と優先度（`!`〜`!!!`）の色。`///` 行のフラグ。フラグの後のスペースがない例は通常のテキスト |
-| `test-tags.altodo` | タグ、`#key:value`、`#key:"値"` の色 |
-| `test-dates.altodo` | 開始日・期日の色。日付は固定なので、開いた日によって色が変わる |
-| `test-date-format-slash.altodo` | `altodo-date-format` を `"%Y/%m/%d"` にしたときの日付（ファイル内に手順がある） |
-| `test-special-tags.altodo` | `#id`、`#dep`（依存先が未完了のとき赤）、`#group-start`、`#group-due`、`#done`、`#seq-tasks`、`@person` |
-| `test-comments.altodo` | `///` と複数行コメント。複数行コメントになる行（OK）とならない行（NG）。自動テストが OK/NG の行を検証する |
-| `test-markdown-integration.altodo` | Markdown との共存。コードブロック内のタスク風の行、インライン コード、空行の直後のインデント付きタスク |
-| `test-unicode.altodo` | 日本語、中国語、韓国語、アラビア語、ロシア語、ギリシャ語、絵文字 |
-| `test-edge-cases.altodo` | 空のタスク、非常に長い行、深いネスト、連続する空行 |
-| `phase5-8-seq-tasks-demo.altodo` | `#seq-tasks` の例（前の兄弟が完了するまで次が実行できない） |
-| `test-face-rules.altodo` | サイドバーの `:face-rules`・`:count-face-rules`（件数に応じた色）。件数は固定（完了 5、オープン 10、優先度 2、スター 3） |
+| ファイル                           | 確認すること                                                                                                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `test-task-states.altodo`          | 5 つの状態（`[ ]`、`[x]`、`[@]`、`[w]`、`[~]`）の色。`C-c C-x`（トグル）、`C-c C-t o/x/@/w/~`                            |
+| `test-flags.altodo`                | スター（`+`）と優先度（`!`〜`!!!`）の色。`///` 行のフラグ。フラグの後のスペースがない例は通常のテキスト                  |
+| `test-tags.altodo`                 | タグ、`#key:value`、`#key:"値"` の色                                                                                     |
+| `test-dates.altodo`                | 開始日・期日の色。日付は固定なので、開いた日によって色が変わる                                                           |
+| `test-date-format-slash.altodo`    | `altodo-date-format` を `"%Y/%m/%d"` にしたときの日付（ファイル内に手順がある）                                          |
+| `test-special-tags.altodo`         | `#id`、`#dep`（依存先が未完了のとき赤）、`#group-start`、`#group-due`、`#done`、`#seq-tasks`、`@person`                  |
+| `test-comments.altodo`             | `///` と複数行コメント。複数行コメントになる行（OK）とならない行（NG）。自動テストが OK/NG の行を検証する                |
+| `test-markdown-integration.altodo` | Markdown との共存。コードブロック内のタスク風の行、インライン コード、空行の直後のインデント付きタスク                   |
+| `test-unicode.altodo`              | 日本語、中国語、韓国語、アラビア語、ロシア語、ギリシャ語、絵文字                                                         |
+| `test-edge-cases.altodo`           | 空のタスク、非常に長い行、深いネスト、連続する空行                                                                       |
+| `phase5-8-seq-tasks-demo.altodo`   | `#seq-tasks` の例（前の兄弟が完了するまで次が実行できない）                                                              |
+| `test-face-rules.altodo`           | サイドバーの `:face-rules`・`:count-face-rules`（件数に応じた色）。件数は固定（完了 5、オープン 10、優先度 2、スター 3） |
 
 
 ## 実際のプロジェクトに近いファイル
 
-| ファイル | 内容 |
-|---|---|
-| `comprehensive.altodo` | 全機能を含む Java プロジェクト（英語） |
-| `comprehensive-jp.altodo` | 同上（日本語）。`C-c C-t d` で done ファイルを試せる |
-| `test-realistic-backend.altodo` | Spring Boot の REST API 開発 |
-| `test-realistic-frontend.altodo` | フロントエンド開発 |
-| `test-sample-project.altodo` | 1,286 行の大きな例。サイドバーのフィルタ（`.altodo-locals.el_` のパターン）と動的フィルタの確認用 |
+| ファイル                         | 内容                                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `comprehensive.altodo`           | 全機能を含む Java プロジェクト（英語）                                                            |
+| `comprehensive-jp.altodo`        | 同上（日本語）。`C-c C-t d` で done ファイルを試せる                                              |
+| `test-realistic-backend.altodo`  | Spring Boot の REST API 開発                                                                      |
+| `test-realistic-frontend.altodo` | フロントエンド開発                                                                                |
+| `test-sample-project.altodo`     | 1,286 行の大きな例。サイドバーのフィルタ（`.altodo-locals.el_` のパターン）と動的フィルタの確認用 |
 
 
 ## 設定ファイル `.altodo-locals.el_`

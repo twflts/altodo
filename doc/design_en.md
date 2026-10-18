@@ -187,7 +187,7 @@ The date regular expression is not a constant. `altodo--date-regex-info` generat
 | `altodo-week-start-day`                        | `1`            | First day of the week (0 is Sunday, 1 is Monday)          |
 | `altodo-done-file-prefix`                      | `"_done"`      | String added to the done file name                        |
 | `altodo-move-single-line-comments-manually`    | `t`            | Enable manual move of single-line comments                |
-| `altodo-auto-move-interval`                    | `3600`         | Interval of the automatic move (seconds)                  |
+| `altodo-auto-move-interval`                    | `3600`         | Interval of the automatic move (seconds, positive)        |
 | `altodo-auto-save-after-move`                  | `nil`          | Save the source file after a move                         |
 | `altodo-auto-move-skip-done-files`             | `t`            | Exclude done files from the automatic move                |
 | `altodo-show-auto-move-in-mode-line`           | `t`            | Show the automatic move state in the mode line            |
@@ -356,6 +356,32 @@ If the file does not exist, use the following default values:
 - Sidebar faces → Default faces
 
 
+#### Abnormal Configuration Files
+
+- If the file has a syntax error or its content is not an alist, a warning is shown and the default settings are used, as when the file does not exist
+- An entry of `altodo-filter-patterns` that is not a plist with a string `:title` is ignored with a warning; the other entries are used
+- A warning is shown once for the same content each time the file is modified
+
+
+### 4.5 Execution of Code in the Configuration File
+
+The following code in `.altodo-locals.el` runs according to `altodo-locals-code-policy`.
+
+- The `:pattern` (lambda) of `:type search-lambda`, and `:count-pattern-lambda`
+- A `:command` that is not a command of this package (the name does not start with altodo-)
+
+| Value     | Behavior                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------- |
+| `deny`    | Default. The code does not run                                                              |
+| `confirm` | Runs if the SHA-256 of the file is in `altodo-trusted-locals`. Otherwise asks when selected |
+| `allow`   | Always runs                                                                                 |
+
+- Entries whose code does not run are still shown in the sidebar. The count is shown as `?`, and `:face-rules` is not evaluated. Selecting such an entry shows a message that the code does not run (`confirm` asks for trust instead)
+- Trusting a file under `confirm` saves its absolute path and SHA-256 to `altodo-trusted-locals` (`customize-save-variable`). The trust ends when the content of the file changes
+- Code in `altodo-default-filter-patterns` (the Emacs configuration) is not subject to the policy. Only entries from the configuration file are
+- `:face-rules` evaluates only the operators `<`, `>`, `<=`, `>=`, `=` and `/=`. Rules with other operators are ignored
+
+
 ## 5. Feature Specifications
 
 ### 5.1 Task State Management
@@ -472,6 +498,11 @@ Detection is performed line by line, using regular expressions and the state of 
 - Both: `YYYY-MM-DD -> YYYY-MM-DD`
 
 
+#### Dates That Do Not Exist
+
+A date that does not exist, such as `2026-02-30`, is not treated as a date. `altodo--parse-date` returns nil, the date gets the plain date face, and it matches no start or due date condition. Relative conditions (`today`, `overdue`, etc.) use the real date whatever `altodo-date-format` is.
+
+
 #### Date-based Coloring
 
 - Start date exceeded: Gray
@@ -492,6 +523,14 @@ Detection is performed line by line, using regular expressions and the state of 
 
 - Usage: Specify dependency
 - Example: `[ ] Dependent task #dep:20250101-0000`
+
+
+#### Abnormal IDs and Dependencies
+
+- A `#id` value matches only when it is followed by a space or the end of the line. `#id:T1` does not match `#id:T1-2`
+- If the same `#id` appears more than once, only the first one is used. The later ones are never referenced and cause no error
+- A `#dep` on the task itself and a circular `#dep` are "circular", shown with `altodo-dep-error-tag-face`
+- A `#dep` on an `#id` that does not exist is treated as having no dependency (ready)
 
 
 ### 5.7 Task Move Feature
@@ -520,6 +559,15 @@ Detection is performed line by line, using regular expressions and the state of 
 
 - The current version does not keep the nested (tree) structure of tasks. Only the lines of the completed or cancelled task and their multi-line comments are moved under the heading. Subtasks remain in the source buffer
 - A future improvement is planned to move subtasks together
+
+
+#### Preconditions and Abnormal Cases of the Move
+
+- Preconditions: the buffer is writable, and the done file is writable (not a directory, and its parent directory is writable). If they are not met, nothing is moved and a `user-error` is signaled. This prevents the state where the append to the done file succeeds but the deletion from the source buffer fails
+- Writing: write a temporary file in the same directory and replace the done file with `rename-file`. If the write fails, the done file keeps its content
+- If a buffer visits the done file, the entry is appended to that buffer. The buffer is saved if it had no unsaved changes; otherwise it is not saved and a message says so
+- In the automatic move, if the move fails in one buffer, a message is shown and the other buffers are still processed. A read-only buffer is not moved, and a message is shown
+- `altodo-auto-move-interval` must be a positive number. Otherwise the timer is not set and a `user-error` is signaled
 
 
 ### 5.8 Filtering Feature
@@ -745,15 +793,15 @@ Layer 5: Priority (entire comments, strikethrough)
 #### `altodo--parse-date (date-str)`
 
 - Argument: `date-str` - Date string
-- Return: `(year month day)` list or nil
-- Description: Parse date string and convert to list format
+- Return: A time value, or nil (when parsing fails or the date does not exist)
+- Description: Parse a date string and convert it to the time value of 00:00 on that day
 
 
 #### `altodo--days-diff (date-time)`
 
 - Argument: `date-time` - Date
-- Return: Day difference (integer)
-- Description: Calculate day difference between specified date and today
+- Return: Day difference (float with an integer value)
+- Description: Calculate the difference in calendar days between the specified date and today. A day of 23 or 25 hours at the switch of summer time still counts as one day
 
 
 #### `altodo--determine-start-date-face (date-str)`
@@ -840,6 +888,4 @@ Layer 5: Priority (entire comments, strikethrough)
 - `doc/altodo_spec.md` - altodo format specification (Japanese)
 - `doc/altodo_spec_en.md` - altodo format specification (English)
 - `doc/design-filter.md` - Filter design document (includes DSL specification)
-- `doc/design.md.backup_*` - Detailed design (pre-deletion versions)
-- `doc/tmp_design.md` - Implementation details section (for detailed design)
-- `.kiro/memo/` - Development notes
+- `.claude/memo/` - Development notes
