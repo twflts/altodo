@@ -8,6 +8,7 @@
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1") (markdown-mode "2.0"))
 ;; Keywords: text, todo, markdown
+;; URL: https://github.com/twflts/altodo
 
 ;; This file is not part of GNU Emacs.
 
@@ -44,6 +45,8 @@
 
 (require 'markdown-mode)
 (require 'cl-lib)
+(require 'calendar)
+(require 'altodo-calendar)
 
 ;; Variables and functions defined later in this file or in debug-helper.
 ;; A `let' of a variable that is not yet declared special would bind it
@@ -125,7 +128,9 @@ Generated from the special tag names.")
 
 ;; DSL pattern constants
 (defconst altodo--dsl-simple-patterns
-  '("done" "progress" "waiting" "open" "cancelled" "priority" "star" "has-multiline-comment")
+  '("done" "progress" "waiting" "open" "cancelled" "priority" "star"
+    "has-multiline-comment" "task" "comment" "multiline-comment" "heading"
+    "empty-line" "any-line")
   "List of valid simple DSL patterns.")
 
 (defconst altodo--dsl-logic-operators-regex
@@ -133,7 +138,9 @@ Generated from the special tag names.")
   "Regular expression for matching DSL logic operators.")
 
 (defconst altodo--dsl-arg-types
-  '("tag" "person" "text" "regexp" "level" "heading" "multiline-comment-contains" "due-date" "start-date" "tag-value" "parent-task-regexp" "root-task-regexp")
+  '("tag" "person" "text" "regexp" "level" "heading" "multiline-comment-contains"
+    "due-date" "start-date" "tag-value" "parent-task-regexp" "root-task-regexp"
+    "state-any" "has-any-flag" "has-any-tag" "has-any-person" "has-all-tags")
   "List of valid DSL argument types.")
 
 (defgroup altodo nil
@@ -1382,6 +1389,7 @@ Flags override tags to ensure consistent highlighting."
   "C-c C-t w" (lambda () (interactive) (if (altodo--task-p) (altodo-set-task-waiting) (altodo--call-parent-command (this-command-keys-vector))))
   "C-c C-t ~" (lambda () (interactive) (if (altodo--task-p) (altodo-set-task-cancelled) (altodo--call-parent-command (this-command-keys-vector))))
   "C-c C-t d" (lambda () (interactive) (if (altodo--task-p) (altodo-move-done-tasks-at-point) (altodo--call-parent-command (this-command-keys-vector))))
+  "C-c C-t D" (lambda () (interactive) (if (altodo--task-p) (altodo-move-done-task-alone) (altodo--call-parent-command (this-command-keys-vector))))
   "C-c C-a" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-add-task) (altodo--call-parent-command (this-command-keys-vector))))
   "M-RET" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-add-subtask) (altodo--call-parent-command (this-command-keys-vector))))
   "C-c C-m" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-start-multiline-comment) (altodo--call-parent-command (this-command-keys-vector))))
@@ -1389,6 +1397,8 @@ Flags override tags to ensure consistent highlighting."
   "C-c C-f 1" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-set-priority-1) (altodo--call-parent-command (this-command-keys-vector))))
   "C-c C-f 2" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-set-priority-2) (altodo--call-parent-command (this-command-keys-vector))))
   "C-c C-f 3" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-set-priority-3) (altodo--call-parent-command (this-command-keys-vector))))
+  "C-c C-e d" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-select-due-calendar) (altodo--call-parent-command (this-command-keys-vector))))
+  "C-c C-e s" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-select-start-calendar) (altodo--call-parent-command (this-command-keys-vector))))
   "C-c C-i" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-insert-id) (altodo--call-parent-command (this-command-keys-vector))))
   "M-<right>" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p) (altodo--multiline-comment-p)) (altodo-indent-increase) (altodo--call-parent-command (this-command-keys-vector))))
   "M-<left>" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p) (altodo--multiline-comment-p)) (altodo-indent-decrease) (altodo--call-parent-command (this-command-keys-vector))))
@@ -3031,6 +3041,44 @@ Returns t if valid, nil otherwise."
 
     (_ nil)))
 
+(defun altodo--line-heading-p ()
+  "Return non-nil if the current line is a heading (ATX or Setext title)."
+  (and (not (looking-at "^[ \t]*$"))
+       (not (altodo--task-p))
+       (not (altodo--comment-p))
+       (not (altodo--multiline-comment-p))
+       (altodo--heading-level)
+       t))
+
+(defun altodo--line-empty-p ()
+  "Return non-nil if the current line is empty or has only spaces."
+  (save-excursion
+    (beginning-of-line)
+    (looking-at "[ \t]*$")))
+
+(defun altodo--split-multi-arg (arg)
+  "Split the argument ARG of a multi-value pattern into a list of strings.
+The values are separated by commas or vertical bars.  A comma cannot be used
+inside a logic operation, where it separates the operands; use a bar there."
+  (split-string arg "[,|]" t "[ \t]+"))
+
+(defun altodo--compile-any-of-simple-patterns (names allowed type)
+  "Return a predicate that is true if any simple pattern in NAMES matches.
+ALLOWED is the list of the simple patterns that TYPE accepts.  Signal an
+error if NAMES is empty or has a name that is not in ALLOWED."
+  (unless names
+    (error "No value for %s" type))
+  (dolist (name names)
+    (unless (member name allowed)
+      (error "Unknown value for %s: %s (expected one of: %s)"
+             type name (string-join allowed ", "))))
+  (let ((predicates (mapcar (lambda (name)
+                              (altodo--compile-normalized-pattern
+                               (list 'simple name)))
+                            names)))
+    (lambda ()
+      (cl-some #'funcall predicates))))
+
 (defun altodo--compile-normalized-pattern (normalized)
   "Compile NORMALIZED pattern into a predicate function.
 
@@ -3047,6 +3095,12 @@ Returns a lambda function that returns t/nil."
        ("priority" #'altodo--line-has-priority-p)
        ("star" #'altodo--line-has-star-p)
        ("has-multiline-comment" #'altodo--line-has-multiline-comment-p)
+       ("task" #'altodo--task-p)
+       ("comment" #'altodo--comment-p)
+       ("multiline-comment" #'altodo--multiline-comment-p)
+       ("heading" #'altodo--line-heading-p)
+       ("empty-line" #'altodo--line-empty-p)
+       ("any-line" #'always)
        (_ (error "Unknown simple pattern: %s" p))))
 
     ;; 引数付きパターン
@@ -3067,6 +3121,18 @@ Returns a lambda function that returns t/nil."
        ("start-date" (let ((condition (altodo--parse-start-date-condition arg)))
                        (lambda () (altodo--start-date-matches-p condition))))
        ("tag-value" (altodo--parse-tag-value-condition arg))
+       ("state-any" (altodo--compile-any-of-simple-patterns
+                     (altodo--split-multi-arg arg)
+                     '("done" "progress" "waiting" "open" "cancelled")
+                     type))
+       ("has-any-flag" (altodo--compile-any-of-simple-patterns
+                        (altodo--split-multi-arg arg) '("priority" "star") type))
+       ("has-any-tag" (let ((tags (altodo--split-multi-arg arg)))
+                        (lambda () (altodo--line-has-any-tag-p tags))))
+       ("has-all-tags" (let ((tags (altodo--split-multi-arg arg)))
+                         (lambda () (altodo--line-has-all-tags-p tags))))
+       ("has-any-person" (let ((persons (altodo--split-multi-arg arg)))
+                           (lambda () (altodo--line-has-any-person-p persons))))
        ("parent-task-regexp" (lambda () (altodo--line-parent-task-matches-regexp-p arg)))
        ("root-task-regexp" (lambda () (altodo--line-root-parent-task-matches-regexp-p arg)))
        (_ (error "Unknown arg type: %s" type))))
@@ -3795,47 +3861,363 @@ is appended to the done file.  DONE-FILE must be writable."
             (file-writable-p (file-name-directory done-file)))
     (user-error "Cannot write the done file: %s" done-file)))
 
-(defun altodo-move-done-tasks-at-point ()
-  "Move done/cancelled task at point to done file.
-Returns nil."
-  (interactive)
+(defcustom altodo-move-unit 'subtree
+  "Unit in which done tasks are moved to the done file.
+`subtree' Move a done or cancelled task with all its subtasks.  A task whose
+          subtasks are not all done or cancelled is not moved.  The batch
+          move and the automatic move handle only tasks without a parent.
+`line'    Move only the task line and its multi-line comments.  The subtasks
+          stay in the buffer, and a done subtask leaves its parent."
+  :group 'altodo
+  :type '(choice (const :tag "Task with subtasks" subtree)
+                 (const :tag "Task line only" line)))
+
+(defcustom altodo-move-after-days nil
+  "Minimum number of days since the `#done' tag for the batch and automatic move.
+If nil, every done or cancelled task is moved.  If a number N, a task is
+moved only when the date of its `#done' tag is N or more days ago.  A task
+without a `#done' tag that has a date is not moved.  With the unit
+`subtree', every task of the subtree must be old enough.  The manual move
+ignores this option."
+  :group 'altodo
+  :type '(choice (const :tag "Move at once" nil)
+                 (natnum :tag "Days since #done")))
+
+(defun altodo--line-done-tag-value ()
+  "Return the value of the `#done' tag on the current line, or nil."
+  (save-excursion
+    (beginning-of-line)
+    (when (re-search-forward "\\(?:^\\|[ \t]\\)#done:\\([^[:space:]]+\\)"
+                             (line-end-position) t)
+      (match-string-no-properties 1))))
+
+(defun altodo--done-tag-time (value)
+  "Return the time value of the `#done' tag VALUE, or nil if not a date.
+VALUE is an ISO 8601 date or time (the date part is used), a Unix time in
+seconds, or a date in `altodo-date-format'."
+  (cond
+   ((string-match "\\`\\([0-9]\\{4\\}\\)-\\([0-9]\\{2\\}\\)-\\([0-9]\\{2\\}\\)" value)
+    (altodo--encode-date (string-to-number (match-string 1 value))
+                         (string-to-number (match-string 2 value))
+                         (string-to-number (match-string 3 value))))
+   ((string-match-p "\\`[0-9]\\{9,\\}\\'" value)
+    (seconds-to-time (string-to-number value)))
+   (t (altodo--parse-date value))))
+
+(defun altodo--done-tag-days-ago ()
+  "Return the days from the `#done' tag on the current line to today.
+Return nil if the line has no `#done' tag with a date."
+  (let* ((value (altodo--line-done-tag-value))
+         (time (and value (altodo--done-tag-time value))))
+    (and time (round (- (altodo--days-diff time))))))
+
+(defun altodo--old-enough-to-move-p (end)
+  "Return non-nil if the done tasks from point to END are old enough to move.
+Always true if `altodo-move-after-days' is nil.  With the unit `subtree'
+every task up to END must be old enough, otherwise only the task at point."
+  (or (null altodo-move-after-days)
+      (save-excursion
+        (let ((old-enough t)
+              (limit (if (eq altodo-move-unit 'subtree)
+                         end
+                       (line-beginning-position 2))))
+          (while (and old-enough (< (point) limit))
+            (when (altodo--task-p)
+              (let ((days (altodo--done-tag-days-ago)))
+                (unless (and days (>= days altodo-move-after-days))
+                  (setq old-enough nil))))
+            (forward-line 1))
+          old-enough))))
+
+(defun altodo--task-subtree-end ()
+  "Return the end position of the subtree of the task at point.
+The subtree is the task line and the following lines that are indented
+deeper than it: subtasks, `///' lines and multi-line comments.  A blank line
+belongs to the subtree only if a task or `///' line that is indented deeper
+follows it.  The end is the beginning of the line after the subtree."
+  (save-excursion
+    (let ((indent (altodo--leading-spaces))
+          (end (line-beginning-position 2))
+          (inside t))
+      (forward-line 1)
+      (while (and inside (not (eobp)))
+        (if (looking-at "^$")
+            (progn
+              (while (and (not (eobp)) (looking-at "^$"))
+                (forward-line 1))
+              (unless (and (not (eobp))
+                           (> (altodo--leading-spaces) indent)
+                           (altodo--task-or-comment-line-p))
+                (setq inside nil)))
+          (if (<= (altodo--leading-spaces) indent)
+              (setq inside nil)
+            (setq end (line-beginning-position 2))
+            (forward-line 1))))
+      end)))
+
+(defun altodo--subtree-completed-p (end)
+  "Return non-nil if all tasks from point to END are done or cancelled."
+  (save-excursion
+    (let ((completed t))
+      (while (and completed (< (point) end))
+        (when (and (altodo--task-p)
+                   (not (altodo--is-done-or-cancelled-task)))
+          (setq completed nil))
+        (forward-line 1))
+      completed)))
+
+(defun altodo--count-tasks (end)
+  "Return the number of task lines from point to END."
+  (save-excursion
+    (let ((count 0))
+      (while (< (point) end)
+        (when (altodo--task-p)
+          (setq count (1+ count)))
+        (forward-line 1))
+      count)))
+
+(defun altodo--task-has-parent-p ()
+  "Return non-nil if the task at point is a subtask of another task."
+  (save-excursion
+    (let ((indent (altodo--leading-spaces))
+          (found nil)
+          (parent nil))
+      (when (> indent 0)
+        (while (and (not found) (not (bobp)))
+          (forward-line -1)
+          (unless (looking-at "^$")
+            (when (< (altodo--leading-spaces) indent)
+              (setq found t
+                    parent (altodo--task-p))))))
+      parent)))
+
+(defun altodo--indented-subtree-text (start end indent)
+  "Return the text from START to END without the first INDENT spaces of a line."
+  (let ((text (buffer-substring-no-properties start end)))
+    (if (zerop indent)
+        text
+      (let ((pattern (format "^ \\{1,%d\\}" indent)))
+        (mapconcat (lambda (line) (replace-regexp-in-string pattern "" line))
+                   (split-string text "\n") "\n")))))
+
+(defun altodo--move-task-to-done-file (unit)
+  "Move the task at point to the done file in UNIT, `subtree' or `line'.
+Signal a `user-error' if the task is not done or cancelled, if UNIT is
+`subtree' and a subtask is not done, or if the move is not possible.
+Return the number of tasks moved."
   (unless (buffer-file-name)
     (user-error "Buffer is not visiting a file"))
-
   (unless (altodo--is-done-or-cancelled-task)
     (user-error "Current line is not a done or cancelled task"))
-  (altodo--check-can-move-tasks (altodo--get-done-file-path))
+  (let ((done-file (altodo--get-done-file-path))
+        (heading (altodo--get-task-heading)))
+    (altodo--check-can-move-tasks done-file)
+    (if (eq unit 'subtree)
+        (let* ((start (line-beginning-position))
+               (end (altodo--task-subtree-end))
+               (indent (altodo--leading-spaces)))
+          (unless (altodo--subtree-completed-p end)
+            (user-error "Cannot move: the task has subtasks that are not done"))
+          (let* ((count (altodo--count-tasks end))
+                 (text (altodo--indented-subtree-text start end indent))
+                 (newline (string-search "\n" text))
+                 (task-line (substring text 0 newline))
+                 (rest (and newline (substring text (1+ newline))))
+                 (comments (and rest (not (string-empty-p rest)) rest)))
+            (altodo--append-to-done-file done-file heading task-line comments)
+            (delete-region start end)
+            (message "Moved %d task(s) to %s" count done-file)
+            count))
+      (let* ((task-data (altodo--extract-task-with-comments)))
+        (altodo--append-to-done-file done-file heading
+                                     (car task-data) (cdr task-data))
+        (altodo--delete-task-from-buffer)
+        (message "Moved task to %s" done-file)
+        1))))
 
-  (let* ((done-file (altodo--get-done-file-path))
-         (heading (altodo--get-task-heading))
-         (task-data (altodo--extract-task-with-comments))
-         (task-line (car task-data))
-         (comments (cdr task-data)))
+(defun altodo-move-done-tasks-at-point ()
+  "Move the done or cancelled task at point to the done file.
+The unit is set by `altodo-move-unit'.
+Returns nil."
+  (interactive)
+  (altodo--move-task-to-done-file altodo-move-unit)
+  nil)
 
-    (altodo--append-to-done-file done-file heading task-line comments)
-    (altodo--delete-task-from-buffer)
-    (message "Moved task to %s" done-file)))
+(defun altodo-move-done-task-alone ()
+  "Move only the done or cancelled task line at point to the done file.
+Its subtasks stay in the buffer, whatever `altodo-move-unit' is."
+  (interactive)
+  (altodo--move-task-to-done-file 'line)
+  nil)
+
+(defun altodo--movable-in-batch-p ()
+  "Return non-nil if the done task at point is moved by the batch move.
+With `altodo-move-unit' `subtree', that is a task without a parent whose
+subtasks are all done or cancelled.  If `altodo-move-after-days' is set, the
+`#done' dates must also be old enough."
+  (and (if (eq altodo-move-unit 'line)
+           t
+         (and (not (altodo--task-has-parent-p))
+              (save-excursion
+                (altodo--subtree-completed-p (altodo--task-subtree-end)))))
+       (altodo--old-enough-to-move-p (altodo--task-subtree-end))))
 
 (defun altodo-move-all-done-tasks (&optional auto-save)
   "Move all done/cancelled tasks in buffer to done file.
+The unit is set by `altodo-move-unit'.
 If AUTO-SAVE is non-nil, save buffer after moving tasks."
   (interactive)
   (unless (buffer-file-name)
     (user-error "Buffer is not visiting a file"))
-
+  
   (let ((count 0)
         (original-pos (point)))
     (goto-char (point-min))
     (while (not (eobp))
-      (if (altodo--is-done-or-cancelled-task)
-          (progn
-            (altodo-move-done-tasks-at-point)
-            (setq count (1+ count)))
+      (if (and (altodo--is-done-or-cancelled-task)
+               (altodo--movable-in-batch-p))
+          (setq count (+ count (altodo--move-task-to-done-file
+                                altodo-move-unit)))
         (forward-line 1)))
     (when (and auto-save (buffer-modified-p))
       (save-buffer))
     (goto-char (min original-pos (point-max)))
     (message "Moved %d task(s) to done file" count)))
+
+
+;;; Date Input
+
+(defvar-local altodo--calendar-target nil
+  "In the calendar buffer: (MARKER . KIND) of the line to set the date on.
+KIND is `due' or `start'.")
+
+(defun altodo--format-date-list (date)
+  "Return DATE, a list (MONTH DAY YEAR), as a string in `altodo-date-format'."
+  (format-time-string (or altodo-date-format "%Y-%m-%d")
+                      (encode-time (list 0 0 12 (nth 1 date) (nth 0 date)
+                                         (nth 2 date) nil -1 nil))))
+
+(defun altodo--line-date-bounds (kind)
+  "Return (START . END) of the date text of KIND on the current line, or nil.
+KIND is `due' (the date after \"->\") or `start' (the date before it)."
+  (save-excursion
+    (beginning-of-line)
+    (let ((regex (altodo--date-regex-match)))
+      (when (re-search-forward
+             (if (eq kind 'due)
+                 (concat "-> \\(" regex "\\)")
+               (concat "\\(" regex "\\) ->"))
+             (line-end-position) t)
+        (cons (match-beginning 1) (match-end 1))))))
+
+(defun altodo--current-line-date (kind)
+  "Return the date of KIND on the current line as (MONTH DAY YEAR), or nil."
+  (let ((value (if (eq kind 'due)
+                   (altodo--line-due-date-value)
+                 (altodo--line-start-date-value))))
+    (when (and value (string-match "\\`\\([0-9]+\\)-\\([0-9]+\\)-\\([0-9]+\\)\\'" value))
+      (list (string-to-number (match-string 2 value))
+            (string-to-number (match-string 3 value))
+            (string-to-number (match-string 1 value))))))
+
+(defun altodo--set-line-date (kind date)
+  "Set the date of KIND on the current line to DATE, a list (MONTH DAY YEAR).
+KIND is `due' or `start'.  An existing date of KIND is replaced.  Otherwise
+the date is added: a due date as \"-> DATE\", a start date as \"DATE ->\";
+if the other date exists, the arrow is shared (\"START -> DUE\")."
+  (unless (or (altodo--task-p) (altodo--comment-p))
+    (user-error "Not on a task or comment line"))
+  (let ((text (altodo--format-date-list date))
+        (bounds (altodo--line-date-bounds kind)))
+    (save-excursion
+      (cond
+       (bounds
+        (goto-char (car bounds))
+        (delete-region (car bounds) (cdr bounds))
+        (insert text))
+       ((eq kind 'due)
+        (let ((start-bounds (altodo--line-date-bounds 'start)))
+          (if start-bounds
+              (progn (goto-char (+ (cdr start-bounds) 3))
+                     (insert " " text))
+            (end-of-line)
+            (insert " -> " text))))
+       (t
+        (let ((due-bounds (altodo--line-date-bounds 'due)))
+          (if due-bounds
+              (progn (goto-char (- (car due-bounds) 3))
+                     (insert text " "))
+            (end-of-line)
+            (insert " " text " ->"))))))))
+
+(defun altodo--select-date-with-calendar (kind)
+  "Open the calendar and set the date of KIND on the current line from it.
+Move to a date and press RET; press q to cancel."
+  (unless (or (altodo--task-p) (altodo--comment-p))
+    (user-error "Not on a task or comment line"))
+  (let ((marker (point-marker))
+        (initial (or (altodo--current-line-date kind) (calendar-current-date))))
+    (calendar)
+    (with-current-buffer calendar-buffer
+      (setq-local calendar-week-start-day altodo-week-start-day)
+      (setq altodo--calendar-target (cons marker kind))
+      (use-local-map
+       (make-composed-keymap
+        (let ((map (make-sparse-keymap)))
+          (define-key map (kbd "RET") #'altodo-calendar-pick-date)
+          map)
+        calendar-mode-map))
+      (calendar-redraw)
+      (calendar-goto-date initial))
+    (message "Move to a date and press RET to set the %s date (q: cancel)"
+             kind)))
+
+(defun altodo-calendar-pick-date ()
+  "Set the date at the cursor on the task line that opened the calendar."
+  (interactive)
+  (unless altodo--calendar-target
+    (user-error "This calendar was not opened by altodo"))
+  (let ((date (calendar-cursor-to-date))
+        (marker (car altodo--calendar-target))
+        (kind (cdr altodo--calendar-target)))
+    (unless date
+      (user-error "Move the cursor to a date"))
+    (with-current-buffer (marker-buffer marker)
+      (save-excursion
+        (goto-char marker)
+        (altodo--set-line-date kind date)))
+    (calendar-exit)
+    (message "Set the %s date to %s" kind (altodo--format-date-list date))))
+
+(defun altodo--input-date-in-minibuffer (kind)
+  "Read a date in the minibuffer and set the date of KIND on the current line."
+  (unless (or (altodo--task-p) (altodo--comment-p))
+    (user-error "Not on a task or comment line"))
+  (altodo--set-line-date
+   kind (calendar-read-date nil (or (altodo--current-line-date kind)
+                                    (calendar-current-date)))))
+
+(defun altodo-select-due-calendar ()
+  "Select the due date (-> DATE) of the task at point in a calendar window.
+Move to a date and press RET; press q to cancel."
+  (interactive)
+  (altodo--select-date-with-calendar 'due))
+
+(defun altodo-select-start-calendar ()
+  "Select the start date (DATE ->) of the task at point in a calendar window.
+Move to a date and press RET; press q to cancel."
+  (interactive)
+  (altodo--select-date-with-calendar 'start))
+
+(defun altodo-input-due-date ()
+  "Input the due date (-> DATE) of the task at point in the minibuffer."
+  (interactive)
+  (altodo--input-date-in-minibuffer 'due))
+
+(defun altodo-input-start-date ()
+  "Input the start date (DATE ->) of the task at point in the minibuffer."
+  (interactive)
+  (altodo--input-date-in-minibuffer 'start))
 
 
 ;;; Debug System
@@ -4235,7 +4617,8 @@ Can be overridden by .altodo-locals.el."
   :type 'boolean)
 
 (defcustom altodo-default-filter-patterns
-  '((:title "Status" :type group-header :nest 0)
+  '((:title "" :type calendar :nest 1)
+    (:title "Status" :type group-header :nest 0)
     (:title "Open [ ] - %n" :type search-simple :pattern "open" :count-format t :nest 1)
     (:title "In Progress [@] - %n" :type search-simple :pattern "progress" :count-format t :nest 1)
     (:title "Waiting [w] - %n" :type search-simple :pattern "waiting" :count-format t :nest 1)
@@ -4280,6 +4663,9 @@ Can be overridden by .altodo-locals.el."
 
     (:title "People" :type group-header :nest 0)
     (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1)
+
+    (:title "Headings" :type group-header :nest 0)
+    (:title "%s - %n" :type dynamic :dynamic-type "heading" :count-format t :nest 1)
 
     (:title "Section" :type separator :pattern "─" :nest 0)
     (:title "[Clear Filter]" :type command :nest 0 :command altodo-filter-clear)
@@ -4349,6 +4735,381 @@ SOURCE-BUFFER is the altodo buffer that is used to count matches."
             ;; Move to next line
             (forward-line)))))))
 
+;;; Sidebar Calendar and Agenda
+
+(defcustom altodo-calendar-heavy-count 3
+  "Number of due tasks on one day from which the calendar uses the heavy face."
+  :group 'altodo-calendar
+  :type 'natnum)
+
+(defcustom altodo-calendar-priority 'due
+  "Which date wins on a day that has both due and start dates.
+It decides the face of the day in the sidebar calendar and the filter that
+a click on the day applies: the tasks due that day, or the tasks that start
+that day."
+  :group 'altodo-calendar
+  :type '(choice (const :tag "Due date" due)
+                 (const :tag "Start date" start)))
+
+(defface altodo-agenda-date-face
+  '((t :inherit default))
+  "Face for the date of a line of the sidebar agenda."
+  :group 'altodo-calendar)
+
+(defface altodo-agenda-today-face
+  '((t :inherit default :weight bold))
+  "Face for today in the sidebar agenda."
+  :group 'altodo-calendar)
+
+(defface altodo-agenda-overdue-face
+  '((t :inherit (altodo-calendar-overdue-face error)))
+  "Face for the overdue line of the sidebar agenda."
+  :group 'altodo-calendar)
+
+(defface altodo-agenda-empty-face
+  '((t :inherit shadow))
+  "Face for a day without tasks in the sidebar agenda."
+  :group 'altodo-calendar)
+
+(defface altodo-agenda-count-face
+  '((t :weight bold))
+  "Face for the counts in the sidebar agenda."
+  :group 'altodo-calendar)
+
+(defvar-local altodo-sidebar--calendar-month nil
+  "Month shown by the sidebar calendar as (MONTH . YEAR), or nil for this month.")
+
+(defun altodo--today-date-list ()
+  "Return today as a list (MONTH DAY YEAR)."
+  (let ((decoded (decode-time (altodo--today-start))))
+    (list (nth 4 decoded) (nth 3 decoded) (nth 5 decoded))))
+
+(defun altodo--date-key (date)
+  "Return DATE, a list (MONTH DAY YEAR), as the string YYYY-MM-DD."
+  (format "%04d-%02d-%02d" (nth 2 date) (nth 0 date) (nth 1 date)))
+
+(defun altodo--normalized-date-key (value)
+  "Return VALUE, a string YYYY-MM-DD, padded, or nil if it is not a real date."
+  (when (and value
+             (string-match "\\`\\([0-9]+\\)-\\([0-9]+\\)-\\([0-9]+\\)\\'" value))
+    (let ((year (string-to-number (match-string 1 value)))
+          (month (string-to-number (match-string 2 value)))
+          (day (string-to-number (match-string 3 value))))
+      (when (altodo--valid-date-p year month day)
+        (format "%04d-%02d-%02d" year month day)))))
+
+(defun altodo--collect-date-counts (source-buffer count-done)
+  "Count the tasks per due date and start date in SOURCE-BUFFER.
+Return a hash table from YYYY-MM-DD to (DUE . START).  Tasks that are done
+or cancelled are counted only if COUNT-DONE is non-nil."
+  (let ((table (make-hash-table :test 'equal)))
+    (when (and source-buffer (buffer-live-p source-buffer))
+      (with-current-buffer source-buffer
+        (save-excursion
+          (goto-char (point-min))
+          (while (not (eobp))
+            (when (and (altodo--task-p)
+                       (or count-done
+                           (not (altodo--is-done-or-cancelled-task))))
+              (let ((due (altodo--normalized-date-key
+                          (altodo--line-due-date-value)))
+                    (start (altodo--normalized-date-key
+                            (altodo--line-start-date-value))))
+                (when due
+                  (let ((entry (gethash due table (cons 0 0))))
+                    (puthash due (cons (1+ (car entry)) (cdr entry)) table)))
+                (when start
+                  (let ((entry (gethash start table (cons 0 0))))
+                    (puthash start (cons (car entry) (1+ (cdr entry))) table)))))
+            (forward-line 1)))))
+    table))
+
+(defun altodo--overdue-count (counts today-key)
+  "Return the number of due tasks before TODAY-KEY in the hash table COUNTS."
+  (let ((total 0))
+    (maphash (lambda (key value)
+               (when (string< key today-key)
+                 (setq total (+ total (car value)))))
+             counts)
+    total))
+
+(defun altodo--day-kind (info target)
+  "Return `due', `start' or nil: the kind of date that decides a day.
+INFO is the cons (DUE . START) of the counts of the day, or nil.  TARGET is
+`due', `start' or `both'.  A day with both kinds takes the kind of
+`altodo-calendar-priority'."
+  (let ((due (and info (memq target '(due both)) (> (car info) 0)))
+        (start (and info (memq target '(start both)) (> (cdr info) 0))))
+    (cond ((and due start) altodo-calendar-priority)
+          (due 'due)
+          (start 'start))))
+
+(defun altodo--day-filter-entry (date kind)
+  "Return the sidebar filter entry for the tasks of DATE.
+DATE is a list (MONTH DAY YEAR).  KIND is `due' or `start'."
+  (let ((text (altodo--format-date-list date)))
+    (list :title (format "%s %s" (altodo--date-key date) kind)
+          :type 'search-simple
+          :pattern (format "%s-date:%s" kind text))))
+
+(defun altodo--calendar-selection-p (entry config source-buffer)
+  "Return non-nil if the filter ENTRY is selected or active in the sidebar.
+CONFIG is the sidebar configuration and SOURCE-BUFFER the altodo buffer."
+  (memq (altodo-sidebar--get-face entry config source-buffer)
+        '(altodo-sidebar-selected-filter-face
+          altodo-sidebar-active-filter-face)))
+
+(defun altodo--calendar-day-info (date counts target today-key config source-buffer)
+  "Return the day information of DATE for `altodo-calendar-insert'.
+COUNTS is the hash table of `altodo--collect-date-counts'.  TARGET is
+`due', `start' or `both'.  TODAY-KEY is the key of today.  CONFIG is the
+sidebar configuration and SOURCE-BUFFER the altodo buffer.  Only a day that
+has tasks of the target kind is a button."
+  (let* ((key (altodo--date-key date))
+         (info (gethash key counts))
+         (kind (altodo--day-kind info target)))
+    (when kind
+      (let* ((entry (altodo--day-filter-entry date kind))
+             (selected (altodo--calendar-selection-p entry config source-buffer)))
+        (list :faces
+              (delq nil
+                    (list (and selected 'altodo-calendar-selected-face)
+                          (and (eq kind 'due) (string< key today-key)
+                               'altodo-calendar-overdue-face)
+                          (if (eq kind 'due)
+                              (if (>= (car info) altodo-calendar-heavy-count)
+                                  'altodo-calendar-due-heavy-face
+                                'altodo-calendar-due-face)
+                            'altodo-calendar-start-face)))
+              :action #'altodo-sidebar--apply-filter
+              :properties (list 'sidebar-entry entry)
+              :help (format "%d due, %d start" (car info) (cdr info)))))))
+
+(defun altodo-sidebar--insert-calendar (entry config source-buffer sidebar-window)
+  "Insert the month calendar of the sidebar ENTRY (type `calendar').
+CONFIG is the sidebar configuration, SOURCE-BUFFER the altodo buffer and
+SIDEBAR-WINDOW the window of the sidebar or nil.  The calendar is drawn by
+`altodo-calendar-insert'.  Days that have tasks are buttons that filter the
+tasks of the day.  The entry accepts the properties `:count-done' and
+`:calendar-target' (`due', `start' or `both', the default)."
+  (let* ((indent-width (* (or (plist-get entry :nest) 0) (plist-get config :indent)))
+         (indent (make-string indent-width ?\s))
+         (target (or (plist-get entry :calendar-target) 'both))
+         (counts (altodo--collect-date-counts source-buffer
+                                              (plist-get entry :count-done)))
+         (today (altodo--today-date-list))
+         (today-key (altodo--date-key today))
+         (shown (or altodo-sidebar--calendar-month
+                    (cons (nth 0 today) (nth 2 today))))
+         (title (plist-get entry :title)))
+    (when (and title (not (string-empty-p title)))
+      (insert indent (propertize title 'face 'altodo-sidebar-group-header-face
+                                 'read-only t)
+              "\n"))
+    (if (and sidebar-window (< (window-body-width sidebar-window)
+                               (+ indent-width (altodo-calendar-width))))
+        (insert indent (propertize "(sidebar is too narrow for the calendar)"
+                                   'face 'altodo-agenda-empty-face 'read-only t)
+                "\n")
+      (altodo-calendar-insert
+       (car shown) (cdr shown)
+       :indent indent-width
+       :week-start altodo-week-start-day
+       :today today
+       :nav-function #'altodo-sidebar--calendar-move
+       :day-function (lambda (date)
+                       (altodo--calendar-day-info date counts target today-key
+                                                  config source-buffer))))))
+
+(defun altodo--agenda-setting (entry property default)
+  "Return the PROPERTY of the sidebar ENTRY, or DEFAULT if it has none."
+  (if (plist-member entry property)
+      (plist-get entry property)
+    default))
+
+(defun altodo--agenda-format-date (date format)
+  "Return DATE, a list (MONTH DAY YEAR), as a string in FORMAT.
+FORMAT is `altodo' (the format `altodo-date-format'), `done-tag' (the format
+`altodo-done-tag-datetime-format') or a string for `format-time-string'."
+  (format-time-string
+   (pcase format
+     ('altodo (or altodo-date-format "%Y-%m-%d"))
+     ('done-tag (or altodo-done-tag-datetime-format "%Y-%m-%d"))
+     ((pred stringp) format)
+     (_ "%Y-%m-%d"))
+   (encode-time (list 0 0 12 (nth 1 date) (nth 0 date) (nth 2 date) nil -1 nil))))
+
+(defun altodo--pad-right (text width)
+  "Return TEXT padded with spaces on the right to WIDTH display columns."
+  (concat text (make-string (max 0 (- width (string-width text))) ?\s)))
+
+(defun altodo-sidebar--insert-agenda (entry config source-buffer _sidebar-window)
+  "Insert the agenda of the sidebar ENTRY (type `agenda').
+The agenda has one line per day from today, with the numbers of the due (D)
+and start (S) dates.  CONFIG is the sidebar configuration and SOURCE-BUFFER
+the altodo buffer.  The entry accepts `:days' (default 7), `:count-done',
+`:agenda-overdue' and `:calendar-target' (`due', `start' or `both', the
+default).  By default a line with the overdue tasks is shown; a nil
+`:agenda-overdue' hides it.  The display is set with the properties of the
+entry: `:date-format' (`altodo', the default, follows `altodo-date-format';
+`done-tag' follows `altodo-done-tag-datetime-format'; a string is an own
+format for `format-time-string'), `:show-weekday' (default t),
+`:today-label' (\"Today\"), `:tomorrow-label' (\"Tomorrow\"),
+`:overdue-label' (\"Overdue\") and `:label-newline' (nil; non-nil puts a
+label on a line of its own)."
+  (let* ((indent-width (* (or (plist-get entry :nest) 0) (plist-get config :indent)))
+         (indent (make-string indent-width ?\s))
+         (target (or (plist-get entry :calendar-target) 'both))
+         (days (or (plist-get entry :days) 7))
+         (date-format (altodo--agenda-setting entry :date-format 'altodo))
+         (show-weekday (altodo--agenda-setting entry :show-weekday t))
+         (today-label (altodo--agenda-setting entry :today-label "Today"))
+         (tomorrow-label (altodo--agenda-setting entry :tomorrow-label "Tomorrow"))
+         (overdue-label (altodo--agenda-setting entry :overdue-label "Overdue"))
+         (newline (altodo--agenda-setting entry :label-newline nil))
+         (show-overdue (and (> (altodo--overdue-count
+                                (altodo--collect-date-counts
+                                 source-buffer (plist-get entry :count-done))
+                                (altodo--date-key (altodo--today-date-list)))
+                               0)
+                            (not (and (plist-member entry :agenda-overdue)
+                                      (null (plist-get entry :agenda-overdue))))
+                            (memq target '(due both))))
+         ;; The column of the labels, when they share a line with the date.
+         (label-width (if newline
+                          0
+                        (apply #'max (mapcar #'string-width
+                                             (append (list today-label
+                                                           tomorrow-label)
+                                                     (and show-overdue
+                                                          (list overdue-label)))))))
+         ;; A line under a label is indented.
+         (detail-indent (if newline (concat indent "  ") indent))
+         (counts (altodo--collect-date-counts source-buffer
+                                              (plist-get entry :count-done)))
+         (today (altodo--today-date-list))
+         (today-key (altodo--date-key today))
+         (today-absolute (calendar-absolute-from-gregorian today))
+         (title (plist-get entry :title))
+         (overdue (altodo--overdue-count counts today-key)))
+    (when (and title (not (string-empty-p title)))
+      (insert indent (propertize title 'face 'altodo-sidebar-group-header-face
+                                 'read-only t)
+              "\n"))
+    (when (and (> overdue 0) (not (and (plist-member entry :agenda-overdue)
+                                       (null (plist-get entry :agenda-overdue))))
+               (memq target '(due both)))
+      (let ((overdue-entry (list :title "Overdue" :type 'search-simple
+                                 :pattern "due-date:overdue"))
+            (face nil))
+        (setq face (if (altodo--calendar-selection-p overdue-entry config
+                                                     source-buffer)
+                       'altodo-calendar-selected-face
+                     'altodo-agenda-overdue-face))
+        (when (and newline (not (string-empty-p overdue-label)))
+          (insert indent (propertize overdue-label 'face face 'read-only t) "\n"))
+        (insert detail-indent)
+        (let ((start (point)))
+          (insert (if newline
+                      (number-to-string overdue)
+                    (string-trim-right
+                     (concat (altodo--pad-right overdue-label label-width)
+                             (if (> label-width 0) " " "")
+                             (number-to-string overdue)))))
+          (make-text-button start (point)
+                            'type 'button
+                            'face face
+                            'follow-link t
+                            'action #'altodo-sidebar--apply-filter
+                            'sidebar-entry overdue-entry
+                            'help-echo nil
+                            'mouse-face 'highlight))
+        (insert "\n")))
+    (dotimes (index days)
+      (let* ((date (calendar-gregorian-from-absolute (+ today-absolute index)))
+             (key (altodo--date-key date))
+             (info (gethash key counts))
+             (due (if (memq target '(due both)) (or (car info) 0) 0))
+             (start (if (memq target '(start both)) (or (cdr info) 0) 0))
+             (kind (altodo--day-kind info target))
+             (label (pcase index (0 today-label) (1 tomorrow-label) (_ "")))
+             (weekday (and show-weekday
+                           (aref calendar-day-abbrev-array
+                                 (calendar-day-of-week date))))
+             (counts-text (string-join
+                           (delq nil (list (and (> due 0) (format "D%d" due))
+                                           (and (> start 0) (format "S%d" start))))
+                           " "))
+             (date-text (string-join
+                         (delq nil (list (altodo--agenda-format-date date date-format)
+                                         weekday
+                                         (and (not (string-empty-p counts-text))
+                                              counts-text)))
+                         " "))
+             (text (if newline
+                       date-text
+                     (string-trim-right
+                      (concat (altodo--pad-right label label-width)
+                              (if (> label-width 0) " " "")
+                              date-text))))
+             (day-entry (and kind (altodo--day-filter-entry date kind)))
+             (face (cond ((and day-entry
+                               (altodo--calendar-selection-p day-entry config
+                                                             source-buffer))
+                          'altodo-calendar-selected-face)
+                         ((null kind) 'altodo-agenda-empty-face)
+                         ((= index 0) 'altodo-agenda-today-face)
+                         (t 'altodo-agenda-date-face))))
+        (when (and newline (not (string-empty-p label)))
+          (insert indent (propertize label 'face face 'read-only t) "\n"))
+        (insert detail-indent)
+        (if (null kind)
+            (insert (propertize text 'face face 'read-only t))
+          (let ((button-start (point)))
+            (insert text)
+            (make-text-button button-start (point)
+                              'type 'button
+                              'face face
+                              'follow-link t
+                              'action #'altodo-sidebar--apply-filter
+                              'sidebar-entry day-entry
+                              'help-echo nil
+                              'mouse-face 'highlight)
+            (when (> (length counts-text) 0)
+              (add-face-text-property (- (point) (length counts-text)) (point)
+                                      'altodo-agenda-count-face))))
+        (insert "\n")))))
+
+(defun altodo-sidebar--calendar-move (delta)
+  "Change the month of the sidebar calendar by DELTA; 0 is this month."
+  (let ((buffer (altodo--get-sidebar-buffer)))
+    (when buffer
+      (with-current-buffer buffer
+        (setq altodo-sidebar--calendar-month
+              (if (zerop delta)
+                  nil
+                (let* ((today (altodo--today-date-list))
+                       (shown (or altodo-sidebar--calendar-month
+                                  (cons (nth 0 today) (nth 2 today))))
+                       (total (+ (* 12 (cdr shown)) (1- (car shown)) delta)))
+                  (cons (1+ (mod total 12)) (/ total 12)))))))
+    (altodo-sidebar-refresh)))
+
+(defun altodo-sidebar-calendar-next ()
+  "Show the next month in the sidebar calendar."
+  (interactive)
+  (altodo-sidebar--calendar-move 1))
+
+(defun altodo-sidebar-calendar-previous ()
+  "Show the previous month in the sidebar calendar."
+  (interactive)
+  (altodo-sidebar--calendar-move -1))
+
+(defun altodo-sidebar-calendar-today ()
+  "Show this month in the sidebar calendar."
+  (interactive)
+  (altodo-sidebar--calendar-move 0))
+
 (defun altodo-sidebar--render (buffer config)
   "Render entries in BUFFER based on CONFIG.
 Clears BUFFER and inserts all entries from CONFIG.
@@ -4367,11 +5128,17 @@ Uses the source buffer (altodo main buffer) for counting."
           (setq altodo-sidebar--current-combined-predicate nil
                 combined-predicate nil))
         (dolist (entry (plist-get config :entries))
-          (if (or (eq (plist-get entry :type) 'dynamic)
-                  (equal (plist-get entry :type) "dynamic"))
-              (dolist (expanded (altodo--expand-dynamic-filter entry source-buffer combined-predicate))
-                (altodo-sidebar--insert-entry expanded config source-buffer sidebar-window combined-predicate combine-mode))
-            (altodo-sidebar--insert-entry entry config source-buffer sidebar-window combined-predicate combine-mode)))
+          (cond
+           ((eq (plist-get entry :type) 'calendar)
+            (altodo-sidebar--insert-calendar entry config source-buffer sidebar-window))
+           ((eq (plist-get entry :type) 'agenda)
+            (altodo-sidebar--insert-agenda entry config source-buffer sidebar-window))
+           ((or (eq (plist-get entry :type) 'dynamic)
+                (equal (plist-get entry :type) "dynamic"))
+            (dolist (expanded (altodo--expand-dynamic-filter entry source-buffer combined-predicate))
+              (altodo-sidebar--insert-entry expanded config source-buffer sidebar-window combined-predicate combine-mode)))
+           (t
+            (altodo-sidebar--insert-entry entry config source-buffer sidebar-window combined-predicate combine-mode))))
         ;; Each entry ends with a newline; drop the last one so that the
         ;; sidebar does not end with an empty line.
         (goto-char (point-max))
@@ -4537,8 +5304,23 @@ Enables `special-mode', sets read-only, and configures mode-line."
     (define-key map (kbd "C-c C-o") 'altodo-sidebar-set-or-mode)
     (define-key map (kbd "C-c C-t") 'altodo-sidebar-toggle-combine-mode)
     (define-key map (kbd "C-<mouse-1>") 'altodo-sidebar-mouse-toggle-selection)
+    (define-key map (kbd "}") 'altodo-sidebar-calendar-next)
+    (define-key map (kbd "{") 'altodo-sidebar-calendar-previous)
+    (define-key map (kbd ".") 'altodo-sidebar-calendar-today)
+    (define-key map (kbd "?") 'altodo-sidebar-help)
+    (define-key map (kbd "h") 'altodo-sidebar-help)
     map)
   "Keymap for altodo sidebar.")
+
+(defun altodo-sidebar-help ()
+  "Show the key bindings of the altodo sidebar in a help window."
+  (interactive)
+  (with-help-window "*altodo-sidebar-help*"
+    (princ "altodo sidebar\n\n")
+    (princ (concat "Select a filter with RET or SPC.  Select several filters with s\n"
+                   "and combine them with AND (C-c C-a) or OR (C-c C-o);\n"
+                   "C-c C-t toggles AND/OR.  Clear the filter with c.\n\n"))
+    (princ (substitute-command-keys "\\{altodo-sidebar-mode-map}"))))
 
 (defun altodo-sidebar--setup-keybindings ()
   "Setup keybindings for sidebar buffer.
@@ -4552,7 +5334,10 @@ Returns value."
   (let ((button (button-at (point))))
     (if button
         (let ((inhibit-read-only t))
-          (altodo-sidebar--apply-filter button))
+          (if (button-get button 'sidebar-entry)
+              (altodo-sidebar--apply-filter button)
+            ;; A button of another kind, such as a month button.
+            (button-activate button)))
       (message "No filter at point"))))
 
 (defun altodo-sidebar--get-face (entry config &optional source-buffer)
@@ -4628,7 +5413,7 @@ Returns appropriate face based on entry type."
   (ignore nest)
   (cond
    ((eq type 'group-header) 'altodo-sidebar-group-header-face)
-   ((eq type 'search-simple) 'altodo-sidebar-search-simple-face)
+   ((memq type '(search-simple heading-jump)) 'altodo-sidebar-search-simple-face)
    ((eq type 'search-lambda) 'altodo-sidebar-search-lambda-face)
    ((eq type 'command) 'altodo-sidebar-command-face)
    ((eq type 'separator) 'altodo-sidebar-separator-face)
@@ -5185,6 +5970,114 @@ Returns alist of (value . count)."
       (cl-subseq alist 0 (min limit (length alist)))
     alist))
 
+(defun altodo--collect-headings (count-open)
+  "Return the headings of the current buffer in buffer order.
+Each element is a list (TEXT LEVEL POSITION OPEN-COUNT).  ATX and Setext
+headings are collected; lines in a fenced code block are skipped.
+When COUNT-OPEN is non-nil, OPEN-COUNT is the number of tasks that are
+neither done nor cancelled, from the heading to the next heading of any
+level.  Otherwise it is 0."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (goto-char (point-min))
+      (let ((headings nil)
+            (in-fence nil))
+        (while (not (eobp))
+          (cond
+           ((looking-at "^ \\{0,3\\}\\(?:```\\|~~~\\)")
+            (setq in-fence (not in-fence)))
+           (in-fence)
+           ((looking-at "^\\(#+\\)[ \t]+\\(.+\\)$")
+            (push (list (match-string-no-properties 2)
+                        (length (match-string 1))
+                        (line-beginning-position)
+                        0)
+                  headings))
+           ((and count-open headings (looking-at altodo-task-regex))
+            (unless (member (match-string 2) (list altodo-state-done
+                                                   altodo-state-cancelled))
+              (cl-incf (nth 3 (car headings)))))
+           ;; Setext heading: a text line followed by "===" or "---".
+           ((and (looking-at "^[^ \t\n]")
+                 (memq (char-after (1+ (line-end-position))) '(?= ?-))
+                 (not (looking-at altodo-comment-regex))
+                 (save-excursion
+                   (forward-line 1)
+                   (looking-at "^\\(=+\\|-+\\)[ \t]*$")))
+            (push (list (buffer-substring-no-properties
+                         (line-beginning-position) (line-end-position))
+                        (save-excursion
+                          (forward-line 1)
+                          (if (eq (char-after) ?=) 1 2))
+                        (line-beginning-position)
+                        0)
+                  headings)
+            (forward-line 1)))
+          (forward-line 1))
+        (nreverse headings)))))
+
+(defun altodo--heading-indent-offset (level indent-by-level)
+  "Return the number of extra indent levels of a heading of LEVEL.
+INDENT-BY-LEVEL is nil (no extra indent), t (indent from level 2), or an
+integer N: the headings up to level N are not indented and a deeper
+heading is indented by LEVEL minus N steps.  An integer below 1 is
+treated like t."
+  (cond
+   ((null indent-by-level) 0)
+   (t (max 0 (- level (if (integerp indent-by-level)
+                          (max 1 indent-by-level)
+                        1))))))
+
+(defun altodo--expand-heading-filter (entry source-buffer)
+  "Expand the heading filter ENTRY to `heading-jump' entries.
+The headings are taken from SOURCE-BUFFER in buffer order.  The count of
+`%n' (tasks neither done nor cancelled) is computed only when :title
+contains `%n' and :count-format is not nil."
+  (when (buffer-live-p source-buffer)
+    (let* ((title (plist-get entry :title))
+           (levels (let ((value (plist-get entry :level)))
+                     (if (listp value) value (list value))))
+           (limit (plist-get entry :limit))
+           (count-format (if (plist-member entry :count-format)
+                             (plist-get entry :count-format)
+                           t))
+           (count-p (and count-format (string-match-p "%n" title)))
+           (indent-by-level (if (plist-member entry :indent-by-level)
+                                (plist-get entry :indent-by-level)
+                              t))
+           (nest (or (plist-get entry :nest) 0))
+           (face (plist-get entry :face))
+           (face-count (plist-get entry :face-count))
+           (headings (with-current-buffer source-buffer
+                       (altodo--collect-headings count-p))))
+      (when levels
+        (setq headings (seq-filter (lambda (heading)
+                                     (memq (nth 1 heading) levels))
+                                   headings)))
+      (when (and (integerp limit) (> limit 0))
+        (setq headings (seq-take headings limit)))
+      (mapcar
+       (lambda (heading)
+         (pcase-let ((`(,text ,level ,position ,open-count) heading))
+           `(:title ,(replace-regexp-in-string
+                      "%[snl]"
+                      (lambda (placeholder)
+                        (pcase (aref placeholder 1)
+                          (?s text)
+                          (?l (number-to-string level))
+                          (_ (cond
+                              ((not count-p) placeholder)
+                              (face-count (propertize (number-to-string open-count)
+                                                      'face face-count))
+                              (t (number-to-string open-count))))))
+                      title t t)
+             :type heading-jump
+             :nest ,(+ nest (altodo--heading-indent-offset level indent-by-level))
+             :marker ,(set-marker (make-marker) position source-buffer)
+             ,@(when face `(:face ,face)))))
+       headings))))
+
 (defun altodo--format-placeholder (text replacements)
   "Replace placeholders in TEXT with REPLACEMENTS.
 REPLACEMENTS is alist of (placeholder . value).
@@ -5200,6 +6093,13 @@ Returns plain text without any face properties."
 (defun altodo--expand-dynamic-filter (entry source-buffer &optional combined-predicate)
   "Expand dynamic filter ENTRY to actual filter entries using SOURCE-BUFFER.
 If COMBINED-PREDICATE is provided, filter values based on combined predicate."
+  (if (equal (plist-get entry :dynamic-type) "heading")
+      (altodo--expand-heading-filter entry source-buffer)
+    (altodo--expand-value-filter entry source-buffer combined-predicate)))
+
+(defun altodo--expand-value-filter (entry source-buffer &optional combined-predicate)
+  "Expand the dynamic filter ENTRY that collects values to filter entries.
+SOURCE-BUFFER and COMBINED-PREDICATE are as in `altodo--expand-dynamic-filter'."
   (let* ((dynamic-type (plist-get entry :dynamic-type))
          (tag-mode (or (plist-get entry :tag-mode)
                        (when (plist-get entry :tag-ignore-value) "name-only")
@@ -5574,6 +6474,30 @@ The value is `all', `heading-only' or `none'.  It defaults to `heading-only'."
       (plist-get entry :display-context)
     'heading-only))
 
+(defun altodo-sidebar--jump-to-heading (entry source-buffer)
+  "Move point to the heading of the `heading-jump' ENTRY in SOURCE-BUFFER.
+Select the window of SOURCE-BUFFER and put the heading near its top.
+When a filter hides the heading line, clear the filter first."
+  (let ((marker (plist-get entry :marker)))
+    (if (not (and (markerp marker)
+                  (eq (marker-buffer marker) source-buffer)
+                  (with-current-buffer source-buffer
+                    (save-excursion
+                      (goto-char marker)
+                      (altodo--heading-level)))))
+        (message "The heading no longer exists.  Refresh the sidebar")
+      (with-current-buffer source-buffer
+        (when (seq-some (lambda (overlay)
+                          (and (eq (overlay-get overlay 'category)
+                                   'altodo-filter)
+                               (overlay-get overlay 'invisible)))
+                        (overlays-at marker))
+          (altodo-filter-clear)))
+      (select-window (or (get-buffer-window source-buffer)
+                         (display-buffer source-buffer)))
+      (goto-char marker)
+      (recenter 0))))
+
 (defun altodo-sidebar--apply-filter (button)
   "Apply filter from BUTTON.
 Extracts pattern from button and applies filter to altodo buffer."
@@ -5589,43 +6513,46 @@ Extracts pattern from button and applies filter to altodo buffer."
     (if (not (and source-buffer (buffer-live-p source-buffer)))
         (message "Error: No valid source buffer")
 
-      ;; Save window configuration to prevent scrolling
-      (save-window-excursion
-        (cond
-         ;; Group header or separator - do nothing
-         ((memq type '(group-header separator)))
+      ;; The jump must stay: `save-window-excursion' would undo it.
+      (if (eq type 'heading-jump)
+          (altodo-sidebar--jump-to-heading entry source-buffer)
+        ;; Save window configuration to prevent scrolling
+        (save-window-excursion
+          (cond
+           ;; Group header or separator - do nothing
+           ((memq type '(group-header separator)))
 
-         ;; Code from .altodo-locals.el that is not permitted to run
-         ((not (altodo--entry-code-permitted-p entry t)))
+           ;; Code from .altodo-locals.el that is not permitted to run
+           ((not (altodo--entry-code-permitted-p entry t)))
 
-         ;; Command - execute command in source buffer
-         ((eq type 'command)
-          (when command
+           ;; Command - execute command in source buffer
+           ((eq type 'command)
+            (when command
+              (with-current-buffer source-buffer
+                (call-interactively command))))
+
+           ;; Search lambda - apply custom predicate to source buffer
+           ((and pattern (eq type 'search-lambda))
             (with-current-buffer source-buffer
-              (call-interactively command))))
+              (altodo--filter-lines pattern show-multiline))
+            (altodo-sidebar--update-active-entry entry))
 
-         ;; Search lambda - apply custom predicate to source buffer
-         ((and pattern (eq type 'search-lambda))
-          (with-current-buffer source-buffer
-            (altodo--filter-lines pattern show-multiline))
-          (altodo-sidebar--update-active-entry entry))
+           ;; Search simple - apply filter to source buffer
+           ((and pattern (eq type 'search-simple))
+            (setq altodo-sidebar--selected-filters nil
+                  altodo-sidebar--selection-mode 'single
+                  altodo-sidebar--current-combined-predicate nil)
+            (altodo-sidebar--update-active-entry entry)
+            (with-current-buffer source-buffer
+              (altodo--filter-lines (altodo--compile-filter-predicate entry)
+                                    show-multiline
+                                    (altodo--get-display-context-option entry)))
+            (altodo-sidebar-refresh)
+            (altodo--update-sidebar-modeline))
 
-         ;; Search simple - apply filter to source buffer
-         ((and pattern (eq type 'search-simple))
-          (setq altodo-sidebar--selected-filters nil
-                altodo-sidebar--selection-mode 'single
-                altodo-sidebar--current-combined-predicate nil)
-          (altodo-sidebar--update-active-entry entry)
-          (with-current-buffer source-buffer
-            (altodo--filter-lines (altodo--compile-filter-predicate entry)
-                                  show-multiline
-                                  (altodo--get-display-context-option entry)))
-          (altodo-sidebar-refresh)
-          (altodo--update-sidebar-modeline))
-
-         ;; No pattern or unknown type
-         (t
-          (message "No action for type=%s pattern=%s" type pattern)))))))
+           ;; No pattern or unknown type
+           (t
+            (message "No action for type=%s pattern=%s" type pattern))))))))
 
 
 (defun altodo-sidebar-hide ()
@@ -5668,10 +6595,14 @@ Returns value."
 (defun altodo-sidebar--toggle-filter-selection (entry)
   "Toggle ENTRY in multiple selection mode.
 Add or remove ENTRY from altodo-sidebar--selected-filters.
-If no filters are selected after removal, clear the filter."
-  (when (or (altodo--with-sidebar-buffer
-             (lambda () (member entry altodo-sidebar--selected-filters)))
-            (altodo--entry-code-permitted-p entry t))
+If no filters are selected after removal, clear the filter.
+A heading entry cannot be selected."
+  (when (eq (plist-get entry :type) 'heading-jump)
+    (message "A heading entry cannot be selected"))
+  (when (and (not (eq (plist-get entry :type) 'heading-jump))
+             (or (altodo--with-sidebar-buffer
+                  (lambda () (member entry altodo-sidebar--selected-filters)))
+                 (altodo--entry-code-permitted-p entry t)))
     (altodo--with-sidebar-buffer
      (lambda ()
        ;; Switch to multiple selection mode
