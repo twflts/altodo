@@ -4146,21 +4146,18 @@ Move to a date and press RET; press q to cancel."
 
 
 (defun altodo-filter-clear ()
-  "Clear all filters."
+  "Clear all filters.
+In the sidebar, clear the filters of its altodo buffer."
   (interactive)
-  (mapc #'delete-overlay altodo--filter-overlays)
-  (setq altodo--filter-overlays nil)
-  (setq altodo--filter-mode nil)
-  (let ((sidebar-buffer (altodo--get-sidebar-buffer)))
-    (when sidebar-buffer
-      (with-current-buffer sidebar-buffer
-        (setq-local altodo-sidebar--active-entries nil
-                    altodo-sidebar--selected-filters nil
-                    altodo-sidebar--selection-mode nil
-                    altodo-sidebar--current-combined-predicate nil))))
-  (altodo-sidebar-refresh)
-  (altodo--update-sidebar-modeline)
-  (message "Filter cleared"))
+  (let ((source (bound-and-true-p altodo-sidebar--source-buffer)))
+    (if (and source (buffer-live-p source))
+        (with-current-buffer source
+          (altodo-filter-clear))
+      (mapc #'delete-overlay altodo--filter-overlays)
+      (setq altodo--filter-overlays nil)
+      (setq altodo--filter-mode nil)
+      (altodo-sidebar--reset-selection)
+      (message "Filter cleared"))))
 
 
 ;; The commands below apply a DSL pattern (see `altodo--compile-simple-pattern')
@@ -4183,7 +4180,8 @@ signals a `user-error' and changes nothing."
            (error (user-error "Invalid DSL pattern \"%s\": %s" pattern
                               (error-message-string err))))))
     (altodo--filter-lines predicate)
-    (setq altodo--filter-mode mode)))
+    (setq altodo--filter-mode mode)
+    (altodo-sidebar--reset-selection)))
 
 (defun altodo-filter-by-pattern (pattern)
   "Show only the lines that match the DSL PATTERN.
@@ -4346,15 +4344,13 @@ See `doc/design-filter.md` for detailed specification."
 (defvar-local altodo-sidebar--source-buffer nil
   "The altodo buffer that this sidebar is associated with.")
 
-(defvar-local altodo-sidebar--active-entries nil
-  "List of currently active entries in sidebar.
-Each element is an entry plist from altodo-filter-patterns.
-Used for applying face to selected filters.")
-
-;; Multiple filter selection state
+;; The selection state is the four variables below.  Change them only with
+;; `altodo-sidebar--set-selection'.
 (defvar-local altodo-sidebar--selected-filters nil
-  "List of selected filters in multiple selection mode.
-Each element is an entry plist from altodo-filter-patterns.")
+  "List of the selected filter entries of the sidebar.
+Each element is an entry plist from altodo-filter-patterns.  It has one
+element after a click on an entry (mode `single') and the entries chosen
+with \\[altodo-sidebar-toggle-selection] in mode `multiple'.")
 
 (defvar-local altodo-sidebar--combine-mode 'and
   "Combine mode for multiple filters: \\='and or \\='or.
@@ -4367,6 +4363,38 @@ Default: \\='and (more restrictive).")
   "Current combined predicate for multiple filter selection.
 Set by altodo-sidebar--apply-combined-filter.
 Used by altodo-sidebar--render for dynamic count calculation.")
+
+(defun altodo-sidebar--set-selection (entries mode &optional predicate)
+  "Set the selection of the sidebar of the current buffer.
+ENTRIES are the selected filter entries, MODE is `single', `multiple' or nil,
+and PREDICATE is the combined predicate of ENTRIES in mode `multiple'.
+This is the only function that changes the three variables, so they do not
+disagree.  Nothing happens when the buffer has no sidebar."
+  (altodo--with-sidebar-buffer
+   (lambda ()
+     (setq altodo-sidebar--selected-filters entries
+           altodo-sidebar--selection-mode mode
+           altodo-sidebar--current-combined-predicate predicate))))
+
+(defun altodo-sidebar--reset-selection ()
+  "Clear the selection of the sidebar of the current buffer and redraw it.
+Nothing happens when the buffer has no sidebar."
+  (when (altodo--get-sidebar-buffer)
+    (altodo-sidebar--set-selection nil nil)
+    (altodo-sidebar-refresh)
+    (altodo--update-sidebar-modeline)))
+
+(defun altodo-sidebar--multiple-p ()
+  "Return non-nil if the current sidebar buffer has a multiple selection."
+  (and altodo-sidebar--selected-filters
+       (not (eq altodo-sidebar--selection-mode 'single))))
+
+(defun altodo-sidebar--entry-state (entry)
+  "Return `selected', `active' or nil for the filter ENTRY.
+The current buffer is the sidebar.  ENTRY is `active' when it was clicked
+and `selected' when it is one of several entries chosen with s."
+  (when (member entry altodo-sidebar--selected-filters)
+    (if (eq altodo-sidebar--selection-mode 'single) 'active 'selected)))
 
 ;; Generic Sidebar Framework Functions
 
@@ -4502,9 +4530,8 @@ DATE is a list (MONTH DAY YEAR).  KIND is `due' or `start'."
 (defun altodo--calendar-selection-p (entry config source-buffer)
   "Return non-nil if the filter ENTRY is selected or active in the sidebar.
 CONFIG is the sidebar configuration and SOURCE-BUFFER the altodo buffer."
-  (memq (altodo-sidebar--get-face entry config source-buffer)
-        '(altodo-sidebar-selected-filter-face
-          altodo-sidebar-active-filter-face)))
+  (ignore config source-buffer)
+  (altodo-sidebar--entry-state entry))
 
 (defun altodo--calendar-day-info (date counts target today-key config source-buffer)
   "Return the day information of DATE for `altodo-calendar-insert'.
@@ -4771,16 +4798,19 @@ label on a line of its own)."
 Clears BUFFER and inserts all entries from CONFIG.
 Uses the source buffer (altodo main buffer) for counting."
   (let ((source-buffer (plist-get config :source-buffer))
-        (sidebar-window (get-buffer-window buffer))
-        ;; 保存された複合 predicate を取得（再生成なし）
-        (combined-predicate (when (and altodo-sidebar-dynamic-count-enabled
-                                       (eq altodo-sidebar--selection-mode 'multiple))
-                              altodo-sidebar--current-combined-predicate))
-        (combine-mode altodo-sidebar--combine-mode))
+        (sidebar-window (get-buffer-window buffer)))
+    ;; The state is buffer-local: read it in BUFFER, whichever buffer is
+    ;; current.
     (with-current-buffer buffer
       (let ((inhibit-read-only t)
             ;; A count is computed once for each entry in a drawing.
-            (altodo--count-cache (make-hash-table :test 'eq)))
+            (altodo--count-cache (make-hash-table :test 'eq))
+            ;; The saved combined predicate is used as it is.
+            (combined-predicate
+             (when (and altodo-sidebar-dynamic-count-enabled
+                        (eq altodo-sidebar--selection-mode 'multiple))
+               altodo-sidebar--current-combined-predicate))
+            (combine-mode altodo-sidebar--combine-mode))
         (altodo--release-heading-markers)
         (erase-buffer)
         (unless (and source-buffer (buffer-live-p source-buffer))
@@ -4848,72 +4878,41 @@ SOURCE-BUFFER is the main altodo buffer for counting matches.
 SIDEBAR-WINDOW is the sidebar window for width calculation.
 COMBINED-PREDICATE is the combined predicate for dynamic count calculation.
 COMBINE-MODE is \\='and or \\='or, used to determine whether to apply
-combined-predicate."
-  (let* ((title (altodo--format-sidebar-title entry source-buffer combined-predicate combine-mode))
+combined-predicate.
+The row has the face of `altodo-sidebar--get-face'.  A selected or active
+entry has that face on the whole row.  Otherwise the face is added only
+where the title has no face of its own, such as the number of `%n'."
+  (let* ((state (altodo-sidebar--entry-state entry))
+         (title (altodo--format-sidebar-title entry source-buffer
+                                              combined-predicate combine-mode))
          (type (plist-get entry :type))
          (nest (or (plist-get entry :nest) 0))
          (action (and (not (member type '(separator group-header comment nil)))
                       (or (plist-get entry :action)
                           #'altodo-sidebar--apply-filter)))
          (indent (make-string (* nest (plist-get config :indent)) ?\s))
-         (face (altodo-sidebar--get-face entry config source-buffer)))
-
-    (cond
-     ;; Separator - fill line with repeated pattern, optionally with title
-     ((eq type 'separator)
-      (let ((full-line (altodo--make-separator-line sidebar-window indent title
-                                                     (or (plist-get entry :pattern) "─"))))
-        (insert (propertize full-line 'face face 'read-only t))))
-
-     ;; Non-clickable entry (no action)
-     ((null action)
-      (let* ((is-selection (or (eq face 'altodo-sidebar-selected-filter-face)
-                               (eq face 'altodo-sidebar-active-filter-face)))
-             (effective-title (if is-selection (substring-no-properties title) title))
-             (full-line (concat indent effective-title)))
-        (if is-selection
-            ;; Selection face: apply to entire line
-            (insert (propertize full-line 'face face 'read-only t))
-          ;; Non-selection: preserve title's existing face properties
-          (when (> (length indent) 0)
-            (put-text-property 0 (length indent) 'face face full-line))
-          (let ((pos (length indent)))
-            (while (< pos (length full-line))
-              (unless (get-text-property pos 'face full-line)
-                (put-text-property pos (1+ pos) 'face face full-line))
-              (setq pos (1+ pos))))
-          (insert (propertize full-line 'read-only t)))))
-
-     ;; Clickable button (default)
-     (t
+         (face (altodo-sidebar--get-face entry config source-buffer
+                                         combined-predicate combine-mode)))
+    (if (eq type 'separator)
+        ;; Fill the line with the repeated pattern, with the title if any.
+        (insert (propertize (altodo--make-separator-line
+                             sidebar-window indent title
+                             (or (plist-get entry :pattern) "─"))
+                            'face face 'read-only t))
       (insert (propertize indent 'face face))
-      ;; Selection face (Layer 1) overrides all existing face properties
-      (let ((is-selection (or (eq face 'altodo-sidebar-selected-filter-face)
-                              (eq face 'altodo-sidebar-active-filter-face))))
-        (if (and (not is-selection) (altodo--string-has-face-property title))
-            ;; Non-selection: preserve title's existing face properties
-            (let ((start (point)))
-              (insert title)
-              (altodo--apply-face-to-unfaced-text start (point) face)
-              (make-text-button start (point)
-                                'type 'button
-                                'follow-link t
-                                'action action
-                                'sidebar-entry entry
-                                'sidebar-config config
-                                'help-echo nil
-                                'mouse-face 'highlight))
-          ;; Selection or no face property: apply face to entire title
-          (insert-button (if is-selection (substring-no-properties title) title)
-                         'type 'button
-                         'face face
-                         'follow-link t
-                         'action action
-                         'sidebar-entry entry
-                         'sidebar-config config
-                         'help-echo nil
-                         'mouse-face 'highlight)))))
-
+      (let ((start (point)))
+        (insert (if state (substring-no-properties title) title))
+        (altodo--apply-face-to-unfaced-text start (point) face)
+        (if action
+            (make-text-button start (point)
+                              'type 'button
+                              'follow-link t
+                              'action action
+                              'sidebar-entry entry
+                              'sidebar-config config
+                              'help-echo nil
+                              'mouse-face 'highlight)
+          (put-text-property (line-beginning-position) (point) 'read-only t))))
     (insert "\n")))
 
 (defun altodo-sidebar--make-display-action (config)
@@ -4999,72 +4998,63 @@ of an altodo buffer.  Select an entry with \\[altodo-sidebar--apply-filter-at-po
             (button-activate button)))
       (message "No filter at point"))))
 
-(defun altodo-sidebar--get-face (entry config &optional source-buffer)
-  "Get face for ENTRY based on CONFIG using selection mode.
-SOURCE-BUFFER is used for :face-rules evaluation.
-Returns face symbol based on current selection mode."
+(defun altodo-sidebar--get-face (entry config &optional source-buffer combined-predicate combine-mode)
+  "Return the face of the row of the filter ENTRY.
+The current buffer is the sidebar.  CONFIG is not used.  SOURCE-BUFFER is
+the altodo buffer, in which the count for `:face-rules' is taken.
+COMBINED-PREDICATE and COMBINE-MODE make that count the same as the count in
+the title (see `altodo--get-entry-count').
+The first of these decides, from the highest priority:
+1. `altodo-sidebar-selected-filter-face' or
+   `altodo-sidebar-active-filter-face', see `altodo-sidebar--entry-state'
+2. the first matching rule of `:face-rules', when `:count-format' is not nil
+3. `:face'
+4. the default face of the type, see `altodo-sidebar--default-face'
+`:count-face-rules' and `:face-count' do not change the row; see
+`altodo--count-face'."
   (ignore config)
-  (let* ((selected-filters (buffer-local-value 'altodo-sidebar--selected-filters (current-buffer)))
-         (active-entries (buffer-local-value 'altodo-sidebar--active-entries (current-buffer)))
-         (face-spec (plist-get entry :face))
-         (face-rules (plist-get entry :face-rules)))
-
-    (cond
-      ;; Layer 1: Selection mode (highest priority)
-      ((and selected-filters (member entry selected-filters))
-       'altodo-sidebar-selected-filter-face)
-
-      ((and active-entries (equal (car active-entries) entry))
-       'altodo-sidebar-active-filter-face)
-
-      ;; Layer 2: Face rules (title-wide face)
-      ((and (plist-get entry :count-format)
-            (or (plist-get entry :face-rules)
-                (plist-get entry :count-face-rules)))
-       (let ((count (altodo--get-entry-count entry source-buffer))
-             (rules (or face-rules (plist-get entry :count-face-rules))))
-         (let ((face-rules-result (altodo--evaluate-face-rules rules count)))
-           (if face-rules-result
-               face-rules-result
-             ;; If no rule matches, fall through to Layer 4/5
-             (or (altodo-sidebar--resolve-face face-spec)
-                 (altodo-sidebar--default-face (plist-get entry :type)
-                                        (plist-get entry :nest)))))))
-
-      ;; Layer 4: Static face
-      ((altodo-sidebar--resolve-face face-spec)
-       (altodo-sidebar--resolve-face face-spec))
-
-      ;; Layer 5: Default face
-      (t
-        (altodo-sidebar--default-face (plist-get entry :type)
-                               (plist-get entry :nest))))))
-
+  (pcase (altodo-sidebar--entry-state entry)
+    ('selected 'altodo-sidebar-selected-filter-face)
+    ('active 'altodo-sidebar-active-filter-face)
+    (_
+     (or (when (and (plist-get entry :face-rules)
+                    (altodo--count-format-p entry))
+           (altodo-sidebar--resolve-face
+            (altodo--evaluate-face-rules
+             (plist-get entry :face-rules)
+             (altodo--get-entry-count entry source-buffer
+                                      combined-predicate combine-mode))))
+         (altodo-sidebar--resolve-face (plist-get entry :face))
+         (altodo-sidebar--default-face (plist-get entry :type)
+                                       (plist-get entry :nest))))))
 
 (defun altodo-sidebar--resolve-face (face-spec)
-  "Resolve FACE-SPEC to actual face symbol or spec.
+  "Return FACE-SPEC as a value of the `face' text property, or nil.
 FACE-SPEC can be:
-- nil (use default)
-- face symbol (e.g., \\='bold, \\='done-face)
-- face spec (e.g., ((t (:foreground \"green\"))))"
+- a face name, such as \\='bold
+- a list of face names, such as \\='(bold error)
+- a plist of face attributes, such as \\='(:foreground \"red\")
+- a defface-style spec, such as \\='((t (:foreground \"red\"))); only
+  its clause for all displays (the one with t) is used
+Anything else, such as an odd plist, is invalid and gives nil."
   (cond
-   ;; nil - use default (handled by caller)
    ((null face-spec) nil)
-
-   ;; Face spec (list starting with (t ...))
-   ;; Convert to anonymous face (list of attributes)
-   ((and (listp face-spec) (listp (car face-spec)))
-    ;; Extract attributes from ((t (:foreground "red" ...)))
-    ;; to (:foreground "red" ...)
-    (let ((display-spec (car face-spec)))
-      (when (eq (car display-spec) 't)
-        (cadr display-spec))))
-
-   ;; Face symbol
-   ((symbolp face-spec)
-    face-spec)
-
-   (t nil)))
+   ((keywordp face-spec) nil)
+   ((symbolp face-spec) face-spec)
+   ((not (proper-list-p face-spec)) nil)
+   ;; Plist of attributes.
+   ((keywordp (car face-spec))
+    (and (cl-evenp (length face-spec)) face-spec))
+   ;; defface-style: the attributes of the `t' clause.
+   ((consp (car face-spec))
+    (let ((attributes (cadr (assq t face-spec))))
+      (and (keywordp (car-safe attributes))
+           (cl-evenp (length attributes))
+           attributes)))
+   ;; List of face names.
+   ((cl-every (lambda (face) (and face (symbolp face) (not (keywordp face))))
+              face-spec)
+    face-spec)))
 
 (defun altodo-sidebar--default-face (type nest)
   "Get default face for TYPE and NEST level.
@@ -5694,6 +5684,23 @@ buffer is updated at each edit until it is released or collected.")
   (mapc (lambda (marker) (set-marker marker nil)) altodo--heading-markers)
   (setq altodo--heading-markers nil))
 
+(defun altodo--inherited-properties (entry excluded)
+  "Return the properties of the dynamic ENTRY as a plist, except EXCLUDED.
+The expanded entries take them over, so that :face-rules, :display-context
+and the like work as they do for an entry that is not dynamic."
+  (let (result)
+    (cl-loop for (key value) on entry by #'cddr
+             unless (memq key excluded)
+             do (setq result (nconc result (list key value))))
+    result))
+
+(defconst altodo--dynamic-own-properties
+  '(:title :type :pattern :nest :count-format :action :command :marker
+    :count-pattern-simple :count-pattern-lambda :dynamic-type
+    :tag-mode :tag-ignore-value :sort-by :sort :limit :level :indent-by-level
+    :exclude-person :exclude-tag :exclude-tag-value)
+  "Properties of a dynamic entry that its expanded entries do not take over.")
+
 (defun altodo--expand-heading-filter (entry source-buffer)
   "Expand the heading filter ENTRY to `heading-jump' entries.
 The headings are taken from SOURCE-BUFFER in buffer order.  The count of
@@ -5704,16 +5711,16 @@ contains `%n' and :count-format is not nil."
            (levels (let ((value (plist-get entry :level)))
                      (if (listp value) value (list value))))
            (limit (plist-get entry :limit))
-           (count-format (if (plist-member entry :count-format)
-                             (plist-get entry :count-format)
-                           t))
-           (count-p (and count-format (string-match-p "%n" title)))
+           (count-p (and (altodo--count-format-p entry)
+                         (or (string-match-p "%n" title)
+                             (plist-get entry :face-rules)
+                             (plist-get entry :count-face-rules))))
+           (inherited (altodo--inherited-properties
+                       entry (cons :face-count altodo--dynamic-own-properties)))
            (indent-by-level (if (plist-member entry :indent-by-level)
                                 (plist-get entry :indent-by-level)
                               t))
            (nest (or (plist-get entry :nest) 0))
-           (face (plist-get entry :face))
-           (face-count (plist-get entry :face-count))
            (headings (with-current-buffer source-buffer
                        (altodo--collect-headings count-p))))
       (when levels
@@ -5731,11 +5738,14 @@ contains `%n' and :count-format is not nil."
                         (pcase (aref placeholder 1)
                           (?s text)
                           (?l (number-to-string level))
-                          (_ (cond
-                              ((not count-p) placeholder)
-                              (face-count (propertize (number-to-string open-count)
-                                                      'face face-count))
-                              (t (number-to-string open-count))))))
+                          (_ (if (not count-p)
+                                 placeholder
+                               (let ((count-face
+                                      (altodo--count-face entry open-count))
+                                     (count-text (number-to-string open-count)))
+                                 (if count-face
+                                     (propertize count-text 'face count-face)
+                                   count-text))))))
                       title t t)
              :type heading-jump
              :nest ,(+ nest (altodo--heading-indent-offset level indent-by-level))
@@ -5743,7 +5753,8 @@ contains `%n' and :count-format is not nil."
                                                 source-buffer)))
                         (push marker altodo--heading-markers)
                         marker)
-             ,@(when face `(:face ,face)))))
+             ,@(when count-p `(:count-format t :count-value ,open-count))
+             ,@inherited)))
        headings))))
 
 (defun altodo--format-placeholder (text replacements)
@@ -5774,12 +5785,10 @@ SOURCE-BUFFER and COMBINED-PREDICATE are as in `altodo--expand-dynamic-filter'."
                        "name-only"))
          (sort-by (or (plist-get entry :sort-by) "alpha"))
          (limit (plist-get entry :limit))
-         (count-format (if (plist-member entry :count-format)
-                           (plist-get entry :count-format)
-                         t))
+         (count-format (altodo--count-format-p entry))
          (nest (or (plist-get entry :nest) 0))
-         (face (plist-get entry :face))
-         (face-count (plist-get entry :face-count))
+         (inherited (altodo--inherited-properties
+                     entry altodo--dynamic-own-properties))
          (title (plist-get entry :title))
          (exclude-person (plist-get entry :exclude-person))
          (exclude-tag (plist-get entry :exclude-tag))
@@ -5809,9 +5818,8 @@ SOURCE-BUFFER and COMBINED-PREDICATE are as in `altodo--expand-dynamic-filter'."
                   :type search-simple
                   :pattern ,pattern
                   :nest ,nest
-                  ,@(when face `(:face ,face))
-                  ,@(when face-count `(:face-count ,face-count))
-                  ,@(when count-format `(:count-format ,count-format)))))
+                  ,@(when count-format `(:count-format ,count-format))
+                  ,@inherited)))
             limited)))
 
 (defun altodo--find-line-with-tag (tag value)
@@ -5880,56 +5888,111 @@ searching for its parent would scan up to the beginning of the buffer."
                            (altodo--has-seq-tasks-tag)))))))))
       (and parent-is-seq-tasks previous-sibling-open))))
 
-;;; Helper: Check if string has face property
-
-(defun altodo--string-has-face-property (str)
-  "Return t if STR has any face property, nil otherwise."
-  (let ((has-face nil))
-    (dotimes (i (length str))
-      (when (get-text-property i 'face str)
-        (setq has-face t)))
-    has-face))
+;;; Helper: face of text
 
 (defun altodo--apply-face-to-unfaced-text (start end face)
   "Apply FACE to text between START and END that lacks face property."
   (let ((pos start))
     (while (< pos end)
-      (unless (get-text-property pos 'face)
-        (put-text-property pos (1+ pos) 'face face))
-      (setq pos (1+ pos)))))
+      (let ((next (or (next-single-property-change pos 'face nil end) end)))
+        (unless (get-text-property pos 'face)
+          (put-text-property pos next 'face face))
+        (setq pos next)))))
 
 ;;; Sidebar Title Expansion
+
+(defvar altodo--reported-face-rules nil
+  "Invalid face rules that were reported, so that each is reported once.")
+
+(defun altodo--report-invalid-face-rule (rule)
+  "Show a message that the face RULE is invalid, once for each RULE."
+  (unless (member rule altodo--reported-face-rules)
+    (push rule altodo--reported-face-rules)
+    (message "altodo: ignored the invalid face rule %S" rule)))
+
+(defun altodo--face-rule-valid-p (rule)
+  "Return non-nil if RULE has the form (OP NUMBER FACE).
+OP is one of the comparison operators.  Only these are called: the rules
+may come from .altodo-locals.el."
+  (and (proper-list-p rule)
+       (= (length rule) 3)
+       (memq (nth 0 rule) '(< > <= >= = /=))
+       (numberp (nth 1 rule))))
 
 (defun altodo--evaluate-face-rules (rules count)
   "Evaluate RULES against COUNT, return first matching face or nil.
 RULES: ((OP N FACE) ...) e.g. ((>= 10 \\='face1) (>= 1 \\='face2) (= 0
-\\='face3))"
-  (catch 'found
-    (dolist (rule rules)
-      ;; Only comparison operators: the rules may come from .altodo-locals.el.
-      (when (and (integerp count)
-                 (memq (nth 0 rule) '(< > <= >= = /=))
-                 (funcall (nth 0 rule) count (nth 1 rule)))
-        (throw 'found (nth 2 rule))))))
+\\='face3)).  An invalid rule is skipped and reported once."
+  (cond
+   ((not (proper-list-p rules))
+    (altodo--report-invalid-face-rule rules)
+    nil)
+   ((integerp count)
+    (catch 'found
+      (dolist (rule rules)
+        (cond
+         ((not (altodo--face-rule-valid-p rule))
+          (altodo--report-invalid-face-rule rule))
+         ((funcall (nth 0 rule) count (nth 1 rule))
+          (throw 'found (nth 2 rule)))))))))
 
 (defvar altodo--count-cache nil
   "Hash table (ENTRY to count) while the sidebar is drawn, otherwise nil.
 The buffer does not change during a drawing, so the title and the face of an
 entry can share one count.")
 
+(defvar-local altodo--count-memo nil
+  "Counts of the filter entries in this buffer, as (STAMP . TABLE).
+TABLE maps an entry to its count without a combined predicate.  It is used
+while STAMP is the same, see `altodo--count-memo-stamp'.")
+
+(defun altodo--count-memo-stamp ()
+  "Return what the counts of the current buffer depend on.
+These are the text, the narrowing and today (for dates), so a click, a
+selection or a change of AND/OR does not count the buffer again."
+  (list (buffer-chars-modified-tick) (point-min) (point-max)
+        (altodo--today-date-list)))
+
+(defun altodo--count-memoizable-p (entry)
+  "Return non-nil if the count of ENTRY depends only on the buffer.
+A function as the pattern may read anything, so its count is not kept."
+  (seq-every-p (lambda (key)
+                 (let ((value (plist-get entry key)))
+                   (or (null value) (stringp value))))
+               '(:pattern :count-pattern-simple :count-pattern-lambda)))
+
+(defun altodo--memoized-entry-count (entry source-buffer)
+  "Return the count of ENTRY in SOURCE-BUFFER, kept while the buffer is the same."
+  (with-current-buffer (or source-buffer (current-buffer))
+    (let ((stamp (altodo--count-memo-stamp)))
+      (unless (equal (car altodo--count-memo) stamp)
+        (setq altodo--count-memo (cons stamp (make-hash-table :test 'equal))))
+      (let ((cached (gethash entry (cdr altodo--count-memo) 'miss)))
+        (if (not (eq cached 'miss))
+            cached
+          (let ((count (altodo--compute-entry-count entry source-buffer)))
+            ;; nil: the code of ENTRY is not permitted to run (yet).
+            (when (and count (altodo--count-memoizable-p entry))
+              (puthash entry count (cdr altodo--count-memo)))
+            count))))))
+
 (defun altodo--get-entry-count (entry &optional source-buffer combined-predicate combine-mode)
   "Get match count for ENTRY from SOURCE-BUFFER, using `altodo--count-cache'.
-COMBINED-PREDICATE and COMBINE-MODE are as in `altodo--compute-entry-count'."
-  (if (null altodo--count-cache)
-      (altodo--compute-entry-count entry source-buffer combined-predicate
-                                   combine-mode)
-    (let ((cached (gethash entry altodo--count-cache 'miss)))
-      (if (not (eq cached 'miss))
-          cached
-        (puthash entry
-                 (altodo--compute-entry-count entry source-buffer
-                                              combined-predicate combine-mode)
-                 altodo--count-cache)))))
+COMBINED-PREDICATE and COMBINE-MODE are as in `altodo--compute-entry-count'.
+Without COMBINED-PREDICATE the count is also kept while the buffer does not
+change (`altodo--memoized-entry-count')."
+  (let ((compute
+         (lambda ()
+           (if combined-predicate
+               (altodo--compute-entry-count entry source-buffer
+                                            combined-predicate combine-mode)
+             (altodo--memoized-entry-count entry source-buffer)))))
+    (if (null altodo--count-cache)
+        (funcall compute)
+      (let ((cached (gethash entry altodo--count-cache 'miss)))
+        (if (not (eq cached 'miss))
+            cached
+          (puthash entry (funcall compute) altodo--count-cache))))))
 
 (defun altodo--compute-entry-count (entry &optional source-buffer combined-predicate combine-mode)
   "Get match count for ENTRY from SOURCE-BUFFER.
@@ -5938,43 +6001,46 @@ COMBINED-PREDICATE.
 COMBINE-MODE is \\='and or \\='or, used to determine whether to apply
 combined-predicate.
 Returns integer (number of matching lines), or nil if the code of ENTRY
-is not permitted to run."
+is not permitted to run.  An entry with :count-value (an expanded heading)
+has the count already."
   (when (altodo--entry-code-permitted-p entry)
-    (let* ((type (plist-get entry :type))
-           (pattern (plist-get entry :pattern))
-           (count-pattern-simple (plist-get entry :count-pattern-simple))
-           (count-pattern-lambda (plist-get entry :count-pattern-lambda))
-           ;; Only the task lines are counted unless the entry says nil.
-           (exclude-others (if (plist-member entry :count-exclude-others)
-                               (plist-get entry :count-exclude-others)
-                             t))
-           (match-pattern (cond
-                           ((eq type 'search-simple) (or count-pattern-simple pattern))
-                           ((eq type 'search-lambda) (or count-pattern-lambda pattern))
-                           (t pattern)))
-           ;; エントリの predicate を事前にコンパイル
-           (entry-pred (when match-pattern
-                         (if (functionp match-pattern)
-                             match-pattern
-                           (altodo--compile-simple-pattern match-pattern))))
-           ;; 複合フィルタ下でのカウント用 predicate
-           (effective-predicate
-            (cond
-             ;; combined-predicate がない場合: entry-pred のみ
-             ((not combined-predicate) entry-pred)
-             ;; entry-pred がない場合: combined-predicate のみ
-             ((not entry-pred) combined-predicate)
-             ;; OR モード: combined-predicate を無視（全体のカウント）
-             ((eq combine-mode 'or) entry-pred)
-             ;; AND モードまたはデフォルト: entry AND combined
-             (t
-              (lambda ()
-                (and (funcall entry-pred)
-                     (funcall combined-predicate)))))))
-      (if (null match-pattern)
-          0
-        (progn
-          (altodo--count-matching-lines effective-predicate exclude-others source-buffer))))))
+    (if (plist-member entry :count-value)
+        (plist-get entry :count-value)
+      (let* ((type (plist-get entry :type))
+             (pattern (plist-get entry :pattern))
+             (count-pattern-simple (plist-get entry :count-pattern-simple))
+             (count-pattern-lambda (plist-get entry :count-pattern-lambda))
+             ;; Only the task lines are counted unless the entry says nil.
+             (exclude-others (if (plist-member entry :count-exclude-others)
+                                 (plist-get entry :count-exclude-others)
+                               t))
+             (match-pattern (cond
+                             ((eq type 'search-simple) (or count-pattern-simple pattern))
+                             ((eq type 'search-lambda) (or count-pattern-lambda pattern))
+                             (t pattern)))
+             ;; エントリの predicate を事前にコンパイル
+             (entry-pred (when match-pattern
+                           (if (functionp match-pattern)
+                               match-pattern
+                             (altodo--compile-simple-pattern match-pattern))))
+             ;; 複合フィルタ下でのカウント用 predicate
+             (effective-predicate
+              (cond
+               ;; combined-predicate がない場合: entry-pred のみ
+               ((not combined-predicate) entry-pred)
+               ;; entry-pred がない場合: combined-predicate のみ
+               ((not entry-pred) combined-predicate)
+               ;; OR モード: combined-predicate を無視（全体のカウント）
+               ((eq combine-mode 'or) entry-pred)
+               ;; AND モードまたはデフォルト: entry AND combined
+               (t
+                (lambda ()
+                  (and (funcall entry-pred)
+                       (funcall combined-predicate)))))))
+        (if (null match-pattern)
+            0
+          (progn
+            (altodo--count-matching-lines effective-predicate exclude-others source-buffer)))))))
 
 (defun altodo--count-matching-lines (pattern &optional exclude-others source-buffer)
   "Count lines matching PATTERN in SOURCE-BUFFER.
@@ -5998,26 +6064,38 @@ SOURCE-BUFFER defaults to current buffer if not specified."
           (forward-line 1))))
     count))
 
+(defun altodo--count-format-p (entry)
+  "Return non-nil if `%n' of the filter ENTRY is replaced with the count.
+:count-format is t when ENTRY does not have it."
+  (if (plist-member entry :count-format)
+      (plist-get entry :count-format)
+    t))
+
+(defun altodo--count-face (entry count)
+  "Return the face of the number COUNT of the filter ENTRY, or nil.
+:count-face-rules wins over :face-count."
+  (or (when (plist-get entry :count-face-rules)
+        (altodo--evaluate-face-rules (plist-get entry :count-face-rules) count))
+      (plist-get entry :face-count)))
+
 (defun altodo--format-sidebar-title (pattern-spec &optional source-buffer combined-predicate combine-mode)
   "Generate :title from PATTERN-SPEC.
-Replace %n with match count if :count-format is t.
+Replace %n with match count unless :count-format is nil.
 Apply :face-count or :count-face-rules to the count if specified.
 SOURCE-BUFFER is the main altodo buffer for counting matches.
 COMBINED-PREDICATE is the combined predicate for dynamic count calculation.
 COMBINE-MODE is \\='and or \\='or, used to determine whether to apply
 combined-predicate.
 Returns formatted title string."
-  (let ((title (plist-get pattern-spec :title))
-        (count-format (plist-get pattern-spec :count-format))
-        (face-count (plist-get pattern-spec :face-count))
-        (count-face-rules (plist-get pattern-spec :count-face-rules)))
-    (if (not (and count-format (string-match "%n" title)))
+  (let ((title (plist-get pattern-spec :title)))
+    (if (not (and (stringp title)
+                  (altodo--count-format-p pattern-spec)
+                  (string-match "%n" title)))
         title
       (let* ((count (altodo--get-entry-count pattern-spec source-buffer combined-predicate combine-mode))
              (count-str (if count (number-to-string count) "?"))
-             (resolved-face (or (when count-face-rules
-                                  (altodo--evaluate-face-rules count-face-rules count))
-                                face-count)))
+             (resolved-face (altodo-sidebar--resolve-face
+                             (altodo--count-face pattern-spec count))))
         (when resolved-face
           (setq count-str (propertize count-str 'face resolved-face)))
         (replace-regexp-in-string "%n" count-str title t t)))))
@@ -6068,14 +6146,6 @@ Creates sidebar buffer with filter patterns from .altodo-locals.el."
           (when sidebar-buf
             (with-current-buffer sidebar-buf
               (altodo--update-sidebar-modeline))))))))
-
-(defun altodo-sidebar--update-active-entry (entry)
-  "Update active ENTRY in sidebar buffer and refresh."
-  (let ((sidebar-buffer (altodo--get-sidebar-buffer)))
-    (when sidebar-buffer
-      (with-current-buffer sidebar-buffer
-        (setq-local altodo-sidebar--active-entries (list entry)))))
-  (altodo-sidebar-refresh))
 
 (defun altodo--get-display-context-option (entry)
   "Return the :display-context of filter ENTRY.
@@ -6144,18 +6214,9 @@ Extracts pattern from button and applies filter to altodo buffer."
               (with-current-buffer source-buffer
                 (call-interactively command))))
 
-           ;; Search lambda - apply custom predicate to source buffer
-           ((and pattern (eq type 'search-lambda))
-            (with-current-buffer source-buffer
-              (altodo--filter-lines pattern show-multiline))
-            (altodo-sidebar--update-active-entry entry))
-
-           ;; Search simple - apply filter to source buffer
-           ((and pattern (eq type 'search-simple))
-            (setq altodo-sidebar--selected-filters nil
-                  altodo-sidebar--selection-mode 'single
-                  altodo-sidebar--current-combined-predicate nil)
-            (altodo-sidebar--update-active-entry entry)
+           ;; Search - apply the pattern or the predicate to the source buffer
+           ((and pattern (memq type '(search-simple search-lambda)))
+            (altodo-sidebar--set-selection (list entry) 'single)
             (with-current-buffer source-buffer
               (altodo--filter-lines (altodo--compile-filter-predicate entry)
                                     show-multiline
@@ -6216,6 +6277,8 @@ Extracts pattern from button and applies filter to altodo buffer."
   "Toggle ENTRY in multiple selection mode.
 Add or remove ENTRY from altodo-sidebar--selected-filters.
 If no filters are selected after removal, clear the filter.
+A click on an entry is not part of a multiple selection: the first entry
+chosen after a click starts a new selection.
 A heading entry cannot be selected."
   (when (eq (plist-get entry :type) 'heading-jump)
     (message "A heading entry cannot be selected"))
@@ -6225,36 +6288,23 @@ A heading entry cannot be selected."
                  (altodo--entry-code-permitted-p entry t)))
     (altodo--with-sidebar-buffer
      (lambda ()
-       ;; Switch to multiple selection mode
-       (setq altodo-sidebar--active-entries nil
-             altodo-sidebar--selection-mode 'multiple)
-
-       (let ((cursor-pos (point)))
-         (if (member entry altodo-sidebar--selected-filters)
-             ;; Remove from selection
-             (progn
-               (setq altodo-sidebar--selected-filters
-                     (delete entry altodo-sidebar--selected-filters)))
-           ;; Add to selection
-           (push entry altodo-sidebar--selected-filters))
-
-         ;; If no filters selected, clear the filter and reset mode
-         (if (null altodo-sidebar--selected-filters)
-             (progn
-               (setq altodo-sidebar--selection-mode nil
-                     altodo-sidebar--current-combined-predicate nil)
-               (let ((source-buf altodo-sidebar--source-buffer))
-                 (when (and source-buf (buffer-live-p source-buf))
-                   (with-current-buffer source-buf
-                     (altodo-filter-clear)))))
-           ;; Apply combined filter
-           (altodo-sidebar--apply-combined-filter))
-
-         ;; Refresh sidebar to update faces
-         (altodo-sidebar-refresh)
-         (altodo--update-sidebar-modeline)
-
-         ;; Restore cursor position
+       (let* ((cursor-pos (point))
+              (current (unless (eq altodo-sidebar--selection-mode 'single)
+                         altodo-sidebar--selected-filters))
+              (selected (if (member entry current)
+                            (delete entry (copy-sequence current))
+                          (cons entry current)))
+              (source-buf altodo-sidebar--source-buffer))
+         (if (null selected)
+             ;; Nothing is selected: clear the filter and the selection.
+             (when (and source-buf (buffer-live-p source-buf))
+               (with-current-buffer source-buf
+                 (altodo-filter-clear)))
+           (altodo-sidebar--set-selection selected 'multiple)
+           (altodo-sidebar--apply-combined-filter)
+           ;; Refresh sidebar to update faces
+           (altodo-sidebar-refresh)
+           (altodo--update-sidebar-modeline))
          (goto-char (min cursor-pos (point-max))))))))
 
 (defun altodo-sidebar--apply-combined-filter ()
@@ -6272,10 +6322,12 @@ Combines predicates using altodo-sidebar--combine-mode."
         (let* ((predicates (mapcar #'altodo--compile-filter-predicate selected-filters))
                (combined-predicate (altodo--combine-predicates predicates combine-mode)))
 
-          ;; predicate を変数に保存（altodo-sidebar--render で再利用）
+          ;; Keep the predicate for the counts of the next drawing.
           (altodo--with-sidebar-buffer
            (lambda ()
-             (setq altodo-sidebar--current-combined-predicate combined-predicate)))
+             (altodo-sidebar--set-selection selected-filters
+                                            altodo-sidebar--selection-mode
+                                            combined-predicate)))
 
           ;; Apply combined filter
           (altodo--filter-lines combined-predicate t 'heading-only))))))
@@ -6302,7 +6354,7 @@ Command: `altodo-sidebar-set-and-mode'"
   (altodo--with-sidebar-buffer
    (lambda ()
      (setq altodo-sidebar--combine-mode 'and)
-     (when altodo-sidebar--selected-filters
+     (when (altodo-sidebar--multiple-p)
        (altodo-sidebar--apply-combined-filter)
        (altodo-sidebar-refresh))
      (altodo--update-sidebar-modeline))))
@@ -6314,7 +6366,7 @@ Command: `altodo-sidebar-set-or-mode'"
   (altodo--with-sidebar-buffer
    (lambda ()
      (setq altodo-sidebar--combine-mode 'or)
-     (when altodo-sidebar--selected-filters
+     (when (altodo-sidebar--multiple-p)
        (altodo-sidebar--apply-combined-filter)
        (altodo-sidebar-refresh))
      (altodo--update-sidebar-modeline))))
@@ -6325,7 +6377,7 @@ Command: `altodo-sidebar-toggle-combine-mode'"
   (interactive)
   (altodo--with-sidebar-buffer
    (lambda ()
-     (if (not altodo-sidebar--selected-filters)
+     (if (not (altodo-sidebar--multiple-p))
          (message "No filters selected")
        (setq altodo-sidebar--combine-mode
              (if (eq altodo-sidebar--combine-mode 'and) 'or 'and))
@@ -6342,7 +6394,7 @@ Command: `altodo-sidebar-toggle-combine-mode'"
 (defun altodo-sidebar--get-mode-line-string ()
   "Generate mode-line string for multiple selection display.
 Returns nil if no filters selected, otherwise returns display string."
-  (when altodo-sidebar--selected-filters
+  (when (altodo-sidebar--multiple-p)
     (let ((mode-str (upcase (symbol-name altodo-sidebar--combine-mode))))
       (concat " Multiple: " (number-to-string (length altodo-sidebar--selected-filters))
               " filters, "

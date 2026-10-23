@@ -397,11 +397,10 @@ sidebar) or \"filter\" (apply a DSL pattern).  The time is also reported."
     (if (null sidebar)
         "not created"
       (with-current-buffer sidebar
-        (format "%s; mode %s; selection %s; selected %d; active %d"
+        (format "%s; mode %s; selection %s; selected %d"
                 (if (get-buffer-window sidebar t) "shown" "hidden")
                 altodo-sidebar--combine-mode altodo-sidebar--selection-mode
-                (length altodo-sidebar--selected-filters)
-                (length altodo-sidebar--active-entries))))))
+                (length altodo-sidebar--selected-filters))))))
 
 ;;;###autoload
 (defun altodo-debug-report ()

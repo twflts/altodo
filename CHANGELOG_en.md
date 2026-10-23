@@ -7,6 +7,9 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Changes that affect compatibility
 
+- When `:count-format` is omitted in a sidebar entry, it is `t` (before: `nil` for an ordinary entry, `t` for dynamic filters and headings). `%n` in `:title` is replaced with the count. Give `:count-format nil` to keep `%n` as it is
+- `:count-face-rules` applies to the digits of `%n` only. It no longer applies to the whole row when `:face-rules` is absent (as in section 13.6 of the design document)
+- The internal variable `altodo-sidebar--active-entries` and the internal function `altodo-sidebar--update-active-entry` were removed. The clicked entry is held in `altodo-sidebar--selected-filters` (with `altodo-sidebar--selection-mode` `single`)
 - Code written in `.altodo-locals.el` does not run by default: the lambda of `search-lambda`, `:count-pattern-lambda`, and a `:command` whose name does not start with `altodo-`. To run it, set `altodo-locals-code-policy` to `confirm` (runs only when the SHA-256 of the file is trusted) or `allow` (always runs). Code in `altodo-default-filter-patterns` runs as before
 - The internal functions without a prefix, `sidebar-*`, are renamed to `altodo-sidebar--*` (`sidebar-display` is now `altodo-sidebar--display`). There are no compatibility aliases
 - The built-in self-test functions (such as `altodo-run-full-test-suite`) are removed. Tests are unified as ERT tests in `test/`
@@ -51,6 +54,11 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Changed
 
+- The expansion of dynamic filters (`:type dynamic`) and headings passes on the properties it does not use itself, such as `:face-rules`, `:count-face-rules`, `:count-exclude-others`, `:display-context` and `:multiline-comment`, to the expanded entries (before: only `:face`, `:face-count` and `:count-format`). `:face-rules` of a heading is evaluated with the number of unfinished tasks under the heading
+- The values of `:face`, `:face-count`, `:face-rules` and `:count-face-rules` can be a face name, a list of face names, a plist (`(:foreground "red")`) or the defface style (`((t (:foreground "red")))`). `:face` ignored a plist before
+- A rule of `:face-rules` or `:count-face-rules` with an invalid form is ignored alone, and a message is shown once (before: the whole sidebar was not drawn)
+- The count that `:face-rules` uses in a multiple selection is the same value as `%n` in the title (with the combined predicate), also for a title without `%n`
+- A click in the sidebar is faster. One click drew the sidebar twice and now draws it once, and the counts of the entries are reused while the buffer does not change. For 5000 lines and the default patterns, it takes about 0.2 s (second click on) instead of about 1.4 s
 - The sidebar buffer has its own major mode, `altodo-sidebar-mode`, derived from `special-mode`. The key bindings of `special-mode` work too
 - The due entries of the default patterns ("Open and Over Due" and so on) use DSL patterns instead of a `lambda`. The display and the counts are the same
 - The `:count-face-rules` of "Star (+)" in the default patterns was removed (the count was shown in `error` from 5 and `warning` from 1). Like "Priority (!)", the count has no color
@@ -66,6 +74,10 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Fixed
 
+- A click on a `search-lambda` entry did not end a multiple selection. `:display-context` is applied too
+- After `altodo-filter-by-pattern` or `altodo-filter-show-*`, the selection (color) of the sidebar did not match the actual filter. They now clear the selection of the sidebar and draw it again
+- `c` in the sidebar did not clear the filter of the source buffer
+- After the sidebar was hidden and shown again, the counts of a multiple selection returned to the total
 - `C-c C-v f c`, `C-c C-v s t` and `C-c C-v s r` did not work on headings and plain text lines (the Markdown command ran instead); they now work on every line
 - The time of the fontification was proportional to the square of the number of lines; fontifying a whole buffer of 5000 lines took 53 seconds
 - With a format for `#done`, the tag got a time zone offset or was cut at a space

@@ -200,14 +200,22 @@ buffer-invisibility-spec により非表示
 **値**: シンボル（`'done`, `'progress`, `'tag`, など）または `nil`
 
 
-#### altodo-sidebar--selected-filters
+#### サイドバーの選択の状態
 
 ```elisp
-(defvar-local altodo-sidebar--selected-filters nil
-  "List of selected filter entries.")
+(defvar-local altodo-sidebar--selected-filters nil)
+(defvar-local altodo-sidebar--selection-mode nil)
+(defvar-local altodo-sidebar--current-combined-predicate nil)
 ```
 
-**説明**: サイドバーで選択されたフィルタのリスト
+**説明**: サイドバーのバッファのバッファローカル変数。選択の状態を表す
+**値**:
+- `altodo-sidebar--selected-filters`: 選択されたフィルタエントリのリスト
+- `altodo-sidebar--selection-mode`: `single`（エントリをクリックした状態。リストの要素は 1 つ）、`multiple`（`s` で複数選択した状態）、`nil`（選択なし）
+- `altodo-sidebar--current-combined-predicate`: `multiple` のときの、結合した predicate。カウントに使う
+
+**更新**: 3 つの変数は `altodo-sidebar--set-selection` だけが変更する。クリック、複数選択、`altodo-filter-clear`、`altodo-filter-show-*`、`altodo-filter-by-pattern` は、いずれもこの関数を通る。選択の状態が、実際のフィルタと食い違わない
+**参照**: `altodo-sidebar--entry-state` が、エントリの状態（`selected`、`active`、`nil`）を返す。`single` のエントリは `active`、`multiple` のエントリは `selected` である
 
 
 #### altodo-sidebar--combine-mode
@@ -260,28 +268,22 @@ buffer-invisibility-spec により非表示
    - `'(separator group-header comment nil)` の場合: `action` = `nil`（クリック不可）
    - それ以外の場合: `action` = `#'altodo-sidebar--apply-filter`（クリック可能）
 
-2. `:type` に基づいて face を決定
-   - `nil` または `comment`: `'altodo-sidebar-comment-face`
-   - `group-header`: `'altodo-sidebar-group-header-face`
-   - `search-simple`: `'altodo-sidebar-search-simple-face`
-   - `search-lambda`: `'altodo-sidebar-search-lambda-face`
-   - `command`: `'altodo-sidebar-command-face`
-   - `separator`: `'altodo-sidebar-separator-face`
-   - それ以外: `'default`
+2. `altodo--format-sidebar-title` でタイトルを作る。`%n` の数字には、カウント部分の face が付く
 
-3. クリック可能な場合: `insert-button` でボタンを作成
-4. クリック不可の場合: テキストを挿入（ボタンなし）
+3. `altodo-sidebar--get-face` で行全体の face を求め、タイトルのうち face のない文字に付ける。選択されたエントリ（`selected`、`active`）は、タイトルの face を取り除き、タイトル全体にその face を付ける
+
+4. クリック可能な場合: `make-text-button` でボタンにする。クリック不可の場合: ボタンにせず、読み取り専用にする。区切り線（`separator`）は、行全体に face を付ける
+
+行全体の face の付け方は、この 1 つの経路だけである。
 
 
 #### altodo-sidebar--get-face
 
-**説明**: エントリの face を決定（Layer 構造）
+**説明**: エントリの行全体の face を決定（Layer 構造）
 
-**処理順序**: 11 節の Layer 構造に従う。
+**処理順序**: 11.1 節の Layer 構造に従う。カウント部分（`%n`）の face は、`altodo--count-face` が決める（11.2 節）。
 
-**face-rules フォールバック**:
-- face-rules がマッチしない場合、`:face` で指定した face にフォールバック
-- `:face` も指定されていない場合、デフォルト face を使用
+**カウント**: `:face-rules` の評価に使うカウントは、タイトルの `%n` と同じ値である（`%n` がなくても数える）。複数選択のときは、結合した predicate を適用したカウントである。
 
 
 #### altodo-sidebar--apply-filter
@@ -293,10 +295,12 @@ buffer-invisibility-spec により非表示
    - `search-simple`: DSL パターンをコンパイルして predicate を生成
    - `search-lambda`: lambda 関数を predicate として使用
    - `command`: 指定したコマンドを実行
-   - `dynamic`: 値を自動収集して展開
+   - `heading-jump`: 見出しへ移動
    - `nil`/`comment`/`group-header`/`separator`: フィルタなし
 
-2. `altodo--filter-lines` で predicate を適用
+2. `search-simple` と `search-lambda` は、選択の状態を `single`（クリックしたエントリ 1 つ）にして、`altodo--filter-lines` で predicate を適用する。`:display-context` と `:multiline-comment` は、両方の種類に適用する
+
+3. サイドバーの描画は 1 回である。`command` の場合、実行したコマンドがフィルタを変えるときは、そのコマンドが選択の状態を解除する
 
 
 ### 6.4 動的フィルタ展開
@@ -371,6 +375,8 @@ buffer-invisibility-spec により非表示
 
 **返り値**: マッチしたタスクの数（整数）
 
+**再利用**: 1 回の描画の中では、エントリごとに 1 回だけ数える（タイトルと行の face が同じ値を使う）。`combined-predicate` がなく、パターンが文字列（DSL）のときは、バッファの文字、狭窄、今日の日付が同じ間、数えた結果を `altodo--count-memo` に残す。クリック、選択、AND/OR の切り替えでは、バッファを数え直さない。パターンが関数のエントリは、関数が何を読むか分からないため、毎回数える
+
 
 #### altodo--format-sidebar-title
 
@@ -384,15 +390,15 @@ buffer-invisibility-spec により非表示
 
 **処理**:
 
-1. `:title` から `%n` を検出
+1. `:title` から `%n` を検出。`:count-format` が `nil` のときは置換しない（省略したときは `t`）
 
 2. `%n` がある場合、カウントを計算
    - `altodo--get-entry-count` でマッチ数を取得
 
-3. カウントに face を適用
-   - `count-face-rules` が指定されている場合は評価
-   - `face-count` が指定されている場合は適用
-   - どちらも指定されていない場合は `:face` またはデフォルト
+3. カウント部分の face を `altodo--count-face` で決める
+   - `:count-face-rules` の最初にマッチした規則の face
+   - なければ `:face-count`
+   - どちらもなければ、カウントに face を付けない（行全体の face が付く）
 
 4. `%n` をカウント数に置換
    - カウント文字列に face プロパティを適用
@@ -435,6 +441,8 @@ buffer-invisibility-spec により非表示
 | `altodo-sidebar-set-and-mode`        | AND モードに切り替え             |
 | `altodo-sidebar-set-or-mode`         | OR モードに切り替え              |
 | `altodo-sidebar-toggle-combine-mode` | AND/OR をトグル                  |
+
+`altodo-filter-clear`、`altodo-filter-by-pattern`、`altodo-filter-show-*` は、サイドバーの選択の状態を解除して、サイドバーを描画し直す。サイドバーの `c` は、サイドバーに対応するバッファのフィルタを解除する。
 
 
 ## 7. サイドバー連携
@@ -511,7 +519,8 @@ buffer-invisibility-spec により非表示
 1. **heading-range キャッシュ**: 見出し範囲をキャッシュする
 2. **行位置の相対移動**: 行番号の昇順に処理し、前回の位置から移動する。バッファの先頭から行を数え直さない（`altodo--goto-line`）
 3. **overlay の検索範囲の限定**: 対象行の範囲の overlay だけを調べる（`overlays-in`）
-4. **見出しの範囲と行番号の一括処理**: 見出しの範囲を 1 回の走査で求め、行番号に変換する。マッチした行ごとに全見出しを調べず、overlay の一覧の更新は終了時に 1 回で行う
+4. **カウントの再利用**: バッファが変わらない間は、エントリごとのカウントを再利用する（6.4 節の `altodo--get-entry-count`）。クリックの処理時間は、5000 行（既定のパターン、20 エントリ）で約 1.4 秒から約 0.2 秒（2 回目以降。1 回目は約 0.75 秒）になる
+5. **見出しの範囲と行番号の一括処理**: 見出しの範囲を 1 回の走査で求め、行番号に変換する。マッチした行ごとに全見出しを調べず、overlay の一覧の更新は終了時に 1 回で行う
 
 
 ### 測定
@@ -526,29 +535,51 @@ buffer-invisibility-spec により非表示
 
 ## 11. Face 適用優先度（Layer 構造）
 
-### Layer 1: Selection（最優先）
-
-選択されたフィルタエントリに適用
+行全体の face と、カウント部分（`%n` の数字）の face は、別の軸で決める。
 
 
-### Layer 2: COUNT
+### 11.1 行全体の face
 
-カウント数に基づく face 適用（`:count-face-rules`）
+`altodo-sidebar--get-face` が、次の順に判定し、最初に決まったものを使う。
+
+1. Selected: `s` で複数選択されたエントリ。`altodo-sidebar-selected-filter-face`
+2. Active: クリックしたエントリ。`altodo-sidebar-active-filter-face`
+3. `:face-rules`: `:count-format` が `nil` でないとき、カウントが最初にマッチした規則の face
+4. `:face`
+5. 種類ごとの既定の face
+
+Selected と Active のエントリは、タイトルの face を取り除き、タイトル全体（カウントを含む）にその face を付ける。それ以外のエントリは、タイトルのうち face のない文字に、行全体の face を付ける。
+
+種類ごとの既定の face は次の通り。クリック不可のエントリ（`comment`、`group-header`、`separator`）も、ここで決まる。
+
+- `nil` と `comment`: `altodo-sidebar-comment-face`
+- `group-header`: `altodo-sidebar-group-header-face`
+- `search-simple` と `heading-jump`: `altodo-sidebar-search-simple-face`
+- `search-lambda`: `altodo-sidebar-search-lambda-face`
+- `command`: `altodo-sidebar-command-face`
+- `separator`: `altodo-sidebar-separator-face`
+- それ以外: `default`
 
 
-### Layer 3: Default
+### 11.2 カウント部分の face
 
-エントリに `:face` が指定されている場合
+`%n` の数字の face は、次の順に判定する。Selected と Active のエントリには適用しない。
+
+1. `:count-face-rules`: カウントが最初にマッチした規則の face
+2. `:face-count`
+3. 行全体の face（11.1 節）
+
+`:count-face-rules` と `:face-count` は、数字だけに適用する。行全体には適用しない。
 
 
-### Layer 4: Type-based
+### 11.3 カウントの値
 
-エントリ `:type` に基づくデフォルト face
+`:face-rules` と `:count-face-rules` の条件に使うカウントは、タイトルの `%n` と同じ値である。タイトルに `%n` がなくても数える。複数選択のときは、結合した predicate を適用した値になる（AND はエントリと結合した predicate の両方、OR はエントリだけ）。
 
 
-### Layer 5: Non-clickable
+### 11.4 face の指定の形
 
-クリック不可のエントリ（`comment`、`group-header`）
+`:face`、`:face-count`、`:face-rules` と `:count-face-rules` の値は、同じ関数（`altodo-sidebar--resolve-face`）で解釈する。指定できる形は 13.6 節に示す。解釈できない値は、指定がないものとして扱う。
 
 
 ## 12. 参考資料
@@ -581,9 +612,11 @@ buffer-invisibility-spec により非表示
 | `:title`                | 必須       | サイドバーに表示するタイトル。`%n` でマッチ数を表示             |
 | `:type`                 | 必須       | エントリタイプ（後述）                                          |
 | `:nest`                 | オプション | インデントレベル（デフォルト: 0）                               |
-| `:count-format`         | オプション | `t` で `%n` をカウントに置換（デフォルト: `t`）                 |
-| `:face`                 | オプション | 適用する face                                                   |
+| `:count-format`         | オプション | `nil` で `%n` を置換しない（デフォルト: `t`）                   |
+| `:face`                 | オプション | 行全体に適用する face（形は 13.6 参照）                         |
 | `:face-count`           | オプション | カウント部分 `%n` に適用する face                               |
+| `:face-rules`           | オプション | カウントに応じた行全体の face（13.6 参照）                      |
+| `:count-face-rules`     | オプション | カウントに応じたカウント部分の face（13.6 参照）                |
 | `:display-context`      | オプション | 表示コンテキスト（詳細は 13.3.1 参照）                          |
 | `:multiline-comment`    | オプション | `nil` でマッチ行の複数行コメントを表示しない（デフォルト: `t`） |
 | `:count-exclude-others` | オプション | カウント対象（詳細は 13.3.2 参照、デフォルト: `t`）             |
@@ -670,15 +703,17 @@ __具体例__
 
 表示時に値を自動収集しリスト表示する。
 
-| プロパティ           | 必須/オプション | 説明                                                     |
-| -------------------- | --------------- | -------------------------------------------------------- |
-| `:dynamic-type`      | 必須            | 収集対象（`person`, `tag`, `due`, `start`, `heading`）   |
-| `:tag-mode`          | オプション      | タグ抽出モード（`"all"`, `"name-only"`, `"with-value"`） |
-| `:exclude-person`    | オプション      | 除外する `@person` リスト                                |
-| `:exclude-tag`       | オプション      | 除外する `#tag` リスト                                   |
-| `:exclude-tag-value` | オプション      | 除外する `#tag:value` リスト                             |
-| `:sort`              | オプション      | ソート方法（`alpha`, `count`, `reverse-count`）          |
-| `:limit`             | オプション      | 表示数制限（デフォルト: nil。nil または 0 は無制限）     |
+| プロパティ           | 必須/オプション | 説明                                                         |
+| -------------------- | --------------- | ------------------------------------------------------------ |
+| `:dynamic-type`      | 必須            | 収集対象（`person`, `tag`, `due`, `start`, `heading`）       |
+| `:tag-mode`          | オプション      | タグ抽出モード（`"all"`, `"name-only"`, `"with-value"`）     |
+| `:exclude-person`    | オプション      | 除外する `@person` リスト                                    |
+| `:exclude-tag`       | オプション      | 除外する `#tag` リスト                                       |
+| `:exclude-tag-value` | オプション      | 除外する `#tag:value` リスト                                 |
+| `:sort-by`           | オプション      | 並べ替え（`"alpha"`: 昇順（既定）、`"count"`: 件数の多い順） |
+| `:limit`             | オプション      | 表示数制限（デフォルト: nil。nil または 0 は無制限）         |
+
+`:sort-by` は `person` と `tag` にだけ効く。`due` と `start` は常に昇順（日付の文字列順）である。
 
 `:tag-mode` のオプションは以下の通り。
 
@@ -690,13 +725,15 @@ __具体例__
 
 **注**: `:tag-ignore-value` と `:tag-mode "name-only"` は同様。
 
-`:dynamic-type "heading"` は、値を収集して絞り込むのではなく、見出しへ移るエントリ（`:type heading-jump`）に展開する。専用のプロパティは次の通り。`:sort`、`:exclude-*`、`:tag-mode` は無視する。
+上の表と次の `:level`、`:indent-by-level` 以外のプロパティ（`:face`、`:face-count`、`:face-rules`、`:count-face-rules`、`:count-exclude-others`、`:display-context`、`:multiline-comment` など）は、展開後のエントリに引き継ぐ。展開後のエントリは、通常のエントリと同じに動作する。
+
+`:dynamic-type "heading"` は、値を収集して絞り込むのではなく、見出しへ移るエントリ（`:type heading-jump`）に展開する。専用のプロパティは次の通り。`:sort-by`、`:exclude-*`、`:tag-mode` は無視する。
 
 - `:level`（オプション）: 対象のレベル。整数、または整数のリスト。省略は全レベル
 - `:limit`（オプション）: バッファの先頭からの見出しの数の上限。`0` または `nil` は無制限
 - `:indent-by-level`（オプション）: `t`（既定。レベル 1 をインデントなしにする）、整数 N（レベル N までをインデントなしにする）、`nil`（なし）
 
-`:title` の `%s` は見出しの文字列、`%l` はレベル、`%n` は見出しから次の見出しまでの未完了のタスク数（完了・廃止以外。`:count-format` が `nil` でなく、`:title` に `%n` があるときだけ数える）である。
+`:title` の `%s` は見出しの文字列、`%l` はレベル、`%n` は見出しから次の見出しまでの未完了のタスク数（完了・廃止以外）である。未完了のタスク数は、`:count-format` が `nil` でなく、`:title` に `%n` があるか、`:face-rules` または `:count-face-rules` があるときだけ数える。`:face-rules` と `:count-face-rules` は、この数で評価する。
 
 
 #### `search-simple`（シンプル検索）
@@ -991,8 +1028,10 @@ Tomorrow
 
 `:face-rules` と `:count-face-rules` でカウント数に基づく face を指定できる。
 
-- face-rules: フィルタ行本文全体
-- count-face-rules: フィルタ行のカウント部分 `%n` のみに適用される。この項目が存在しない場合、 `%n` には `:face-rules` や `:face` の項目が適用される
+- `:face-rules`: フィルタ行の本文全体。`:count-format` が `nil` のときは評価しない
+- `:count-face-rules`: フィルタ行のカウント部分 `%n` のみ。行全体には適用しない。この項目がないとき、`%n` には `:face-count`、それもなければ行全体の face が適用される
+
+カウントの値は、タイトルの `%n` と同じである（11.3 節）。
 
 
 ```elisp
@@ -1002,7 +1041,7 @@ Tomorrow
              (= 0 (:foreground "gray")))
 ```
 
-**書式**: `(条件 face-spec)`
+**書式**: `(条件 N face-spec)`
 
 **条件**:
 - `>= N` - N 以上
@@ -1012,13 +1051,18 @@ Tomorrow
 - `/= N` - N と等しくない
 - `< N` - N より小さい
 
-__face-spec__ は以下の通り指定できる。
+規則は上から順に評価し、最初にマッチした規則の face を使う。マッチしない場合は、行全体では `:face`、`:face` もなければ種類ごとの既定の face を使う。カウント部分では、`:face-count`、それもなければ行全体の face を使う。
 
-- face 名（`:foreground "red"`）
-- face 名リスト（`error`, `warning`, `success`）
+書式が不正な規則（条件が上の 6 つでない、N が数でない、要素が 3 つでない）は、その規則だけを無視し、規則ごとに 1 回、メッセージ `altodo: ignored the invalid face rule ...` を表示する。規則のリストがリストでない場合も、同様に無視する。サイドバーの描画は失敗しない。
+
+__face-spec__ は以下の通り指定できる。`:face`、`:face-count` の値も同じ形である。
+
+- face 名（`error`）
+- face 名のリスト（`(bold error)`）
 - plist（`(:foreground "red" :weight bold)`）
+- defface 形式（`((t (:foreground "red")))`）。`t` の節の属性を使う
 
-face-rules 内でマッチしない場合、`:face` で指定した face にフォールバック。`:face` も指定されていない場合はデフォルト face を使用。
+解釈できない値（属性の数が奇数の plist など）は、指定がないものとして扱う。
 
 
 ### 13.7 設定例

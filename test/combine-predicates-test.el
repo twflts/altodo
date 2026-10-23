@@ -137,7 +137,7 @@
   (let ((entry '(:title "Test" :type search-simple :pattern "done")))
     (with-current-buffer (get-buffer-create "*altodo-filters*")
       (setq-local altodo-sidebar--selected-filters (list entry))
-      (setq-local altodo-sidebar--active-entries nil)
+      (setq-local altodo-sidebar--selection-mode 'multiple)
       (let ((face (altodo-sidebar--get-face entry nil)))
         (should (eq face 'altodo-sidebar-selected-filter-face))))))
 
@@ -145,19 +145,10 @@
   "Test face for active filter (not in multiple selection)."
   (let ((entry '(:title "Test" :type search-simple :pattern "done")))
     (with-current-buffer (get-buffer-create "*altodo-filters*")
-      (setq-local altodo-sidebar--selected-filters nil)
-      (setq-local altodo-sidebar--active-entries (list entry))
+      (setq-local altodo-sidebar--selected-filters (list entry))
+      (setq-local altodo-sidebar--selection-mode 'single)
       (let ((face (altodo-sidebar--get-face entry nil)))
         (should (eq face 'altodo-sidebar-active-filter-face))))))
-
-(ert-deftest test-sidebar-get-face-selected-over-active ()
-  "Test that selected filter face takes priority over active filter face."
-  (let ((entry '(:title "Test" :type search-simple :pattern "done")))
-    (with-current-buffer (get-buffer-create "*altodo-filters*")
-      (setq-local altodo-sidebar--selected-filters (list entry))
-      (setq-local altodo-sidebar--active-entries (list entry))
-      (let ((face (altodo-sidebar--get-face entry nil)))
-        (should (eq face 'altodo-sidebar-selected-filter-face))))))
 
 ;;; Run tests
 

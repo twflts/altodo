@@ -49,8 +49,6 @@
             (with-current-buffer sidebar-buffer
               (setq-local altodo-sidebar--selected-filters 
                           '((:title "Open" :pattern "state:open")))
-              (setq-local altodo-sidebar--active-entries 
-                          '((:title "Open" :pattern "state:open")))
               (should altodo-sidebar--selected-filters))
             (with-current-buffer source-buffer
               (altodo-filter-clear))
@@ -61,8 +59,8 @@
       (when (buffer-live-p source-buffer)
         (kill-buffer source-buffer)))))
 
-(ert-deftest altodo-test-sidebar-buffer-update-active-entry-correct-sidebar ()
-  "Test altodo-sidebar--update-active-entry updates the correct sidebar."
+(ert-deftest altodo-test-sidebar-buffer-set-selection-correct-sidebar ()
+  "Test altodo-sidebar--set-selection changes the sidebar of the buffer."
   (let ((source-buffer (generate-new-buffer "test.altodo")))
     (unwind-protect
         (with-current-buffer source-buffer
@@ -71,9 +69,11 @@
           (let ((sidebar-buffer (altodo-sidebar--get-or-create-buffer source-buffer))
                 (entry '(:title "Open" :pattern "state:open")))
             (with-current-buffer source-buffer
-              (altodo-sidebar--update-active-entry entry))
+              (altodo-sidebar--set-selection (list entry) 'single))
             (with-current-buffer sidebar-buffer
-              (should (equal altodo-sidebar--active-entries (list entry))))
+              (should (equal altodo-sidebar--selected-filters (list entry)))
+              (should (eq altodo-sidebar--selection-mode 'single)))
+            (should-not altodo-sidebar--selected-filters)
             (when (buffer-live-p sidebar-buffer)
               (kill-buffer sidebar-buffer))))
       (when (buffer-live-p source-buffer)

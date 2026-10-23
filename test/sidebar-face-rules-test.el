@@ -139,6 +139,7 @@
     (dotimes (_ 12) (insert "[x] done task\n"))
     (altodo-mode)
     (let ((entry '(:title "Done" :type search-simple :pattern "done"
+                   :count-format nil
                    :face bold
                    :face-rules ((>= 1 face-high)))))
       (should (eq (altodo-sidebar--get-face entry nil (current-buffer)) 'bold)))))

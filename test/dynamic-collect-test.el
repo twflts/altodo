@@ -208,11 +208,35 @@
     (insert "[x] Task C #due:2026-03-05\n")
     (insert "[x] Task D #due:2026-03-10\n")
     (insert "[x] Task E #due:2026-03-15\n")
-    (let* ((entry '(:title "Due: %s [%n]" :type dynamic :dynamic-type "due" :sort-by "count" :limit 2 :count-format t))
+    (let* ((entry '(:title "Due: %s [%n]" :type dynamic :dynamic-type "due" :limit 2 :count-format t))
            (result (altodo--expand-dynamic-filter entry (current-buffer))))
       (should (equal (length result) 2))
       (should (equal (plist-get (car result) :title) "Due: 2026-03-05 [%n]"))
       (should (equal (plist-get (cadr result) :title) "Due: 2026-03-10 [%n]")))))
+
+(ert-deftest dynamic-collect-test-due-ignores-sort-by ()
+  "`:sort-by' applies to person and tag only; due is always ascending."
+  (with-temp-buffer
+    (insert "[ ] A #due:2026-03-20\n[ ] B #due:2026-03-20\n[ ] C #due:2026-03-05\n")
+    (altodo-mode)
+    (let ((titles (mapcar (lambda (e) (plist-get e :title))
+                          (altodo--expand-dynamic-filter
+                           '(:title "%s" :type dynamic :dynamic-type "due"
+                             :sort-by "count")
+                           (current-buffer)))))
+      (should (equal titles '("2026-03-05" "2026-03-20"))))))
+
+(ert-deftest dynamic-collect-test-sort-is-not-read ()
+  "`:sort' is not a property: the order stays ascending."
+  (with-temp-buffer
+    (insert "[ ] A @bob\n[ ] B @bob\n[ ] C @ann\n")
+    (altodo-mode)
+    (let ((titles (mapcar (lambda (e) (plist-get e :title))
+                          (altodo--expand-dynamic-filter
+                           '(:title "%s" :type dynamic :dynamic-type "person"
+                             :sort "count")
+                           (current-buffer)))))
+      (should (equal titles '("ann" "bob"))))))
 
 (ert-deftest dynamic-collect-test-complex-empty-buffer ()
   "Test collecting from empty buffer."

@@ -7,6 +7,9 @@
 
 ### 互換性に影響する変更
 
+- サイドバーのエントリで `:count-format` を省略したとき、`t` として扱う（従来は、通常のエントリは `nil`、動的フィルタと見出しは `t`）。`:title` に `%n` があれば、数に置き換わる。置き換えたくないときは `:count-format nil` を指定する
+- `:count-face-rules` は、`%n` の数字だけに適用する。`:face-rules` がないときに行全体にも適用していた動作をやめた（設計書 13.6 節のとおり）
+- サイドバーの内部変数 `altodo-sidebar--active-entries` と内部関数 `altodo-sidebar--update-active-entry` を削除した。クリックしたエントリは `altodo-sidebar--selected-filters`（`altodo-sidebar--selection-mode` が `single`）に入る
 - `.altodo-locals.el` に書いた `search-lambda` の lambda、`:count-pattern-lambda`、`altodo-` で始まらない `:command` は、既定では実行しない。実行する場合は、`altodo-locals-code-policy` を `confirm`（ファイルの SHA-256 を承認したときだけ実行）または `allow`（常に実行）にする。`altodo-default-filter-patterns` に書いたコードは、従来どおり実行する
 - 内部関数のうち、接頭辞のない `sidebar-*` を `altodo-sidebar--*` に改名した（`sidebar-display` は `altodo-sidebar--display`）。互換用の別名はない
 - 組み込みの自己テスト関数（`altodo-run-full-test-suite` など）を削除した。テストは `test/` の ERT に統一した
@@ -52,6 +55,11 @@
 
 ### 変更
 
+- サイドバーの動的フィルタ（`:type dynamic`）と見出しの展開は、`:face-rules`、`:count-face-rules`、`:count-exclude-others`、`:display-context`、`:multiline-comment` など、展開に使わないプロパティを展開後のエントリに引き継ぐ（従来は `:face`、`:face-count`、`:count-format` だけだった）。見出しの `:face-rules` は、見出しの未完了のタスク数で評価する
+- `:face`、`:face-count`、`:face-rules` と `:count-face-rules` の値に、face 名、face 名のリスト、plist（`(:foreground "red")`）、defface 形式（`((t (:foreground "red")))`）を指定できる。従来の `:face` は、plist を無視した
+- 書式が不正な `:face-rules`、`:count-face-rules` の規則は、その規則だけを無視して、メッセージを 1 回表示する（従来は、サイドバー全体が描画されなかった）
+- `:face-rules` に使うカウントは、複数選択のとき、タイトルの `%n` と同じ（結合した predicate を適用した）値になる。`%n` のないタイトルでも同じである
+- サイドバーのクリックの処理時間を短縮した。1 回のクリックで描画が 2 回起きていたのを 1 回にし、バッファが変わらない間は、エントリのカウントを再利用する。5000 行、既定のパターンで、約 1.4 秒から約 0.2 秒（2 回目以降）になった
 - サイドバーのバッファを、`special-mode` から派生したメジャーモード `altodo-sidebar-mode` にした。`special-mode` のキー割り当ても使える
 - 既定のパターンの期限のエントリ（"Open and Over Due" など）を、`lambda` から DSL のパターンに変えた。表示と件数は同じである
 - 既定のパターンの「`Star (+)`」から `:count-face-rules` を外した（件数が 5 以上で `error`、1 以上で `warning` の色にしていた）。「`Priority (!)`」と同じく、件数に色を付けない
@@ -67,6 +75,10 @@
 
 ### 修正
 
+- `search-lambda` のエントリをクリックしたとき、複数選択が解除されない不具合を直した。`:display-context` も適用する
+- `altodo-filter-by-pattern` と `altodo-filter-show-*` を実行したとき、サイドバーの選択（色）が実際のフィルタと食い違う不具合を直した。サイドバーの選択を解除して、描画し直す
+- サイドバーの `c` が、ソースのバッファのフィルタを解除しない不具合を直した
+- サイドバーを非表示にして再表示したとき、複数選択のカウントが全体の数に戻る不具合を直した
 - `C-c C-v f c`、`C-c C-v s t`、`C-c C-v s r` が、見出しや通常の文章の行では動かず、Markdown のコマンドに回っていた。どの行でも動く
 - フォントロックの時間が行数の 2 乗になり、5000 行のバッファ全体の色付けに 53 秒かかる
 - `#done` の書式を指定したとき、時差が付く、または空白で値が切れる

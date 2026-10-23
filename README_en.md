@@ -626,7 +626,7 @@ The faces are defined by inheriting existing faces, and can be changed with `cus
 - `:limit`: maximum number of headings, counted from the top of the buffer. `0` or `nil` (default) means unlimited
 - `:indent-by-level`: indent by heading level. `t` (default) does not indent level 1 and indents one more step (`altodo-sidebar-indent`) per deeper level. An integer N does not indent levels up to N and indents a deeper heading by (level - N) steps (with `2`, `# aa` and `## aa` are at the same position and `### aa` is one step deeper). `nil` does not indent by level. An integer below 1 is the same as `t`. `:nest` is added to these steps
 - `:face`, `:face-count`, `:nest`: same as the other dynamic filters
-- `:sort`, `:exclude-*`, `:tag-mode`: not used for headings (ignored)
+- `:sort-by`, `:exclude-*`, `:tag-mode`: not used for headings (ignored)
 - Multiple selection (`s`) is not available
 - The list of headings is built each time the sidebar is drawn. If the buffer is edited after that and the heading is gone, selecting the entry does not move point and shows a message
 

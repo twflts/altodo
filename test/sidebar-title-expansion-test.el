@@ -30,12 +30,12 @@
       (should (string= (altodo--format-sidebar-title pattern-spec) "Done [x] %n")))))
 
 (ert-deftest test-count-format-omitted ()
-  "Test :count-format omitted defaults to nil."
+  "Test :count-format omitted defaults to t."
   (with-temp-buffer
     (insert "[x] Done task 1\n")
     (altodo-mode)
     (let ((pattern-spec '(:title "Done [x] %n" :pattern "done")))
-      (should (string= (altodo--format-sidebar-title pattern-spec) "Done [x] %n")))))
+      (should (string= (altodo--format-sidebar-title pattern-spec) "Done [x] 1")))))
 
 (ert-deftest test-no-placeholder ()
   "Test :count-format is ignored when %n is not present."

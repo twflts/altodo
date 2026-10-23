@@ -47,7 +47,7 @@
                 ;; Verify sidebar has buffer-local variables
                 (should (boundp 'altodo-sidebar--source-buffer))
                 (should (boundp 'altodo-sidebar--selected-filters))
-                (should (boundp 'altodo-sidebar--active-entries))
+                (should (boundp 'altodo-sidebar--selection-mode))
                 (should (eq altodo-sidebar--source-buffer buffer)))))
         
         ;; Cleanup

@@ -26,7 +26,8 @@
                    :count-format t
                    :face-rules ((>= 10 face-high) (>= 1 face-mid)))))
       ;; Simulate active mode
-      (setq-local altodo-sidebar--active-entries (list entry))
+      (setq-local altodo-sidebar--selected-filters (list entry)
+                  altodo-sidebar--selection-mode 'single)
       (should (eq (altodo-sidebar--get-face entry nil (current-buffer))
                   'altodo-sidebar-active-filter-face)))))
 
@@ -231,7 +232,8 @@
                    :count-format t
                    :face bold)))
       ;; With active mode: should use active-filter-face, not :face
-      (setq-local altodo-sidebar--active-entries (list entry))
+      (setq-local altodo-sidebar--selected-filters (list entry)
+                  altodo-sidebar--selection-mode 'single)
       (should (eq (altodo-sidebar--get-face entry nil (current-buffer))
                   'altodo-sidebar-active-filter-face)))))
 

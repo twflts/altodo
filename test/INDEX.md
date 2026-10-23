@@ -4,7 +4,7 @@
 
 ## 使い方
 
-- 全体: 111 ファイル、1089 テスト
+- 全体: 112 ファイル、1125 テスト
 - 実行: `scripts/run-tests.sh [test/NAME.el]`。ベースラインとの差分だけを報告する
 - 関数に対応するテストを探す: `grep -l 'altodo--関数名' test/*.el`
 - 共通の道具: `test/altodo-test-helper.el`（`altodo-test-with-buffer`、`-with-temp-dir`、`-with-locals`、`-with-today`、`altodo-test-file`）
@@ -20,14 +20,15 @@
 | `sidebar-apply-filter-at-point-test` | 3 | Tests for altodo-sidebar--apply-filter-at-point | `altodo-sidebar--apply-filter-at-point`、`altodo-sidebar--apply-filter` |  |
 | `sidebar-blank-line-test` | 3 | Test for sidebar blank line issue | `altodo-sidebar--render` |  |
 | `sidebar-buffer-advanced-test` | 10 | Advanced tests for the sidebar buffers | `altodo-sidebar--get-or-create-buffer`、`altodo-sidebar--buffer-alist`、`altodo-sidebar--get-buffer` |  |
-| `sidebar-buffer-bugfix-test` | 5 | Tests for the sidebar buffer bug fixes | `altodo-sidebar--selected-filters`、`altodo-sidebar--get-or-create-buffer`、`altodo--get-sidebar-buffer` |  |
+| `sidebar-buffer-bugfix-test` | 5 | Tests for the sidebar buffer bug fixes | `altodo-sidebar--selected-filters`、`altodo-sidebar--get-or-create-buffer`、`altodo-sidebar--selection-mode` |  |
 | `sidebar-buffer-dolist-test` | 1 | Tests that every entry is rendered | `altodo-sidebar--render`、`altodo-sidebar-show`、`altodo-sidebar--get-buffer` |  |
 | `sidebar-buffer-real-file-test` | 3 | Tests with a real file | `altodo-sidebar-show`、`altodo-sidebar--get-buffer`、`altodo-sidebar--source-buffer` |  |
 | `sidebar-buffer-refresh-test` | 6 | Tests for refreshing from the sidebar and the source | `altodo-sidebar--get-face`、`altodo-sidebar--get-or-create-buffer`、`altodo-sidebar--selection-mode` |  |
 | `sidebar-buffer-test` | 5 | Tests Multiple Buffer Support | `altodo-sidebar--get-or-create-buffer`、`altodo-sidebar--get-buffer`、`altodo-sidebar--buffer-alist` |  |
 | `sidebar-calendar-test` | 34 | Tests for the calendar and agenda of the sidebar | `altodo-sidebar--render`、`altodo-sidebar--calendar-month`、`altodo--day-filter-entry` |  |
 | `sidebar-dynamic-count-test` | 13 | Tests dynamic count calculation | `altodo--get-entry-count`、`altodo--compile-filter-predicate`、`altodo--combine-predicates` |  |
-| `sidebar-face-layer-test` | 16 | Complex Layer interaction tests | `altodo-sidebar--get-face`、`altodo-sidebar--selected-filters`、`altodo-sidebar--active-entries` |  |
+| `sidebar-face-layer-test` | 16 | Complex Layer interaction tests | `altodo-sidebar--get-face`、`altodo-sidebar--selected-filters`、`altodo-sidebar--selection-mode` |  |
+| `sidebar-face-render-layers-test` | 35 | Faces of the drawn sidebar | `altodo-sidebar--render`、`altodo-sidebar--selection-mode`、`altodo-sidebar-make-config` |  |
 | `sidebar-face-rules-basic-test` | 3 | Tests for face-rules | `altodo-sidebar--get-face`、`altodo-sidebar-make-config`、`altodo--format-sidebar-title` |  |
 | `sidebar-face-rules-comprehensive-test` | 1 | Comprehensive test of face-rules | `altodo-sidebar--get-face`、`altodo--get-entry-count`、`altodo-sidebar-make-config` |  |
 | `sidebar-face-rules-render-test` | 1 | Sidebar rendering test | `altodo-sidebar-make-config`、`altodo-sidebar--render` |  |
@@ -137,10 +138,10 @@
 
 | ファイル | 件数 | 内容 | 主な対象 | 備考 |
 |---|---|---|---|---|
-| `combine-predicates-test` | 16 | Tests multiple filter selection | `altodo-sidebar--selected-filters`、`altodo-sidebar--combine-mode`、`altodo--combine-predicates` |  |
+| `combine-predicates-test` | 15 | Tests multiple filter selection | `altodo-sidebar--selected-filters`、`altodo-sidebar--combine-mode`、`altodo--combine-predicates` |  |
 | `dsl-compiler-test` | 33 | Tests for DSL compiler | `altodo--compile-simple-pattern`、`altodo--validate-pattern`、`altodo--normalize-pattern` |  |
 | `dsl-multi-patterns-test` | 13 | Tests for the line type and multi-value DSL patterns | `altodo--compile-simple-pattern`、`altodo--get-entry-count` |  |
-| `dynamic-collect-test` | 24 | Tests for dynamic filter functionality | `altodo--collect-dynamic-values`、`altodo--expand-dynamic-filter`、`altodo--format-placeholder` |  |
+| `dynamic-collect-test` | 26 | Tests for dynamic filter functionality | `altodo--collect-dynamic-values`、`altodo--expand-dynamic-filter`、`altodo--format-placeholder` |  |
 | `dynamic-filter-test` | 16 | Tests for dynamic filter tag/person extraction | `altodo--line-extract-all-tags`、`altodo--line-extract-all-persons`、`altodo--collect-dynamic-values-with-exclude` |  |
 | `filter-function-test` | 10 | Tests for altodo filter functions | `altodo--line-has-tag-p`、`altodo--line-done-p`、`altodo--line-progress-p` |  |
 | `filter-helper-test` | 2 | Unit tests for filter helper functions | `altodo--filter-create-overlay`、`altodo--filter-find-overlay`、`altodo--filter-overlays` |  |

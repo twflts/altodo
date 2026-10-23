@@ -200,14 +200,22 @@ Hidden by buffer-invisibility-spec
 **Value**: Symbol (`'done`, `'progress`, `'tag`, etc.) or `nil`
 
 
-#### altodo-sidebar--selected-filters
+#### Selection state of the sidebar
 
 ```elisp
-(defvar-local altodo-sidebar--selected-filters nil
-  "List of selected filter entries.")
+(defvar-local altodo-sidebar--selected-filters nil)
+(defvar-local altodo-sidebar--selection-mode nil)
+(defvar-local altodo-sidebar--current-combined-predicate nil)
 ```
 
-**Description**: List of filters selected in sidebar
+**Description**: Buffer-local variables of the sidebar buffer. They hold the selection state
+**Value**:
+- `altodo-sidebar--selected-filters`: list of the selected filter entries
+- `altodo-sidebar--selection-mode`: `single` (an entry was clicked; the list has one element), `multiple` (several entries were chosen with `s`), or `nil` (no selection)
+- `altodo-sidebar--current-combined-predicate`: the combined predicate in `multiple` mode, used for the counts
+
+**Update**: Only `altodo-sidebar--set-selection` changes the three variables. A click, a multiple selection, `altodo-filter-clear`, `altodo-filter-show-*` and `altodo-filter-by-pattern` all go through it, so the selection state does not disagree with the actual filter
+**See also**: `altodo-sidebar--entry-state` returns the state of an entry (`selected`, `active` or `nil`). An entry of `single` mode is `active`, and an entry of `multiple` mode is `selected`
 
 
 #### altodo-sidebar--combine-mode
@@ -260,28 +268,22 @@ Hidden by buffer-invisibility-spec
    - For `'(separator group-header comment nil)`: `action` = `nil` (not clickable)
    - Otherwise: `action` = `#'altodo-sidebar--apply-filter` (clickable)
 
-2. Determine face based on `:type`
-   - `nil` or `comment`: `'altodo-sidebar-comment-face`
-   - `group-header`: `'altodo-sidebar-group-header-face`
-   - `search-simple`: `'altodo-sidebar-search-simple-face`
-   - `search-lambda`: `'altodo-sidebar-search-lambda-face`
-   - `command`: `'altodo-sidebar-command-face`
-   - `separator`: `'altodo-sidebar-separator-face`
-   - Otherwise: `'default`
+2. Build the title with `altodo--format-sidebar-title`. The number of `%n` has the face of the count part
 
-3. If clickable: Create button with `insert-button`
-4. If not clickable: Insert text (no button)
+3. Get the face of the whole row with `altodo-sidebar--get-face` and apply it to the characters of the title that have no face. A selected entry (`selected`, `active`) loses the faces of its title and has that face on the whole title
+
+4. If clickable: make a button with `make-text-button`. If not clickable: no button, and the text is read-only. A separator has the face on the whole line
+
+This is the only path that applies the face of the row.
 
 
 #### altodo-sidebar--get-face
 
-**Description**: Determine entry face (Layer structure)
+**Description**: Determine the face of the whole row of an entry (Layer structure)
 
-**Processing Order**: Follows the Layer structure in section 11.
+**Processing Order**: Follows the Layer structure in section 11.1. The face of the count part (`%n`) is decided by `altodo--count-face` (section 11.2).
 
-**face-rules Fallback**:
-- If face-rules don't match, fallback to face specified by `:face`
-- If `:face` is not specified either, use default face
+**Count**: The count that evaluates `:face-rules` is the same value as `%n` in the title (it is counted even without `%n`). In a multiple selection it is the count with the combined predicate.
 
 
 #### altodo-sidebar--apply-filter
@@ -293,10 +295,12 @@ Hidden by buffer-invisibility-spec
    - `search-simple`: Compile DSL pattern to generate predicate
    - `search-lambda`: Use lambda function as predicate
    - `command`: Execute specified command
-   - `dynamic`: Auto-collect values and expand
+   - `heading-jump`: Jump to the heading
    - `nil`/`comment`/`group-header`/`separator`: No filter
 
-2. Apply predicate with `altodo--filter-lines`
+2. `search-simple` and `search-lambda` set the selection state to `single` (the clicked entry only) and apply the predicate with `altodo--filter-lines`. `:display-context` and `:multiline-comment` apply to both types
+
+3. The sidebar is drawn once. For `command`, a command that changes the filter clears the selection state itself
 
 
 ### 6.4 Dynamic Filter Expansion
@@ -371,6 +375,8 @@ Hidden by buffer-invisibility-spec
 
 **Return Value**: Number of matched tasks (integer)
 
+**Reuse**: In one drawing, each entry is counted once (the title and the face of the row use the same value). Without `combined-predicate`, and with a string (DSL) pattern, the result is kept in `altodo--count-memo` while the text of the buffer, the narrowing and today's date are the same. A click, a selection or a change of AND/OR does not count the buffer again. An entry whose pattern is a function is counted every time, because the function may read anything
+
 
 #### altodo--format-sidebar-title
 
@@ -384,15 +390,15 @@ Hidden by buffer-invisibility-spec
 
 **Process**:
 
-1. Detect `%n` in `:title`
+1. Detect `%n` in `:title`. `%n` is not replaced when `:count-format` is `nil` (it is `t` when omitted)
 
 2. If `%n` exists, calculate count
    - Get match count with `altodo--get-entry-count`
 
-3. Apply face to count
-   - Evaluate if `count-face-rules` is specified
-   - Apply if `face-count` is specified
-   - If neither specified, use `:face` or default
+3. Decide the face of the count part with `altodo--count-face`
+   - The face of the first matching rule of `:count-face-rules`
+   - Otherwise `:face-count`
+   - If neither exists, the count gets no face of its own (the face of the whole row applies)
 
 4. Replace `%n` with count number
    - Apply face property to count string
@@ -435,6 +441,8 @@ Hidden by buffer-invisibility-spec
 | `altodo-sidebar-set-and-mode`        | Switch to AND mode                     |
 | `altodo-sidebar-set-or-mode`         | Switch to OR mode                      |
 | `altodo-sidebar-toggle-combine-mode` | Toggle AND/OR                          |
+
+`altodo-filter-clear`, `altodo-filter-by-pattern` and `altodo-filter-show-*` clear the selection state of the sidebar and draw the sidebar again. `c` in the sidebar clears the filter of the buffer that the sidebar belongs to.
 
 
 ## 7. Sidebar Integration
@@ -511,7 +519,8 @@ Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse bu
 1. **heading-range cache**: Cache the heading ranges
 2. **Relative line movement**: Process line numbers in ascending order and move from the previous position, instead of counting lines from the beginning of the buffer (`altodo--goto-line`)
 3. **Narrowed overlay search**: Examine only the overlays in the range of the target line (`overlays-in`)
-4. **Batch processing of heading ranges and line numbers**: Find the heading ranges in one scan and convert them to line numbers. Do not check every heading for every matched line, and update the overlay list once at the end
+4. **Reuse of counts**: While the buffer does not change, the count of each entry is reused (`altodo--get-entry-count`, section 6.4). A click takes about 1.4 s before and about 0.2 s after (second click on; the first takes about 0.75 s) for 5000 lines, the default patterns and 20 entries
+5. **Batch processing of heading ranges and line numbers**: Find the heading ranges in one scan and convert them to line numbers. Do not check every heading for every matched line, and update the overlay list once at the end
 
 
 ### Measurement
@@ -526,29 +535,51 @@ Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse bu
 
 ## 11. Face Application Priority (Layer Structure)
 
-### Layer 1: Selection (highest priority)
-
-Applied to selected filter entry
+The face of the whole row and the face of the count part (the digits of `%n`) are decided on separate axes.
 
 
-### Layer 2: COUNT
+### 11.1 Face of the whole row
 
-Face application based on count (`:count-face-rules`)
+`altodo-sidebar--get-face` checks the following in order and uses the first that applies.
+
+1. Selected: an entry chosen with `s` in a multiple selection. `altodo-sidebar-selected-filter-face`
+2. Active: the entry that was clicked. `altodo-sidebar-active-filter-face`
+3. `:face-rules`: when `:count-format` is not `nil`, the face of the first rule that matches the count
+4. `:face`
+5. The default face of the type
+
+A Selected or Active entry loses the faces of its title, and the whole title (the count included) gets that face. Any other entry gets the face of the row on the characters of the title that have no face.
+
+The default faces of the types follow. Entries that are not clickable (`comment`, `group-header`, `separator`) are decided here too.
+
+- `nil` and `comment`: `altodo-sidebar-comment-face`
+- `group-header`: `altodo-sidebar-group-header-face`
+- `search-simple` and `heading-jump`: `altodo-sidebar-search-simple-face`
+- `search-lambda`: `altodo-sidebar-search-lambda-face`
+- `command`: `altodo-sidebar-command-face`
+- `separator`: `altodo-sidebar-separator-face`
+- Otherwise: `default`
 
 
-### Layer 3: Default
+### 11.2 Face of the count part
 
-If `:face` is specified in entry
+The face of the digits of `%n` is decided in this order. It does not apply to a Selected or Active entry.
+
+1. `:count-face-rules`: the face of the first rule that matches the count
+2. `:face-count`
+3. The face of the whole row (section 11.1)
+
+`:count-face-rules` and `:face-count` apply to the digits only, never to the whole row.
 
 
-### Layer 4: Type-based
+### 11.3 Value of the count
 
-Default face based on entry `:type`
+The count that the conditions of `:face-rules` and `:count-face-rules` use is the same value as `%n` in the title. It is counted even when the title has no `%n`. In a multiple selection it is the value with the combined predicate (AND: both the entry and the combined predicate; OR: the entry only).
 
 
-### Layer 5: Non-clickable
+### 11.4 Forms of a face
 
-Non-clickable entries (`comment`, `group-header`)
+The values of `:face`, `:face-count`, `:face-rules` and `:count-face-rules` are interpreted by one function (`altodo-sidebar--resolve-face`). Section 13.6 shows the accepted forms. A value that cannot be interpreted is treated as not given.
 
 
 ## 12. References
@@ -581,9 +612,11 @@ Each filter entry is defined as plist (property list):
 | `:title`                | Required | Title to display in sidebar. `%n` displays match count              |
 | `:type`                 | Required | Entry type (described later)                                        |
 | `:nest`                 | Optional | Indent level (default: 0)                                           |
-| `:count-format`         | Optional | `t` to replace `%n` with count (default: `t`)                       |
-| `:face`                 | Optional | Face to apply                                                       |
+| `:count-format`         | Optional | `nil` to leave `%n` as it is (default: `t`)                         |
+| `:face`                 | Optional | Face for the whole row (forms in 13.6)                              |
 | `:face-count`           | Optional | Face to apply to count part `%n`                                    |
+| `:face-rules`           | Optional | Face of the whole row by count (see 13.6)                           |
+| `:count-face-rules`     | Optional | Face of the count part by count (see 13.6)                          |
 | `:display-context`      | Optional | Display context (see 13.3.1)                                        |
 | `:multiline-comment`    | Optional | `nil` hides the multi-line comments of matched lines (default: `t`) |
 | `:count-exclude-others` | Optional | Count target (see 13.3.2, default: `t`)                             |
@@ -672,15 +705,17 @@ Not clickable, visual separator
 
 Auto-collect values on display
 
-| Property             | Required/Optional | Description                                                    |
-| -------------------- | ----------------- | -------------------------------------------------------------- |
-| `:dynamic-type`      | Required          | Collection target (`person`, `tag`, `due`, `start`, `heading`) |
-| `:tag-mode`          | Optional          | Tag extraction mode (`"all"`, `"name-only"`, `"with-value"`)   |
-| `:exclude-person`    | Optional          | List of `@person` to exclude                                   |
-| `:exclude-tag`       | Optional          | List of `#tag` to exclude                                      |
-| `:exclude-tag-value` | Optional          | List of `#tag:value` to exclude                                |
-| `:sort`              | Optional          | Sort method (`alpha`, `count`, `reverse-count`)                |
-| `:limit`             | Optional          | Display limit (default: nil; nil or 0 is unlimited)            |
+| Property             | Required/Optional | Description                                                        |
+| -------------------- | ----------------- | ------------------------------------------------------------------ |
+| `:dynamic-type`      | Required          | Collection target (`person`, `tag`, `due`, `start`, `heading`)     |
+| `:tag-mode`          | Optional          | Tag extraction mode (`"all"`, `"name-only"`, `"with-value"`)       |
+| `:exclude-person`    | Optional          | List of `@person` to exclude                                       |
+| `:exclude-tag`       | Optional          | List of `#tag` to exclude                                          |
+| `:exclude-tag-value` | Optional          | List of `#tag:value` to exclude                                    |
+| `:sort-by`           | Optional          | Sort order (`"alpha"`: ascending (default), `"count"`: most first) |
+| `:limit`             | Optional          | Display limit (default: nil; nil or 0 is unlimited)                |
+
+`:sort-by` applies to `person` and `tag` only. `due` and `start` are always in ascending order (the order of the date strings).
 
 **`:tag-mode` Description**:
 
@@ -692,13 +727,15 @@ Auto-collect values on display
 
 **Note**: `:tag-ignore-value` is deprecated. Use `:tag-mode` instead.
 
-`:dynamic-type "heading"` does not collect values to filter by. It expands to entries that jump to a heading (`:type heading-jump`). The properties for it are below. `:sort`, `:exclude-*` and `:tag-mode` are ignored.
+The properties other than those in the table above and `:level` and `:indent-by-level` below (`:face`, `:face-count`, `:face-rules`, `:count-face-rules`, `:count-exclude-others`, `:display-context`, `:multiline-comment` and so on) are passed on to the expanded entries. An expanded entry works like an entry that is not dynamic.
+
+`:dynamic-type "heading"` does not collect values to filter by. It expands to entries that jump to a heading (`:type heading-jump`). The properties for it are below. `:sort-by`, `:exclude-*` and `:tag-mode` are ignored.
 
 - `:level` (optional): levels to list. An integer or a list of integers. All levels if omitted
 - `:limit` (optional): maximum number of headings from the top of the buffer. `0` or `nil` is unlimited
 - `:indent-by-level` (optional): `t` (default; level 1 is not indented), an integer N (levels up to N are not indented), `nil` (none)
 
-In `:title`, `%s` is the heading text, `%l` the level, and `%n` the number of unfinished tasks (neither done nor cancelled) from the heading to the next heading. `%n` is counted only when `:count-format` is not `nil` and `:title` contains `%n`.
+In `:title`, `%s` is the heading text, `%l` the level, and `%n` the number of unfinished tasks (neither done nor cancelled) from the heading to the next heading. The number is counted only when `:count-format` is not `nil` and `:title` contains `%n`, or `:face-rules` or `:count-face-rules` exists. `:face-rules` and `:count-face-rules` are evaluated with this number.
 
 
 #### `search-simple` (Simple Search)
@@ -994,8 +1031,10 @@ Example: `tag-value:priority (> 5)`
 
 `:face-rules` and `:count-face-rules` can specify face based on count.
 
-- face-rules: Entire filter line text
-- count-face-rules: Applied only to count part `%n` of filter line. If this item doesn't exist, `:face-rules` or `:face` items are applied to `%n`
+- `:face-rules`: The whole text of the filter row. It is not evaluated when `:count-format` is `nil`
+- `:count-face-rules`: Only the count part `%n` of the filter row, never the whole row. If this item doesn't exist, `%n` gets `:face-count`, or the face of the whole row if that does not exist either
+
+The count is the same value as `%n` in the title (section 11.3).
 
 
 ```elisp
@@ -1005,7 +1044,7 @@ Example: `tag-value:priority (> 5)`
              (= 0 (:foreground "gray")))
 ```
 
-**Format**: `(condition face-spec)`
+**Format**: `(condition N face-spec)`
 
 **Conditions**:
 - `>= N` - N or more
@@ -1015,13 +1054,18 @@ Example: `tag-value:priority (> 5)`
 - `/= N` - Not equal to N
 - `< N` - Less than N
 
-__face-spec__ can be specified as follows:
+The rules are evaluated from the top, and the face of the first matching rule is used. If no rule matches, the whole row uses `:face`, or the default face of the type if `:face` does not exist. The count part uses `:face-count`, or the face of the whole row if that does not exist.
 
-- Face name (`:foreground "red"`)
-- Face name list (`error`, `warning`, `success`)
+A rule with an invalid form (a condition other than the six above, an N that is not a number, or not three elements) is ignored alone, and the message `altodo: ignored the invalid face rule ...` is shown once for each rule. A list of rules that is not a list is ignored in the same way. The drawing of the sidebar does not fail.
+
+__face-spec__ can be specified as follows. The values of `:face` and `:face-count` take the same forms.
+
+- Face name (`error`)
+- List of face names (`(bold error)`)
 - plist (`(:foreground "red" :weight bold)`)
+- defface style (`((t (:foreground "red")))`). The attributes of the `t` clause are used
 
-If no match in face-rules, fallback to face specified by `:face`. If `:face` is not specified either, use default face.
+A value that cannot be interpreted (such as a plist with an odd number of elements) is treated as not given.
 
 
 ### 13.7 Configuration Example

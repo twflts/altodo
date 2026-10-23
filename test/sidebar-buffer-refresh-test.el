@@ -16,7 +16,6 @@
               (setq-local altodo-sidebar--selection-mode 'multiple)
               (setq-local altodo-sidebar--selected-filters 
                           '((:title "Open" :pattern "state:open")))
-              (setq-local altodo-sidebar--active-entries nil)
               
               ;; Test that altodo-sidebar--get-face returns correct face
               (let ((entry '(:title "Open" :pattern "state:open")))
@@ -80,8 +79,7 @@
             (with-current-buffer sidebar1
               (setq-local altodo-sidebar--selection-mode 'multiple)
               (setq-local altodo-sidebar--selected-filters 
-                          '((:title "Open" :pattern "state:open")))
-              (setq-local altodo-sidebar--active-entries nil))
+                          '((:title "Open" :pattern "state:open"))))
             
             (with-current-buffer buffer2
               (altodo-mode)
@@ -89,8 +87,7 @@
             (let ((sidebar2 (altodo-sidebar--get-or-create-buffer buffer2)))
               (with-current-buffer sidebar2
                 (setq-local altodo-sidebar--selection-mode 'single)
-                (setq-local altodo-sidebar--selected-filters nil)
-                (setq-local altodo-sidebar--active-entries 
+                (setq-local altodo-sidebar--selected-filters
                             '((:title "Done" :pattern "state:done"))))
               
               (with-current-buffer sidebar1
@@ -109,10 +106,10 @@
       (when (buffer-live-p buffer2)
         (kill-buffer buffer2)))))
 
-;;; Test 5: altodo-sidebar--get-face with active-entries
+;;; Test 5: altodo-sidebar--get-face with a single selection
 
 (ert-deftest altodo-test-sidebar-buffer-mcp-sidebar-get-face-active ()
-  "Test altodo-sidebar--get-face with active-entries."
+  "Test altodo-sidebar--get-face with a single selection."
   (let ((source-buffer (generate-new-buffer "test.altodo")))
     (unwind-protect
         (with-current-buffer source-buffer
@@ -120,8 +117,7 @@
           (let ((sidebar-buffer (altodo-sidebar--get-or-create-buffer source-buffer)))
             (with-current-buffer sidebar-buffer
               (setq-local altodo-sidebar--selection-mode 'single)
-              (setq-local altodo-sidebar--selected-filters nil)
-              (setq-local altodo-sidebar--active-entries 
+              (setq-local altodo-sidebar--selected-filters
                           '((:title "Done" :pattern "state:done")))
               
               (let ((entry '(:title "Done" :pattern "state:done")))
@@ -145,7 +141,6 @@
             (with-current-buffer sidebar-buffer
               (setq-local altodo-sidebar--selection-mode nil)
               (setq-local altodo-sidebar--selected-filters nil)
-              (setq-local altodo-sidebar--active-entries nil)
               
               (let ((entry '(:title "Open" :pattern "state:open" :type search-simple)))
                 (let ((face (altodo-sidebar--get-face entry nil)))
