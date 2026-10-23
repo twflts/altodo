@@ -272,13 +272,13 @@ alist 形式で複数の変数を指定可能：
 
 `.altodo-locals.el` から読む変数は、次の 5 つである（`altodo--get-locals-value`）。他の変数を書いても、使わない。
 
-| 変数名                      | 説明                                        |
-| --------------------------- | ------------------------------------------- |
-| `altodo-filter-patterns`    | サイドバーフィルタパターンリスト            |
-| `altodo-sidebar-face-alist` | サイドバー用 face 定義                      |
-| `altodo-sidebar-position`   | サイドバー表示位置（`left` または `right`） |
-| `altodo-sidebar-size`       | サイドバー幅（ウィンドウ幅に対する比率）    |
-| `altodo-sidebar-indent`     | サイドバーインデント幅                      |
+| 変数名                      | 説明                                                    |
+| --------------------------- | ------------------------------------------------------- |
+| `altodo-filter-patterns`    | サイドバーフィルタパターンリスト                        |
+| `altodo-sidebar-face-alist` | サイドバー用 face 定義                                  |
+| `altodo-sidebar-position`   | サイドバー表示位置（`left`、`right`、`above`、`below`） |
+| `altodo-sidebar-size`       | 幅（左右）・高さ（上下）。1 未満は比率、1 以上は桁・行  |
+| `altodo-sidebar-indent`     | サイドバーインデント幅                                  |
 
 **例**:
 
@@ -305,6 +305,7 @@ alist 形式で複数の変数を指定可能：
 - 構文エラー、または内容が alist でない場合は、警告を表示し、設定ファイルがないときと同じく既定の設定を使う
 - `altodo-filter-patterns` のエントリのうち、`:title` が文字列の plist でないものは、警告を表示し、そのエントリだけを使わない
 - 警告は、同じ内容につき、ファイルを更新するごとに 1 回だけ表示する
+- エントリの値が不正で描画できないとき（`:nest` が整数でない、数える lambda がエラーを出す、など）は、メッセージを 1 回表示し、そのエントリだけを除く。他のエントリは描画する（`doc/design-filter.md` の 7 節）
 
 
 ### 4.5 設定ファイル内のコードの実行

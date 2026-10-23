@@ -272,13 +272,13 @@ Multiple variables can be specified in alist format:
 
 Only the following five variables are read from `.altodo-locals.el` (`altodo--get-locals-value`). Other variables in the file are not used.
 
-| Variable Name               | Description                                  |
-| --------------------------- | -------------------------------------------- |
-| `altodo-filter-patterns`    | Sidebar filter pattern list                  |
-| `altodo-sidebar-face-alist` | Sidebar face definitions                     |
-| `altodo-sidebar-position`   | Sidebar display position (`left` or `right`) |
-| `altodo-sidebar-size`       | Sidebar width (ratio to the window width)    |
-| `altodo-sidebar-indent`     | Sidebar indent width                         |
+| Variable Name               | Description                                               |
+| --------------------------- | --------------------------------------------------------- |
+| `altodo-filter-patterns`    | Sidebar filter pattern list                               |
+| `altodo-sidebar-face-alist` | Sidebar face definitions                                  |
+| `altodo-sidebar-position`   | Sidebar position (`left`, `right`, `above`, `below`)      |
+| `altodo-sidebar-size`       | Width or height; below 1 a frame ratio, else columns/rows |
+| `altodo-sidebar-indent`     | Sidebar indent width                                      |
 
 **Example**:
 
@@ -305,6 +305,7 @@ If the file does not exist, use the following default values:
 - If the file has a syntax error or its content is not an alist, a warning is shown and the default settings are used, as when the file does not exist
 - An entry of `altodo-filter-patterns` that is not a plist with a string `:title` is ignored with a warning; the other entries are used
 - A warning is shown once for the same content each time the file is modified
+- When the value of an entry is invalid and the entry cannot be drawn (`:nest` is not an integer, a lambda that counts signals an error, and so on), a message is shown once and only that entry is left out. The other entries are drawn (section 7 of `doc/design-filter.md`)
 
 
 ### 4.5 Execution of Code in the Configuration File

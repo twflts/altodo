@@ -43,11 +43,11 @@
       (should (= (cdr (assoc "priority:low" result)) 1)))))
 
 (ert-deftest dynamic-collect-test-collect-due ()
-  "Test collecting #due values from buffer."
+  "Test collecting the due dates (-> DATE) from buffer."
   (with-temp-buffer
-    (insert "[x] Task A #due:2026-03-05\n")
-    (insert "[x] Task B #due:2026-03-05\n")
-    (insert "[x] Task C #due:2026-03-10\n")
+    (insert "[x] Task A -> 2026-03-05\n")
+    (insert "[x] Task B -> 2026-03-05\n")
+    (insert "[x] Task C -> 2026-03-10\n")
     (let ((result (altodo--collect-dynamic-values "due" (current-buffer))))
       (should (equal (length result) 2))
       (should (assoc "2026-03-05" result))
@@ -56,11 +56,11 @@
       (should (= (cdr (assoc "2026-03-10" result)) 1)))))
 
 (ert-deftest dynamic-collect-test-collect-start ()
-  "Test collecting #start values from buffer."
+  "Test collecting the start dates (DATE ->) from buffer."
   (with-temp-buffer
-    (insert "[x] Task A #start:2026-03-05\n")
-    (insert "[x] Task B #start:2026-03-10\n")
-    (insert "[x] Task C #start:2026-03-10\n")
+    (insert "[x] Task A 2026-03-05 ->\n")
+    (insert "[x] Task B 2026-03-10 ->\n")
+    (insert "[x] Task C 2026-03-10 ->\n")
     (let ((result (altodo--collect-dynamic-values "start" (current-buffer))))
       (should (equal (length result) 2))
       (should (assoc "2026-03-05" result))
@@ -135,8 +135,8 @@
 (ert-deftest dynamic-collect-test-expand-due ()
   "Test expanding due dynamic filter."
   (with-temp-buffer
-    (insert "[x] Task A #due:2026-03-05\n")
-    (insert "[x] Task B #due:2026-03-10\n")
+    (insert "[x] Task A -> 2026-03-05\n")
+    (insert "[x] Task B -> 2026-03-10\n")
     (let* ((entry '(:title "Due: %s [%n]" :type dynamic :dynamic-type "due" :count-format t))
            (result (altodo--expand-dynamic-filter entry (current-buffer))))
       (should (equal (length result) 2))
@@ -203,28 +203,93 @@
 (ert-deftest dynamic-collect-test-complex-dates-multiple ()
   "Test collecting multiple dates with different counts."
   (with-temp-buffer
-    (insert "[x] Task A #due:2026-03-05\n")
-    (insert "[x] Task B #due:2026-03-05\n")
-    (insert "[x] Task C #due:2026-03-05\n")
-    (insert "[x] Task D #due:2026-03-10\n")
-    (insert "[x] Task E #due:2026-03-15\n")
+    (insert "[x] Task A -> 2026-03-05\n")
+    (insert "[x] Task B -> 2026-03-05\n")
+    (insert "[x] Task C -> 2026-03-05\n")
+    (insert "[x] Task D -> 2026-03-10\n")
+    (insert "[x] Task E -> 2026-03-15\n")
     (let* ((entry '(:title "Due: %s [%n]" :type dynamic :dynamic-type "due" :limit 2 :count-format t))
            (result (altodo--expand-dynamic-filter entry (current-buffer))))
       (should (equal (length result) 2))
       (should (equal (plist-get (car result) :title) "Due: 2026-03-05 [%n]"))
       (should (equal (plist-get (cadr result) :title) "Due: 2026-03-10 [%n]")))))
 
-(ert-deftest dynamic-collect-test-due-ignores-sort-by ()
-  "`:sort-by' applies to person and tag only; due is always ascending."
+(ert-deftest dynamic-collect-test-due-sort-by ()
+  "`:sort-by' applies to the dates: ascending by default, then by count."
   (with-temp-buffer
-    (insert "[ ] A #due:2026-03-20\n[ ] B #due:2026-03-20\n[ ] C #due:2026-03-05\n")
+    (insert "[ ] A -> 2026-03-20\n[ ] B -> 2026-03-20\n[ ] C -> 2026-03-05\n")
     (altodo-mode)
-    (let ((titles (mapcar (lambda (e) (plist-get e :title))
-                          (altodo--expand-dynamic-filter
-                           '(:title "%s" :type dynamic :dynamic-type "due"
-                             :sort-by "count")
-                           (current-buffer)))))
-      (should (equal titles '("2026-03-05" "2026-03-20"))))))
+    (cl-flet ((titles (entry)
+                (mapcar (lambda (e) (plist-get e :title))
+                        (altodo--expand-dynamic-filter entry (current-buffer)))))
+      (should (equal (titles '(:title "%s" :type dynamic :dynamic-type "due"))
+                     '("2026-03-05" "2026-03-20")))
+      (should (equal (titles '(:title "%s" :type dynamic :dynamic-type "due"
+                               :sort-by "count"))
+                     '("2026-03-20" "2026-03-05"))))))
+
+(ert-deftest dynamic-collect-test-due-counts-and-pattern ()
+  "The entry of a due date counts the tasks that the pattern matches."
+  (with-temp-buffer
+    (insert "[ ] A -> 2026-03-20\n[x] B -> 2026-03-20\n[ ] C 2026-03-20 ->\n")
+    (altodo-mode)
+    (let ((entry (car (altodo--expand-dynamic-filter
+                       '(:title "%s" :type dynamic :dynamic-type "due")
+                       (current-buffer)))))
+      (should (equal (plist-get entry :pattern) "due-date:2026-03-20"))
+      (should (= (altodo--compute-entry-count entry (current-buffer)) 2)))))
+
+(ert-deftest dynamic-collect-test-due-uses-the-date-format ()
+  "The title and the pattern of a date use `altodo-date-format'."
+  (let ((altodo-date-format "%Y/%m/%d"))
+    (with-temp-buffer
+      (insert "[ ] A -> 2026/03/20\n")
+      (altodo-mode)
+      (let ((entry (car (altodo--expand-dynamic-filter
+                         '(:title "%s" :type dynamic :dynamic-type "due")
+                         (current-buffer)))))
+        (should (equal (plist-get entry :title) "2026/03/20"))
+        (should (equal (plist-get entry :pattern) "due-date:2026/03/20"))
+        (should (= (altodo--compute-entry-count entry (current-buffer)) 1))))))
+
+(ert-deftest dynamic-collect-test-date-that-does-not-exist-is-left-out ()
+  "A date that does not exist makes no entry (its pattern would be invalid)."
+  (with-temp-buffer
+    (insert "[ ] A -> 2026-02-30\n")
+    (altodo-mode)
+    (should-not (altodo--collect-dynamic-values "due" (current-buffer)))))
+
+(ert-deftest dynamic-collect-test-dynamic-type-as-symbol ()
+  "A symbol such as `person' is the same as the string \"person\"."
+  (with-temp-buffer
+    (insert "[ ] A @bob #java\n")
+    (altodo-mode)
+    (dolist (type '(person "person"))
+      (should (equal (mapcar (lambda (e) (plist-get e :title))
+                             (altodo--expand-dynamic-filter
+                              (list :title "%s" :type 'dynamic
+                                    :dynamic-type type)
+                              (current-buffer)))
+                     '("bob"))))))
+
+(ert-deftest dynamic-collect-test-exclusion-is-exact ()
+  "An exclusion is the whole name, in any case, with or without # or @."
+  (with-temp-buffer
+    (insert "[ ] A #id:1 #idea #Video #dependency #dep:1 #java @bob @bobby @Rob\n")
+    (altodo-mode)
+    (cl-flet ((titles (entry)
+                (mapcar (lambda (e) (plist-get e :title))
+                        (altodo--expand-dynamic-filter entry (current-buffer)))))
+      (should (equal (titles '(:title "%s" :type dynamic :dynamic-type "tag"
+                               :exclude-tag ("ID" "#dep" "video")))
+                     '("dependency" "idea" "java")))
+      (should (equal (titles '(:title "%s" :type dynamic :dynamic-type "person"
+                               :exclude-person ("@bob" "rob")))
+                     '("bobby")))
+      (should (equal (titles '(:title "%s" :type dynamic :dynamic-type "tag"
+                               :tag-mode "all"
+                               :exclude-tag-value ("id:1")))
+                     '("dep:1" "dependency" "idea" "java" "Video"))))))
 
 (ert-deftest dynamic-collect-test-sort-is-not-read ()
   "`:sort' is not a property: the order stays ascending."

@@ -361,14 +361,33 @@ M-x altodo-stop-auto-move-timer
 | --------------------------------------- | --------------------------------------------------------- | ------- |
 | `altodo-sidebar-modeline-enabled`       | Show filter state in sidebar mode line                    | `t`     |
 | `altodo-sidebar-dynamic-count-enabled`  | Dynamically update count with multiple filters            | `t`     |
-| `altodo-sidebar-position`               | Sidebar position (`left` or `right`)                      | `'left` |
-| `altodo-sidebar-size`                   | Sidebar width (window ratio 0.0-1.0)                      | `0.2`   |
+| `altodo-sidebar-position`               | Sidebar position (`left`, `right`, `above` or `below`)    | `'left` |
+| `altodo-sidebar-size`                   | Width or height. Below 1: ratio; 1 or more: columns/rows  | `0.2`   |
 | `altodo-sidebar-indent`                 | Sidebar indent width                                      | `2`     |
 | `altodo-sidebar-focus-after-activation` | Move focus to the source window after a filter is applied | `nil`   |
 | `altodo-sidebar-hide-mode-line`         | Hide sidebar mode line                                    | `nil`   |
 | `altodo-sidebar-hide-line-numbers`      | Hide sidebar line numbers                                 | `t`     |
 | `altodo-locals-code-policy`             | Policy for code in `.altodo-locals.el`                    | `'deny` |
 | `altodo-trusted-locals`                 | SHA-256 of trusted `.altodo-locals.el` files              | `nil`   |
+
+
+#### Sidebar Behavior
+
+- Update: the sidebar is drawn again when the file is saved (while the sidebar is shown) and with `r` and `C-c C-v s r`. Editing alone does not change the counts
+- Multiple selection: `s` selects entries of type `search-simple` and `search-lambda`. With AND, a count is the number of lines that match the selected conditions together. With OR, a count stays the count of the entry alone. The list of a dynamic filter (tags, persons and so on) is collected from the lines that match the selected conditions, with both AND and OR. When `altodo-sidebar-dynamic-count-enabled` is `nil`, the counts of the whole buffer are always shown
+- Switching AND/OR: a click on `[AND]` or `[OR]` in the mode line, and `C-c C-t`, keep the selection and filter again
+- Entries that cannot be drawn: an entry with an invalid value is left out with a message shown once. The other entries are drawn
+
+
+#### Filter Commands
+
+These commands filter without the sidebar. Running one clears the selection of the sidebar.
+
+- `M-x altodo-filter-by-pattern`: show only the lines that match a DSL pattern (e.g. `and:open,priority`)
+- `M-x altodo-filter-show-done-only`, `-progress-only`, `-waiting-only`, `-open-only`, `-cancelled-only`: filter by state
+- `M-x altodo-filter-show-priority`, `altodo-filter-show-star`: filter by flag
+- `M-x altodo-filter-show-tag`, `altodo-filter-show-person`: filter by tag or person
+- `M-x altodo-filter-show-overdue`: show the unfinished tasks (neither done nor cancelled) whose due date has passed
 
 
 #### Date/ID Settings

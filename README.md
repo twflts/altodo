@@ -360,18 +360,37 @@ M-x altodo-stop-auto-move-timer
 
 #### サイドバー設定
 
-| 変数名                                  | 説明                                                   | デフォルト値 |
-| --------------------------------------- | ------------------------------------------------------ | ------------ |
-| `altodo-sidebar-modeline-enabled`       | サイドバーにフィルタ状態を表示                         | `t`          |
-| `altodo-sidebar-dynamic-count-enabled`  | 複数フィルタ選択時にカウントを動的に更新               | `t`          |
-| `altodo-sidebar-position`               | サイドバー表示位置（`left` または `right`）            | `'left`      |
-| `altodo-sidebar-size`                   | サイドバー幅（ウィンドウ比 0.0-1.0）                   | `0.2`        |
-| `altodo-sidebar-indent`                 | サイドバーインデント幅                                 | `2`          |
-| `altodo-sidebar-focus-after-activation` | フィルタの適用後にソースのウィンドウへフォーカスを移す | `nil`        |
-| `altodo-sidebar-hide-mode-line`         | サイドバーのモードラインを非表示                       | `nil`        |
-| `altodo-sidebar-hide-line-numbers`      | サイドバーの行番号を非表示                             | `t`          |
-| `altodo-locals-code-policy`             | `.altodo-locals.el` のコードの実行方針                 | `'deny`      |
-| `altodo-trusted-locals`                 | 承認した `.altodo-locals.el` の SHA-256                | `nil`        |
+| 変数名                                  | 説明                                                    | デフォルト値 |
+| --------------------------------------- | ------------------------------------------------------- | ------------ |
+| `altodo-sidebar-modeline-enabled`       | サイドバーにフィルタ状態を表示                          | `t`          |
+| `altodo-sidebar-dynamic-count-enabled`  | 複数フィルタ選択時にカウントを動的に更新                | `t`          |
+| `altodo-sidebar-position`               | サイドバー表示位置（`left`、`right`、`above`、`below`） | `'left`      |
+| `altodo-sidebar-size`                   | 幅（左右）・高さ（上下）。1 未満は比率、1 以上は桁・行  | `0.2`        |
+| `altodo-sidebar-indent`                 | サイドバーインデント幅                                  | `2`          |
+| `altodo-sidebar-focus-after-activation` | フィルタの適用後にソースのウィンドウへフォーカスを移す  | `nil`        |
+| `altodo-sidebar-hide-mode-line`         | サイドバーのモードラインを非表示                        | `nil`        |
+| `altodo-sidebar-hide-line-numbers`      | サイドバーの行番号を非表示                              | `t`          |
+| `altodo-locals-code-policy`             | `.altodo-locals.el` のコードの実行方針                  | `'deny`      |
+| `altodo-trusted-locals`                 | 承認した `.altodo-locals.el` の SHA-256                 | `nil`        |
+
+
+#### サイドバーの動作
+
+- 更新: 保存時（サイドバーが表示されているとき）と、`r`、`C-c C-v s r` で更新する。編集しただけでは、件数は変わらない
+- 複数選択: `s` で選べるのは、`search-simple` と `search-lambda` のエントリである。AND のとき、件数は選んだ条件を重ねた値になる。OR のとき、件数は各エントリ単独の値のままである。動的フィルタ（タグ、担当者など）の一覧は、AND、OR とも、選んだ条件に一致する行から集める。`altodo-sidebar-dynamic-count-enabled` が `nil` のときは、常に全体の件数を表示する
+- AND/OR の切り替え: モードラインの `[AND]`、`[OR]` のクリックと `C-c C-t` は、選択を残して絞り込み直す
+- 描画できないエントリ: 値が不正なエントリは、メッセージを 1 回表示して除く。他のエントリは描画する
+
+
+#### フィルタのコマンド
+
+サイドバーを使わずに絞り込むコマンドである。実行すると、サイドバーの選択は解除される。
+
+- `M-x altodo-filter-by-pattern`: DSL パターンに一致する行だけを表示する（例: `and:open,priority`）
+- `M-x altodo-filter-show-done-only`、`-progress-only`、`-waiting-only`、`-open-only`、`-cancelled-only`: 状態で絞り込む
+- `M-x altodo-filter-show-priority`、`altodo-filter-show-star`: フラグで絞り込む
+- `M-x altodo-filter-show-tag`、`altodo-filter-show-person`: タグ、担当者で絞り込む
+- `M-x altodo-filter-show-overdue`: 期限が過ぎた、完了・廃止でないタスクを表示する
 
 
 #### 日付・ID 設定

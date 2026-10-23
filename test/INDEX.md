@@ -4,7 +4,7 @@
 
 ## 使い方
 
-- 全体: 112 ファイル、1125 テスト
+- 全体: 114 ファイル、1163 テスト
 - 実行: `scripts/run-tests.sh [test/NAME.el]`。ベースラインとの差分だけを報告する
 - 関数に対応するテストを探す: `grep -l 'altodo--関数名' test/*.el`
 - 共通の道具: `test/altodo-test-helper.el`（`altodo-test-with-buffer`、`-with-temp-dir`、`-with-locals`、`-with-today`、`altodo-test-file`）
@@ -16,6 +16,7 @@
 
 | ファイル | 件数 | 内容 | 主な対象 | 備考 |
 |---|---|---|---|---|
+| `filter-sidebar-doc-impl-test` | 17 | Filter and sidebar behavior of the design document | `altodo--get-display-context-option`、`altodo--compile-simple-pattern`、`altodo-sidebar--get-buffer` |  |
 | `review-fixes-test` | 18 | Tests for the fixes of the code review | `altodo-sidebar-indent`、`altodo--add-done-tag`、`altodo-sidebar--render` |  |
 | `sidebar-apply-filter-at-point-test` | 3 | Tests for altodo-sidebar--apply-filter-at-point | `altodo-sidebar--apply-filter-at-point`、`altodo-sidebar--apply-filter` |  |
 | `sidebar-blank-line-test` | 3 | Test for sidebar blank line issue | `altodo-sidebar--render` |  |
@@ -141,7 +142,8 @@
 | `combine-predicates-test` | 15 | Tests multiple filter selection | `altodo-sidebar--selected-filters`、`altodo-sidebar--combine-mode`、`altodo--combine-predicates` |  |
 | `dsl-compiler-test` | 33 | Tests for DSL compiler | `altodo--compile-simple-pattern`、`altodo--validate-pattern`、`altodo--normalize-pattern` |  |
 | `dsl-multi-patterns-test` | 13 | Tests for the line type and multi-value DSL patterns | `altodo--compile-simple-pattern`、`altodo--get-entry-count` |  |
-| `dynamic-collect-test` | 26 | Tests for dynamic filter functionality | `altodo--collect-dynamic-values`、`altodo--expand-dynamic-filter`、`altodo--format-placeholder` |  |
+| `dsl-review-test` | 16 | DSL behavior of the design document | `altodo--compile-simple-pattern`、`altodo--count-matching-lines`、`altodo--normalize-pattern` |  |
+| `dynamic-collect-test` | 31 | Tests for dynamic filter functionality | `altodo--expand-dynamic-filter`、`altodo--collect-dynamic-values`、`altodo--format-placeholder` |  |
 | `dynamic-filter-test` | 16 | Tests for dynamic filter tag/person extraction | `altodo--line-extract-all-tags`、`altodo--line-extract-all-persons`、`altodo--collect-dynamic-values-with-exclude` |  |
 | `filter-function-test` | 10 | Tests for altodo filter functions | `altodo--line-has-tag-p`、`altodo--line-done-p`、`altodo--line-progress-p` |  |
 | `filter-helper-test` | 2 | Unit tests for filter helper functions | `altodo--filter-create-overlay`、`altodo--filter-find-overlay`、`altodo--filter-overlays` |  |

@@ -7,6 +7,20 @@
 
 ### 互換性に影響する変更
 
+- DSL の `tag:`、`has-any-tag:`、`has-all-tags:`、`tag-value:` は、色付けと動的フィルタの一覧と同じタグの定義を使う。`#` は行頭または空白の直後、名前は英数字、`_`、`-` である。`tag:java` は、`#java-x`、`x#java`、`(#java)`、URL の `#java` に一致しなくなった
+- DSL の `person:`、`has-any-person:` は、名前を次の空白までとして、全体に一致させる。`person:bob` は、`@bob,`、`@bob.`、`@bob.smith` に一致しなくなった（`@Bob` には一致する）
+- 動的フィルタの担当者とタグは、大文字小文字を区別せず、最初に現れた表記の 1 つにまとめる。`:sort-by "alpha"` も大文字小文字を区別しない
+- フェンス付きコードブロックの中の行は、状態・フラグのパターン（`done`、`open`、`priority`、`star`、`state-any:`、`has-any-flag:`）に一致しない。`# コメント` は、見出しとして扱わない
+- 見出しは、その上のタスクと親子関係を持たない。`parent-task-regexp:`、`root-task-regexp:` は、見出しの下のインデント付きタスクを、見出しの前のタスクの子として扱わない
+- `level:N` の N は、0 以上の整数でなければならない（従来は `level:abc` が `level:0` になった）
+- `tag-value:` の `(OP N)` は、`>`、`<`、`=`、`>=`、`<=` と数だけである。`(!= 5)`、`(> abc)`、`(> 5 6)` は、誤りになる（従来は値のリストや、一致しない条件になった）
+- 論理演算の空の引数（`and:open,,priority`、`and:open,priority,`）は、誤りである。引数の前後の空白は取り除く（従来は、空白を含む引数が誤りになった）
+- 不正な正規表現は、`regexp:`、`parent-task-regexp:`、`root-task-regexp:`、`multiline-comment-contains:` でも、パターンのコンパイルでエラーにする（従来は、行ごとの評価でエラーになり、フィルタが中断した）
+- 動的フィルタの `:exclude-person`、`:exclude-tag`、`:exclude-tag-value` は、名前の全体に一致する（従来は部分一致で、`("id")` が `#idea` も除いた）。大文字小文字は区別せず、先頭の `#`、`@` は付けても付けなくてもよい。リストでない値は、そのエントリを描画できない値として扱う
+- 動的フィルタの `:dynamic-type "due"`、`"start"` は、期日（`-> DATE`）と開始日（`DATE ->`）を集める（従来は `#due:DATE`、`#start:DATE` のタグの値で、選んでも件数が 0 になった）。一覧の `%s` は `altodo-date-format` の書式の日付で、`:sort-by` が効く（`"alpha"` は時系列）
+- `altodo-filter-show-overdue` は、完了・廃止のタスクを表示しない（従来は含めた）
+- 未知の `:display-context`（`.altodo-locals.el` に `'all` と引用符を付けて書いた `(quote all)` など）は、メッセージを 1 回表示して `heading-only` として動作する（従来は黙って `none` に近い動作で、見出しが出なかった）。値は引用符を付けずに書く
+- `:display-context` が `heading-only`（既定）と `none` のとき、マッチ行の複数行コメントを表示しない（従来は、既定の `:multiline-comment t` で表示した）。`all` のときだけ表示する。`:multiline-comment` を指定すると、指定が優先する（`t` はどの値でも表示、`nil` は `all` でも表示しない）。コメントを表示したい項目には、`:display-context all` または `:multiline-comment t` を指定する
 - サイドバーのエントリで `:count-format` を省略したとき、`t` として扱う（従来は、通常のエントリは `nil`、動的フィルタと見出しは `t`）。`:title` に `%n` があれば、数に置き換わる。置き換えたくないときは `:count-format nil` を指定する
 - `:count-face-rules` は、`%n` の数字だけに適用する。`:face-rules` がないときに行全体にも適用していた動作をやめた（設計書 13.6 節のとおり）
 - サイドバーの内部変数 `altodo-sidebar--active-entries` と内部関数 `altodo-sidebar--update-active-entry` を削除した。クリックしたエントリは `altodo-sidebar--selected-filters`（`altodo-sidebar--selection-mode` が `single`）に入る
@@ -55,6 +69,18 @@
 
 ### 変更
 
+- `parent-task-regexp:` と `root-task-regexp:` を、バッファの 1 回の走査で求める。親のないインデント付きタスク 5000 行で 57 秒かかっていたのが 0.1 秒以下になった
+- `altodo-sidebar-size`（`.altodo-locals.el` の同名の設定を含む）を反映する。1 未満はフレームに対する比率、1 以上は桁数（上下は行数）である。従来は、どの値でも幅が Emacs の既定（フレーム幅の 4 分の 1）だった
+- `altodo-sidebar-position` に `above`、`below` を指定できる（従来はエラーになった）
+- `:dynamic-type` に、`"person"` のほかに、シンボル `person` も指定できる
+- `heading:REGEXP` と `:display-context` が、Setext 見出しを扱う（従来は ATX 見出しだけだった）
+- `start-date:tomorrow` を使える
+- モードラインの `[AND]`、`[OR]` のクリックは、複数選択を残して絞り込み直す（`C-c C-t` と同じ。従来は、フィルタを全て解除した）
+- サイドバーで `s` を押したとき、`search-simple` と `search-lambda` 以外のエントリ（`command` など）は選べない（従来は選ぶと全行が非表示になった）
+- 描画できないエントリ（数える lambda がエラーを出す、`:nest` が整数でない、など）は、メッセージを 1 回表示して除く。他のエントリは描画する（従来は、サイドバー全体が描画されなかった）
+- 動的フィルタの `:sort-by "count"` で件数が同じ値は、名前の昇順に並べる
+- 空の引数の論理演算（`and:`）のメッセージを、内部のエラーから `The logic operator has no operands` に変えた
+- README に、サイドバーの動作とフィルタのコマンドを追加した
 - サイドバーの動的フィルタ（`:type dynamic`）と見出しの展開は、`:face-rules`、`:count-face-rules`、`:count-exclude-others`、`:display-context`、`:multiline-comment` など、展開に使わないプロパティを展開後のエントリに引き継ぐ（従来は `:face`、`:face-count`、`:count-format` だけだった）。見出しの `:face-rules` は、見出しの未完了のタスク数で評価する
 - `:face`、`:face-count`、`:face-rules` と `:count-face-rules` の値に、face 名、face 名のリスト、plist（`(:foreground "red")`）、defface 形式（`((t (:foreground "red")))`）を指定できる。従来の `:face` は、plist を無視した
 - 書式が不正な `:face-rules`、`:count-face-rules` の規則は、その規則だけを無視して、メッセージを 1 回表示する（従来は、サイドバー全体が描画されなかった）
@@ -75,6 +101,7 @@
 
 ### 修正
 
+- `:display-context all` が、複数行コメントの次の行（マッチしない行）も表示する不具合を直した
 - `search-lambda` のエントリをクリックしたとき、複数選択が解除されない不具合を直した。`:display-context` も適用する
 - `altodo-filter-by-pattern` と `altodo-filter-show-*` を実行したとき、サイドバーの選択（色）が実際のフィルタと食い違う不具合を直した。サイドバーの選択を解除して、描画し直す
 - サイドバーの `c` が、ソースのバッファのフィルタを解除しない不具合を直した

@@ -64,6 +64,7 @@
 (defvar altodo-sidebar--combine-mode)
 (defvar altodo-sidebar--buffer-alist)
 (defvar altodo--count-cache)
+(defvar altodo--person-in-body-regex)
 (defvar read-eval)
 
 ;;; Constants and Variables
@@ -1979,21 +1980,17 @@ changes."
 
 (defun altodo-sidebar--toggle-filter-mode (event)
   "Toggle between AND and OR filter modes.
-EVENT is the mouse event.
-NOTE: Current implementation clears selected filters.
-Future versions may support keeping filters via defcustom option."
+EVENT is the mouse event.  A multiple selection is kept and filtered again
+with the new mode, as with \\[altodo-sidebar-toggle-combine-mode]."
   (interactive "e")
   (ignore event)
   (altodo--with-sidebar-buffer
    (lambda ()
-     ;; Toggle mode
      (setq altodo-sidebar--combine-mode
            (if (eq altodo-sidebar--combine-mode 'and) 'or 'and))
-
-     ;; Clear filters (current behavior)
-     (altodo-filter-clear)
-
-     ;; Update modeline
+     (when (altodo-sidebar--multiple-p)
+       (altodo-sidebar--apply-combined-filter)
+       (altodo-sidebar-refresh))
      (altodo--update-sidebar-modeline))))
 
 (defun altodo--get-sidebar-modeline-string ()
@@ -2124,22 +2121,25 @@ hidden, which looks like a filter result."
                (error-message-string err))
       (signal (car err) (cdr err)))))
 
-(cl-defun altodo--filter-lines (predicate &optional (show-multiline-comment t)
+(cl-defun altodo--filter-lines (predicate &optional (show-multiline-comment 'auto)
                                           display-context)
   "Apply filter using PREDICATE function.
 PREDICATE is called at the beginning of each line.
 If PREDICATE returns t, the line is shown; otherwise, it is hidden.
-SHOW-MULTILINE-COMMENT (default t) controls whether to show multiline comments
-attached to matching task/comment lines.  Passing nil hides them.
+SHOW-MULTILINE-COMMENT controls whether to show multiline comments attached
+to matching task/comment lines: t shows them, nil hides them, and `auto',
+the default, shows them only when DISPLAY-CONTEXT is `all'.
 DISPLAY-CONTEXT (default \\='heading-only) controls display of heading and
 comment lines:
   - \\='all: show heading and multiline comments
   - \\='heading-only: show heading only
   - \\='none: show matched lines only"
-  (let ((show-multiline show-multiline-comment)
-        (ctx (or display-context 'heading-only))
-        (matched-line-numbers nil)
-        (current-line-number 1))
+  (let* ((ctx (or display-context 'heading-only))
+         (show-multiline (if (eq show-multiline-comment 'auto)
+                             (eq ctx 'all)
+                           show-multiline-comment))
+         (matched-line-numbers nil)
+         (current-line-number 1))
 
     ;; Fill the heading cache
     (altodo--compute-all-heading-ranges)
@@ -2183,7 +2183,8 @@ comment lines:
              ;; Third pass: apply display-context option
              (when (and matched-line-numbers (not (eq ctx 'none)))
                (let ((display-lines (sort (altodo--compute-display-lines
-                                           (nreverse matched-line-numbers) ctx)
+                                           (nreverse matched-line-numbers) ctx
+                                           show-multiline)
                                           #'<))
                      (current-line 1))
                  ;; Walk the sorted line numbers once instead of counting lines
@@ -2295,8 +2296,16 @@ ranges are buffer positions.  The vector keeps the buffer order."
                                          (+ (line-number-at-pos)
                                             (if (bolp) 0 1))))
                       (end-line (progn (goto-char (cdr range))
-                                       (line-number-at-pos))))
-                 (list (1- start-line) start-line end-line)))
+                                       (line-number-at-pos)))
+                      ;; The heading is the line before the range, or two
+                      ;; lines before it when that line is an underline.
+                      (heading-line
+                       (progn (goto-char (car range))
+                              (forward-line -1)
+                              (if (looking-at "^#+[ \t]+")
+                                  (1- start-line)
+                                (- start-line 2)))))
+                 (list heading-line start-line end-line)))
              heading-ranges))))
 
 (defun altodo--map-lines-to-headings (lines line-ranges)
@@ -2327,8 +2336,8 @@ ranges that contain the current line is enough."
   "Add the multiline comment lines of line LINE-NUM to DISPLAY-LINES.
 MAX-LINE is the number of the last line.  SEEN is the hash table of the
 lines in DISPLAY-LINES; it is updated.  Returns the new DISPLAY-LINES.
-The line after the comment is added too, because the range from
-`altodo--get-multiline-comment-range' ends at the beginning of that line."
+The range from `altodo--get-multiline-comment-range' ends at the beginning
+of the line after the comment, which is not added."
   (save-excursion
     (altodo--goto-line line-num)
     (let ((line-start (point))
@@ -2341,7 +2350,7 @@ The line after the comment is added too, because the range from
                                 (min line-num max-line)
                               (1+ (min line-num max-line))))
               (iter 0))
-          (while (and (<= (point) (cdr comment-range)) (< iter 1000))
+          (while (and (< (point) (cdr comment-range)) (< iter 1000))
             (unless (gethash comment-line seen)
               (puthash comment-line t seen)
               (push comment-line display-lines))
@@ -2352,10 +2361,13 @@ The line after the comment is added too, because the range from
               (setq iter 1000)))))))
   display-lines)
 
-(defun altodo--compute-display-lines (matched-lines display-context)
+(cl-defun altodo--compute-display-lines (matched-lines display-context
+                                                    &optional (show-multiline t))
   "Compute display lines based on DISPLAY-CONTEXT option.
 MATCHED-LINES: list of line numbers that match the filter
 DISPLAY-CONTEXT: \\='all, \\='heading-only, or \\='none
+SHOW-MULTILINE: nil leaves out the multiline comments of the matched lines;
+it is t by default.
 Returns: list of line numbers to display (including heading and comment lines)"
   ;; Fill the heading cache, as the other filter functions use it.
   (let ((heading-ranges (altodo--compute-all-heading-ranges)))
@@ -2389,7 +2401,7 @@ Returns: list of line numbers to display (including heading and comment lines)"
                       (while (not (eq added previous))
                         (puthash (car added) t seen)
                         (setq added (cdr added)))))))))
-          (when (eq display-context 'all)
+          (when (and (eq display-context 'all) show-multiline)
             (setq display-lines
                   (altodo--add-comment-lines line-num max-line display-lines
                                              seen))))
@@ -2402,7 +2414,9 @@ Returns: list of line numbers to display (including heading and comment lines)"
 (defun altodo--line-state-p (state)
   "Return t if current line has STATE.
 STATE should be one of the altodo-state-* constants."
-  (looking-at (format "^[ \t]*\\[%s\\]" (regexp-quote state))))
+  (and (looking-at (format "^[ \t]*\\[%s\\]" (regexp-quote state)))
+       ;; The pattern first: the check of the code block is slow.
+       (not (altodo--in-fenced-code-block-p))))
 
 (defun altodo--line-done-p ()
   "Return t if current line is a done task, nil otherwise."
@@ -2418,13 +2432,19 @@ STATE should be one of the altodo-state-* constants."
 
 (defun altodo--line-has-tag-p (tag)
   "Return t if the current line has TAG.
-TAG should be a string like \"important\" (without #)."
+TAG is a tag name such as \"important\" (without #), or NAME:VALUE for a tag
+with a value.  A tag is what `altodo-tag-with-value-regex' and
+`altodo-tag-without-value-regex' match, as in the highlighting and in the
+dynamic filters: `#' after a space or at the beginning of the line, and a name
+of letters, digits, `_' and `-'.  The case is ignored.  Only task lines and
+`///' lines have tags."
   (save-excursion
     (beginning-of-line)
     (and (or (altodo--task-p) (altodo--comment-p))
-         (re-search-forward (concat "#" (regexp-quote tag) "\\>")
-                            (line-end-position)
-                            t))))
+         (seq-some (lambda (found) (string-equal-ignore-case found tag))
+                   (altodo--line-extract-all-tags
+                    (if (string-search ":" tag) "all" "name-only")))
+         t)))
 
 (defun altodo--string-to-valid-number (str)
   "Convert STR to number if valid, otherwise return nil.
@@ -2449,7 +2469,8 @@ TAG should be a string like \"priority\" (without #)."
   (save-excursion
     (beginning-of-line)
     (when (or (altodo--task-p) (altodo--comment-p))
-      (when (re-search-forward (concat "#" (regexp-quote tag) ":\\(\"[^\"]*\"\\|[^[:space:]]+\\)")
+      (when (re-search-forward (concat "\\(?:^\\|[ \t]\\)#" (regexp-quote tag)
+                                       ":\\(\"[^\"]*\"\\|[^[:space:]]+\\)")
                                 (line-end-position)
                                 t)
         (altodo--extract-tag-value (match-string 1))))))
@@ -2490,7 +2511,8 @@ Priority flag can be one or more \\='!\\=' characters followed by a space.
 It may follow a star flag."
   (save-excursion
     (beginning-of-line)
-    (when (looking-at altodo-task-regex)
+    (when (and (looking-at altodo-task-regex)
+               (not (altodo--in-fenced-code-block-p)))
       (and (nth 1 (altodo--parse-flags (match-string 3))) t))))
 
 (defun altodo--line-has-star-p ()
@@ -2498,7 +2520,8 @@ It may follow a star flag."
 It may follow a priority flag."
   (save-excursion
     (beginning-of-line)
-    (when (looking-at altodo-task-regex)
+    (when (and (looking-at altodo-task-regex)
+               (not (altodo--in-fenced-code-block-p)))
       (altodo--has-star-flag-p (match-string 3)))))
 
 (defun altodo--line-has-any-tag-p (tags)
@@ -2519,21 +2542,33 @@ TAGS should be a list of tag strings (without @)."
         (throw 'found nil)))
     t))
 
-(defun altodo--person-search-regex (person)
-  "Return the regexp that matches @PERSON in a line.
-The @ must be at the beginning of the line or after a space, so the @ in a
-URL such as https://example.com/a@b is not a person."
-  (concat "\\(?:^\\|[[:space:]]\\)@" (regexp-quote person) "\\>"))
+(defun altodo--line-person-names ()
+  "Return the names of the @persons of the current line, or nil.
+A person is `@' after a space or at the beginning of the text, followed by the
+name up to the next space, as in the dynamic filters.  The text is the task
+body of a task line or the text of a `///' line."
+  (save-excursion
+    (beginning-of-line)
+    (let ((text (cond ((altodo--task-p) (altodo--line-task-body))
+                      ((altodo--comment-p)
+                       (substring-no-properties (match-string 2)))))
+          (start 0)
+          (names nil))
+      (when text
+        (while (string-match altodo--person-in-body-regex text start)
+          (let ((name (match-string 1 text)))
+            (unless (string-match-p "\\`[][]" name)
+              (push name names)))
+          (setq start (match-end 0))))
+      (nreverse names))))
 
 (defun altodo--line-has-person-p (person)
   "Return t if the current line has PERSON.
-PERSON should be a string like \"john\" (without @)."
-  (save-excursion
-    (beginning-of-line)
-    (and (or (altodo--task-p) (altodo--comment-p))
-         (re-search-forward (altodo--person-search-regex person)
-                            (line-end-position)
-                            t))))
+PERSON is a name such as \"john\" (without @), which is the whole name up to
+the next space: `@john,' is the person \"john,\".  The case is ignored."
+  (and (seq-some (lambda (name) (string-equal-ignore-case name person))
+                 (altodo--line-person-names))
+       t))
 
 (defun altodo--line-has-any-person-p (persons)
   "Return t if current line has any of the PERSONS.
@@ -2606,6 +2641,7 @@ PREDICATE gets the days from today to the due date.")
 
 (defconst altodo--start-date-specific-conditions
   (list (cons 'passed (lambda (days-diff) (< days-diff 0)))
+        (cons 'tomorrow (lambda (days-diff) (= days-diff 1)))
         (cons 'not-yet (lambda (days-diff) (> days-diff 0))))
   "Alist of (CONDITION . PREDICATE) that only the start date has.
 PREDICATE gets the days from today to the start date.")
@@ -2707,7 +2743,8 @@ Returns date string (e.g., \"2026-01-01\") or nil."
 
 (defun altodo--start-date-matches-p (condition)
   "Check if current line\\='s start date matches CONDITION.
-CONDITION: \\='passed, \\='today, \\='not-yet, \\='this-week, \\='this-month,
+CONDITION: \\='passed, \\='today, \\='tomorrow, \\='not-yet, \\='this-week,
+           \\='this-month,
            string (date), or list (before/after/between/within/past).
 Returns t if matches, nil otherwise."
   (let ((start-date (altodo--line-start-date-value)))
@@ -2722,7 +2759,7 @@ Supports altodo-date-format for date strings.
 Signals error on invalid date format."
   (altodo--parse-date-condition
    condition-str
-   '("passed" "today" "not-yet" "this-week" "this-month")
+   '("passed" "today" "tomorrow" "not-yet" "this-week" "this-month")
    "start"))
 
 
@@ -2768,58 +2805,96 @@ Assumes point is at beginning of line."
   (and regexp
        (re-search-forward regexp (line-end-position) t)))
 
-(defun altodo--find-parent-task-matching-regexp (regexp target-indent-pred)
-  "Find parent task matching REGEXP using TARGET-INDENT-PRED.
-TARGET-INDENT-PRED is a function that takes (line-indent current-indent)
-and returns t if this is the target parent level.
-Returns t if found, nil otherwise."
-  (when regexp
-    (let ((current-indent (altodo--get-current-indent)))
-      (when (> current-indent 0)
-        (beginning-of-line)
-        (catch 'found
-          (while (zerop (forward-line -1))
-            (when (altodo--task-p)
-              (let ((line-indent (altodo--get-current-indent)))
-                (when (funcall target-indent-pred line-indent current-indent)
-                  (throw 'found
-                         (save-excursion
-                           (altodo--line-matches-regexp-at-point-p regexp))))))))))))
+(defvar-local altodo--ancestor-cache nil
+  "Parents and roots of the lines of this buffer, as (TICK . TABLE).
+TABLE maps the beginning of a line to (PARENT . ROOT), the beginnings of
+the lines of its parent task and its root task.  It is valid while TICK is
+`buffer-chars-modified-tick'.")
+
+(defun altodo--compute-ancestors ()
+  "Return the table of `altodo--ancestor-cache', made in one pass.
+The parent of a line is the nearest task above it that is indented less; the
+root is the nearest task above it without indentation.  A heading ends the
+tasks above it: a task under a heading does not have a parent from before the
+heading."
+  (let ((table (make-hash-table))
+        (stack nil)
+        (root nil))
+    (save-excursion
+      (save-restriction
+        (widen)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let* ((position (point))
+                 (indent (altodo--get-current-indent))
+                 (task (altodo--task-p)))
+            (cond
+             ((and (altodo--heading-level) (altodo--line-heading-p))
+              (setq stack nil
+                    root nil))
+             (t
+              ;; STACK has the tasks above, the nearest first, each indented
+              ;; less than the one before it.
+              (when task
+                (while (and stack (>= (car (car stack)) indent))
+                  (pop stack)))
+              (when (> indent 0)
+                (let ((parent (seq-find (lambda (entry) (< (car entry) indent))
+                                        stack)))
+                  (when (or parent root)
+                    (puthash position (cons (cdr parent) root) table))))
+              (when task
+                (push (cons indent position) stack)
+                (when (= indent 0)
+                  (setq root position)))))
+            (forward-line 1)))))
+    table))
+
+(defun altodo--line-ancestors ()
+  "Return (PARENT . ROOT) of the current line, or nil.
+PARENT and ROOT are the beginnings of the lines of the parent task and the
+root task (see `altodo--compute-ancestors').  The table is made again after
+the buffer changes."
+  (unless (and altodo--ancestor-cache
+               (eql (car altodo--ancestor-cache) (buffer-chars-modified-tick)))
+    (setq altodo--ancestor-cache
+          (cons (buffer-chars-modified-tick) (altodo--compute-ancestors))))
+  (gethash (line-beginning-position) (cdr altodo--ancestor-cache)))
+
+(defun altodo--regexp-matches-line-at-p (regexp position)
+  "Return non-nil if REGEXP matches the line at POSITION, or if POSITION is nil."
+  (and position
+       (save-excursion
+         (goto-char position)
+         (altodo--line-matches-regexp-at-point-p regexp))))
 
 (defun altodo--line-parent-task-matches-regexp-p (regexp)
-  "Return t if parent task matches REGEXP or current line is parent that matches.
-Returns nil if no parent task exists (top-level task) or REGEXP is nil."
+  "Return t if the parent task of the current line matches REGEXP.
+The current line counts when it is a task that matches itself.  The parent
+is the nearest task above that is indented less (not further up), and
+REGEXP is searched in the whole text of its line.  A heading ends the
+tasks above it.  Return nil if REGEXP is nil."
   (when regexp
     (save-excursion
-      ;; Check if current line is a task that matches regexp
-      (if (and (altodo--task-p)
-               (progn
-                 (beginning-of-line)
-                 (altodo--line-matches-regexp-at-point-p regexp)))
-          t
-        ;; Check if parent task matches
-        (altodo--find-parent-task-matching-regexp
-         regexp
-         (lambda (line-indent current-indent) (< line-indent current-indent)))))))
+      (or (and (altodo--task-p)
+               (progn (beginning-of-line)
+                      (altodo--line-matches-regexp-at-point-p regexp)))
+          (altodo--regexp-matches-line-at-p
+           regexp (car (altodo--line-ancestors)))))))
 
 (defun altodo--line-root-parent-task-matches-regexp-p (regexp)
-  "Return t if the root parent task (indent=0) matches REGEXP.
-The current line counts when it is the root task.
-Return nil if no root parent task exists or REGEXP is nil."
+  "Return t if the root task of the current line matches REGEXP.
+The root task is the nearest task above without indentation; the current line
+counts when it is such a task.  A heading ends the tasks above it.  Return
+nil if REGEXP is nil."
   (when regexp
     (save-excursion
-      (let ((current-indent (altodo--get-current-indent)))
-        ;; Check if current line is root task that matches
-        (if (and (= current-indent 0)
-                 (altodo--task-p)
-                 (progn
-                   (beginning-of-line)
-                   (altodo--line-matches-regexp-at-point-p regexp)))
-            t
-          ;; Check if root parent task matches
-          (altodo--find-parent-task-matching-regexp
-           regexp
-           (lambda (line-indent _current-indent) (= line-indent 0))))))))
+      (or (and (= (altodo--get-current-indent) 0)
+               (altodo--task-p)
+               (progn (beginning-of-line)
+                      (altodo--line-matches-regexp-at-point-p regexp)))
+          (altodo--regexp-matches-line-at-p
+           regexp (cdr (altodo--line-ancestors)))))))
 
 (defun altodo--parse-tag-value-condition (condition-str)
   "Parse tag-value CONDITION-STR and return predicate function.
@@ -2839,8 +2914,17 @@ Supported formats:
            (op-str (match-string 2 condition-str))
            (value-str (match-string 3 condition-str))
            (op (intern op-str))
-           (value (string-to-number value-str)))
+           (value (altodo--string-to-valid-number value-str)))
+      (unless (and (memq op '(> < = >= <=)) value)
+        (error "Invalid tag-value condition: %s (use OP NUMBER with >, <, =, >= or <=)"
+               condition-str))
       (lambda () (altodo--line-has-tag-value-numeric-p tag op value))))
+
+   ;; A condition with an operator that is not "tag (OP NUMBER)" is an error,
+   ;; not a list of values: "(!= 5)" and "(> abc)".
+   ((string-match-p "^[^ ]+ ([<>=!]" condition-str)
+    (error "Invalid tag-value condition: %s (use OP NUMBER with >, <, =, >= or <=)"
+           condition-str))
 
    ;; Multiple values OR: tag (value1 value2 ...)
    ((string-match "^\\([^ ]+\\) (\\([^)]+\\))$" condition-str)
@@ -2940,10 +3024,16 @@ Returns a list:
 
    ;; 論理演算パターン: op:p1,p2,...
    ((altodo--logic-operator-p pattern)
-    (string-match (concat "^" altodo--dsl-logic-operators-regex "\\(.+\\)$") pattern)
+    (unless (string-match (concat "^" altodo--dsl-logic-operators-regex
+                                  "\\(.+\\)$")
+                          pattern)
+      (error "The logic operator has no operands: %s" pattern))
     (let ((op (match-string 1 pattern))
           (args (match-string 2 pattern)))
-      (list 'logic (intern op) (altodo--split-logic-args args))))
+      (let ((operands (mapcar #'string-trim (altodo--split-logic-args args))))
+        (when (or (member "" operands) (string-suffix-p "," args))
+          (error "The logic operator has an empty operand: %s" pattern))
+        (list 'logic (intern op) operands))))
 
    ;; 引数付きパターン: type:arg
    ((string-match "^\\([^:]+\\):\\(.+\\)$" pattern)
@@ -2977,6 +3067,9 @@ Returns t if valid, nil otherwise."
        (not (altodo--comment-p))
        (not (altodo--multiline-comment-p))
        (altodo--heading-level)
+       ;; A line in a fenced code block, such as "# comment" of a shell
+       ;; script, is not a heading.
+       (not (altodo--in-fenced-code-block-p))
        t))
 
 (defun altodo--line-empty-p ()
@@ -3008,6 +3101,14 @@ error if NAMES is empty or has a name that is not in ALLOWED."
     (lambda ()
       (cl-some #'funcall predicates))))
 
+(defun altodo--check-regexp (regexp type)
+  "Signal an error if REGEXP, the argument of the pattern TYPE, is invalid.
+The error is reported when the pattern is compiled, not on every line."
+  (condition-case nil
+      (string-match-p regexp "")
+    (invalid-regexp
+     (error "Invalid regexp for %s: %s" type regexp))))
+
 (defun altodo--compile-normalized-pattern (normalized)
   "Compile NORMALIZED pattern into a predicate function.
 
@@ -3038,19 +3139,20 @@ Returns a lambda function that returns t/nil."
        ("tag" (lambda () (altodo--line-has-tag-p arg)))
        ("person" (lambda () (altodo--line-has-person-p arg)))
        ("text" (lambda () (altodo--line-text-contains-p arg)))
-       ("regexp" (lambda () (altodo--line-contains-regexp-p arg)))
-       ("level" (let ((level (string-to-number arg)))
-                  (lambda () (altodo--line-nest-level-p level))))
+       ("regexp" (altodo--check-regexp arg type)
+        (lambda () (altodo--line-contains-regexp-p arg)))
+       ("level" (unless (string-match-p "\\`[0-9]+\\'" arg)
+                  (error "The level must be a non-negative integer: %s" arg))
+        (let ((level (string-to-number arg)))
+          (lambda () (altodo--line-nest-level-p level))))
        ("heading" (progn
-                    ;; Report an invalid regexp when the pattern is compiled.
-                    (condition-case nil
-                        (string-match-p arg "")
-                      (invalid-regexp
-                       (error "Invalid regexp for heading: %s" arg)))
+                    (altodo--check-regexp arg type)
                     (lambda ()
                       (altodo--line-in-heading-range-with-filter-p
                        arg t 'only-tasks))))
-       ("multiline-comment-contains" (lambda () (altodo--multiline-comment-contains-regexp-p arg)))
+       ("multiline-comment-contains"
+        (altodo--check-regexp arg type)
+        (lambda () (altodo--multiline-comment-contains-regexp-p arg)))
        ;; Parse the condition once here, so that an invalid condition is
        ;; reported when the pattern is compiled, not on every line.
        ("due-date" (let ((condition (altodo--parse-due-date-condition arg)))
@@ -3070,8 +3172,12 @@ Returns a lambda function that returns t/nil."
                          (lambda () (altodo--line-has-all-tags-p tags))))
        ("has-any-person" (let ((persons (altodo--split-multi-arg arg)))
                            (lambda () (altodo--line-has-any-person-p persons))))
-       ("parent-task-regexp" (lambda () (altodo--line-parent-task-matches-regexp-p arg)))
-       ("root-task-regexp" (lambda () (altodo--line-root-parent-task-matches-regexp-p arg)))
+       ("parent-task-regexp"
+        (altodo--check-regexp arg type)
+        (lambda () (altodo--line-parent-task-matches-regexp-p arg)))
+       ("root-task-regexp"
+        (altodo--check-regexp arg type)
+        (lambda () (altodo--line-root-parent-task-matches-regexp-p arg)))
        (_ (error "Unknown arg type: %s" type))))
 
     ;; 論理演算パターン
@@ -4234,9 +4340,10 @@ out why a pattern does not match what you expect."
   (message "Showing tasks with tag #%s" tag))
 
 (defun altodo-filter-show-overdue ()
-  "Show only tasks whose due date has passed."
+  "Show only the unfinished tasks whose due date has passed."
   (interactive)
-  (altodo--apply-dsl-filter "and:task,due-date:overdue" 'overdue)
+  (altodo--apply-dsl-filter
+   "and:task,due-date:overdue,not:state-any:done|cancelled" 'overdue)
   (message "Showing overdue tasks only"))
 
 (defun altodo-filter-show-person (person)
@@ -4817,22 +4924,47 @@ Uses the source buffer (altodo main buffer) for counting."
           (setq altodo-sidebar--current-combined-predicate nil
                 combined-predicate nil))
         (dolist (entry (plist-get config :entries))
-          (cond
-           ((eq (plist-get entry :type) 'calendar)
-            (altodo-sidebar--insert-calendar entry config source-buffer sidebar-window))
-           ((eq (plist-get entry :type) 'agenda)
-            (altodo-sidebar--insert-agenda entry config source-buffer sidebar-window))
-           ((or (eq (plist-get entry :type) 'dynamic)
-                (equal (plist-get entry :type) "dynamic"))
-            (dolist (expanded (altodo--expand-dynamic-filter entry source-buffer combined-predicate))
-              (altodo-sidebar--insert-entry expanded config source-buffer sidebar-window combined-predicate combine-mode)))
-           (t
-            (altodo-sidebar--insert-entry entry config source-buffer sidebar-window combined-predicate combine-mode))))
+          (let ((start (point-max)))
+            (condition-case err
+                (altodo-sidebar--insert-item entry config source-buffer
+                                             sidebar-window combined-predicate
+                                             combine-mode)
+              ;; An entry that cannot be drawn is left out; the others are
+              ;; still drawn.
+              (error
+               (delete-region start (point-max))
+               (altodo--report-once
+                (list :entry entry)
+                "altodo: ignored the sidebar entry %S: %s"
+                entry (error-message-string err))))))
         ;; Each entry ends with a newline; drop the last one so that the
         ;; sidebar does not end with an empty line.
         (goto-char (point-max))
         (when (and (> (point-max) (point-min)) (eq (char-before) ?\n))
           (delete-char -1))))))
+
+(defun altodo-sidebar--insert-item (entry config source-buffer sidebar-window
+                                         combined-predicate combine-mode)
+  "Insert the sidebar ENTRY, expanding it if it is dynamic.
+CONFIG, SOURCE-BUFFER, SIDEBAR-WINDOW, COMBINED-PREDICATE and COMBINE-MODE
+are as in `altodo-sidebar--render'."
+  (let ((type (plist-get entry :type)))
+    (cond
+     ((eq type 'calendar)
+      (altodo-sidebar--insert-calendar entry config source-buffer
+                                       sidebar-window))
+     ((eq type 'agenda)
+      (altodo-sidebar--insert-agenda entry config source-buffer
+                                     sidebar-window))
+     ((or (eq type 'dynamic) (equal type "dynamic"))
+      (dolist (expanded (altodo--expand-dynamic-filter
+                         entry source-buffer combined-predicate))
+        (altodo-sidebar--insert-entry expanded config source-buffer
+                                      sidebar-window combined-predicate
+                                      combine-mode)))
+     (t
+      (altodo-sidebar--insert-entry entry config source-buffer sidebar-window
+                                    combined-predicate combine-mode)))))
 
 (defun altodo--make-repeated-pattern (pattern width)
   "Create a repeated PATTERN string to fill WIDTH display columns.
@@ -4918,10 +5050,20 @@ where the title has no face of its own, such as the number of `%n'."
 (defun altodo-sidebar--make-display-action (config)
   "Create display action from CONFIG.
 Returns display action (function . alist) per GNU Emacs manual."
-  `(display-buffer-in-side-window
-    . ((side . ,(plist-get config :position))
-       (slot . 0)
-       (dedicated . side))))
+  (let* ((position (plist-get config :position))
+         ;; The sides of `display-buffer-in-side-window' are left, right,
+         ;; top and bottom.
+         (side (pcase position ('above 'top) ('below 'bottom) (_ position)))
+         (size (plist-get config :width))
+         (parameter (if (memq side '(top bottom)) 'window-height 'window-width)))
+    `(display-buffer-in-side-window
+      . ((side . ,side)
+         (slot . 0)
+         (dedicated . side)
+         ;; A number below 1 is a ratio of the frame, 1 or more is the
+         ;; number of columns (rows for the top and the bottom).
+         ,@(when (and (numberp size) (> size 0))
+             `((,parameter . ,(if (< size 1) size (round size)))))))))
 
 (defun altodo-sidebar--setup-buffer (buffer config)
   "Setup BUFFER for sidebar display using CONFIG.
@@ -5308,26 +5450,32 @@ Supports both ATX (# ## ###) and Setext (=== or ---) syntax."
 (defun altodo--compute-all-heading-ranges ()
   "Compute all heading ranges in buffer and cache them.
 Returns alist of (heading-text . (start . end)), in buffer order.
-The range of an ATX heading starts at the line after the heading and
-ends before the next heading of the same or a higher level, or at the end
-of the buffer.  The buffer is scanned once."
+The range of a heading starts at the line after the heading (after the
+underline for a Setext heading) and ends before the next heading of the
+same or a higher level, or at the end of the buffer.  The buffer is scanned
+once."
   (let ((entries nil)
         (open nil))
     (save-excursion
       (goto-char (point-min))
       (while (not (eobp))
         (let ((level (altodo--heading-level)))
-          (when level
+          (when (and level (altodo--line-heading-p))
             (let ((line-start (line-beginning-position)))
               ;; This heading ends the open headings of the same or a
               ;; deeper level.
               (while (and open (<= level (car (car open))))
                 (setcdr (cdr (cdr (pop open))) line-start))
-              (when (looking-at "^#+[ \t]+\\(.+\\)$")
-                (let ((entry (cons (match-string-no-properties 1)
-                                   (cons (line-beginning-position 2) nil))))
-                  (push entry entries)
-                  (push (cons level entry) open))))))
+              (let ((entry
+                     (if (looking-at "^#+[ \t]+\\(.+\\)$")
+                         (cons (match-string-no-properties 1)
+                               (cons (line-beginning-position 2) nil))
+                       ;; Setext heading: the range starts after the underline.
+                       (cons (buffer-substring-no-properties
+                              (line-beginning-position) (line-end-position))
+                             (cons (line-beginning-position 3) nil)))))
+                (push entry entries)
+                (push (cons level entry) open)))))
         (forward-line 1))
       (dolist (item open)
         (setcdr (cdr (cdr item)) (point-max))))
@@ -5544,24 +5692,33 @@ TAG-MODE: \"all\", \"name-only\" (default), \"with-value\".
 Returns alist of (value . count)."
   (altodo--collect-dynamic-values-with-exclude dynamic-type source-buffer tag-mode nil nil nil))
 
+(defun altodo--excluded-p (value exclusions)
+  "Return non-nil if VALUE is one of EXCLUSIONS.
+The comparison ignores the case and a leading `#' or `@' of an exclusion.
+Signal an error if EXCLUSIONS is not a list of strings."
+  (unless (and (proper-list-p exclusions) (seq-every-p #'stringp exclusions))
+    (error "Exclusions must be a list of strings: %S" exclusions))
+  (let ((value (downcase value)))
+    (seq-some (lambda (exclusion)
+                (string= value (downcase (string-remove-prefix
+                                          "#" (string-remove-prefix
+                                               "@" exclusion)))))
+              exclusions)))
+
 (defun altodo--should-exclude-value (value dynamic-type exclude-person exclude-tag exclude-tag-value)
   "Check if VALUE should be excluded based on DYNAMIC-TYPE.
 The lists EXCLUDE-PERSON, EXCLUDE-TAG and EXCLUDE-TAG-VALUE are the exclusions.
+A person is excluded by its name, a tag by its name (the part before the
+first `:' of VALUE) and a tag with a value by NAME:VALUE.
 Return t if value should be excluded, nil otherwise."
-  (catch 'excluded
-    (when (and (equal dynamic-type "person") exclude-person)
-      (dolist (exc exclude-person)
-        (when (string-match (regexp-quote exc) value)
-          (throw 'excluded t))))
-    (when (and (equal dynamic-type "tag") exclude-tag)
-      (dolist (exc exclude-tag)
-        (when (string-match (regexp-quote exc) value)
-          (throw 'excluded t))))
-    (when (and (equal dynamic-type "tag") exclude-tag-value)
-      (dolist (exc exclude-tag-value)
-        (when (string-match (regexp-quote exc) value)
-          (throw 'excluded t))))
-    nil))
+  (cond
+   ((equal dynamic-type "person")
+    (and exclude-person (altodo--excluded-p value exclude-person)))
+   ((equal dynamic-type "tag")
+    (or (and exclude-tag
+             (altodo--excluded-p (car (split-string value ":")) exclude-tag))
+        (and exclude-tag-value (string-search ":" value)
+             (altodo--excluded-p value exclude-tag-value))))))
 
 (defun altodo--extract-dynamic-values (dynamic-type &optional tag-mode)
   "Extract values of DYNAMIC-TYPE from current line.
@@ -5572,12 +5729,13 @@ Returns list of value strings."
     (altodo--line-extract-all-persons))
    ((equal dynamic-type "tag")
     (altodo--line-extract-all-tags (or tag-mode "name-only")))
-   ((equal dynamic-type "due")
-    (let ((v (altodo--line-extract-tag-value "due")))
-      (when v (list v))))
-   ((equal dynamic-type "start")
-    (let ((v (altodo--line-extract-tag-value "start")))
-      (when v (list v))))))
+   ;; The dates are "-> DATE" and "DATE ->", as the DSL `due-date' and
+   ;; `start-date' see them, in the form YYYY-MM-DD.  A date that does not
+   ;; exist would make the pattern of its entry invalid.
+   ((member dynamic-type '("due" "start"))
+    (let ((date (altodo--line-date-value (intern dynamic-type))))
+      (when (and date (altodo--parse-normalized-date date))
+        (list date))))))
 
 (defun altodo--collect-dynamic-values-with-exclude (dynamic-type source-buffer &optional tag-mode exclude-person exclude-tag exclude-tag-value predicate)
   "Collect values of DYNAMIC-TYPE from SOURCE-BUFFER with exclusions.
@@ -5587,7 +5745,11 @@ PREDICATE is an optional predicate function to filter lines (called at line
 beginning).
 Returns alist of (value . count)."
   (with-current-buffer source-buffer
-    (let ((values (make-hash-table :test 'equal)))
+    ;; Persons and tags are the same whatever the case (the patterns
+    ;; `person:' and `tag:' ignore it): one value, written as in its first use.
+    (let ((values (make-hash-table :test 'equal))
+          (spellings (make-hash-table :test 'equal))
+          (ignore-case (member dynamic-type '("person" "tag"))))
       (save-excursion
         (goto-char (point-min))
         (while (not (eobp))
@@ -5596,18 +5758,36 @@ Returns alist of (value . count)."
             (dolist (value (altodo--extract-dynamic-values dynamic-type tag-mode))
               (when (not (altodo--should-exclude-value value dynamic-type
                                                       exclude-person exclude-tag exclude-tag-value))
-                (puthash value (1+ (gethash value values 0)) values))))
+                (let ((key (if ignore-case (downcase value) value)))
+                  (unless (gethash key spellings)
+                    (puthash key value spellings))
+                  (puthash key (1+ (gethash key values 0)) values)))))
           (forward-line 1)))
       (let ((result nil))
-        (maphash (lambda (k v) (push (cons k v) result)) values)
+        (maphash (lambda (k v) (push (cons (gethash k spellings) v) result))
+                 values)
         result))))
+
+(defun altodo--dynamic-value-text (value dynamic-type)
+  "Return VALUE of DYNAMIC-TYPE as it is shown and used in a pattern.
+A date (type `due' or `start') is collected as YYYY-MM-DD, which sorts by
+time, and is written in `altodo-date-format'."
+  (if (member dynamic-type '("due" "start"))
+      (format-time-string (or altodo-date-format "%Y-%m-%d")
+                          (altodo--parse-normalized-date value))
+    value))
 
 (defun altodo--sort-dynamic-values (alist sort-by)
   "Sort ALIST by SORT-BY.\n\"alpha\" for alphabetical, \"count\" for count descending."
   (sort alist
         (if (equal sort-by "count")
-            (lambda (a b) (> (cdr a) (cdr b)))
-          (lambda (a b) (string< (car a) (car b))))))
+            ;; The names break a tie, so the order does not depend on the
+            ;; order of the hash table.
+            (lambda (a b) (or (> (cdr a) (cdr b))
+                              (and (= (cdr a) (cdr b))
+                                   (string< (downcase (car a))
+                                            (downcase (car b))))))
+          (lambda (a b) (string< (downcase (car a)) (downcase (car b)))))))
 
 (defun altodo--limit-dynamic-values (alist limit)
   "Limit ALIST to LIMIT rows.  If LIMIT is nil or 0, return all."
@@ -5772,9 +5952,14 @@ Returns plain text without any face properties."
 (defun altodo--expand-dynamic-filter (entry source-buffer &optional combined-predicate)
   "Expand dynamic filter ENTRY to actual filter entries using SOURCE-BUFFER.
 If COMBINED-PREDICATE is provided, filter values based on combined predicate."
-  (if (equal (plist-get entry :dynamic-type) "heading")
-      (altodo--expand-heading-filter entry source-buffer)
-    (altodo--expand-value-filter entry source-buffer combined-predicate)))
+  (let ((type (plist-get entry :dynamic-type)))
+    ;; A symbol, such as `person', is the same as the string "person".
+    (when (and type (symbolp type))
+      (setq entry (plist-put (copy-sequence entry) :dynamic-type
+                             (symbol-name type))))
+    (if (equal (plist-get entry :dynamic-type) "heading")
+        (altodo--expand-heading-filter entry source-buffer)
+      (altodo--expand-value-filter entry source-buffer combined-predicate))))
 
 (defun altodo--expand-value-filter (entry source-buffer &optional combined-predicate)
   "Expand the dynamic filter ENTRY that collects values to filter entries.
@@ -5797,12 +5982,11 @@ SOURCE-BUFFER and COMBINED-PREDICATE are as in `altodo--expand-dynamic-filter'."
          (alist (altodo--collect-dynamic-values-with-exclude
                  dynamic-type source-buffer tag-mode
                  exclude-person exclude-tag exclude-tag-value combined-predicate))
-         (sorted (if (member dynamic-type '("person" "tag"))
-                     (altodo--sort-dynamic-values alist sort-by)
-                   (altodo--sort-dynamic-values alist "alpha")))
+         (sorted (altodo--sort-dynamic-values alist sort-by))
          (limited (altodo--limit-dynamic-values sorted limit)))
     (mapcar (lambda (item)
-              (let* ((value (car item))
+              (let* ((value (altodo--dynamic-value-text (car item)
+                                                        dynamic-type))
                      ;; %s のみ置換、%n は altodo--format-sidebar-title で再計算される
                      (entry-title (altodo--format-placeholder
                                    title `(("s" . ,value))))
@@ -5903,6 +6087,15 @@ searching for its parent would scan up to the beginning of the buffer."
 
 (defvar altodo--reported-face-rules nil
   "Invalid face rules that were reported, so that each is reported once.")
+
+(defvar altodo--reported-messages nil
+  "Keys of the messages that `altodo--report-once' showed.")
+
+(defun altodo--report-once (key format &rest args)
+  "Show the message FORMAT with ARGS once for each KEY (compared by `equal')."
+  (unless (member key altodo--reported-messages)
+    (push key altodo--reported-messages)
+    (apply #'message format args)))
 
 (defun altodo--report-invalid-face-rule (rule)
   "Show a message that the face RULE is invalid, once for each RULE."
@@ -6150,9 +6343,20 @@ Creates sidebar buffer with filter patterns from .altodo-locals.el."
 (defun altodo--get-display-context-option (entry)
   "Return the :display-context of filter ENTRY.
 The value is `all', `heading-only' or `none'.  It defaults to `heading-only'."
-  (if (plist-member entry :display-context)
-      (plist-get entry :display-context)
-    'heading-only))
+  (let ((value (if (plist-member entry :display-context)
+                   (plist-get entry :display-context)
+                 'heading-only)))
+    (cond
+     ((memq value '(all heading-only none)) value)
+     ((null value) 'heading-only)
+     (t
+      ;; A quoted symbol in a configuration file, such as 'all, is the list
+      ;; (quote all) after it is read.
+      (altodo--report-once
+       (list :display-context value)
+       "altodo: ignored the invalid :display-context %S (use all, heading-only or none)"
+       value)
+      'heading-only))))
 
 (defun altodo-sidebar--jump-to-heading (entry source-buffer)
   "Move point to the heading of the `heading-jump' ENTRY in SOURCE-BUFFER.
@@ -6189,9 +6393,10 @@ Extracts pattern from button and applies filter to altodo buffer."
          (type (plist-get entry :type))
          (command (plist-get entry :command))
          (source-buffer altodo-sidebar--source-buffer)
+         ;; Without :multiline-comment, :display-context decides.
          (show-multiline (if (plist-member entry :multiline-comment)
                              (plist-get entry :multiline-comment)
-                           t)))
+                           'auto)))
 
     (if (not (and source-buffer (buffer-live-p source-buffer)))
         (message "Error: No valid source buffer")
@@ -6279,10 +6484,10 @@ Add or remove ENTRY from altodo-sidebar--selected-filters.
 If no filters are selected after removal, clear the filter.
 A click on an entry is not part of a multiple selection: the first entry
 chosen after a click starts a new selection.
-A heading entry cannot be selected."
-  (when (eq (plist-get entry :type) 'heading-jump)
-    (message "A heading entry cannot be selected"))
-  (when (and (not (eq (plist-get entry :type) 'heading-jump))
+Only an entry of type `search-simple' or `search-lambda' can be selected."
+  (unless (memq (plist-get entry :type) '(search-simple search-lambda))
+    (message "Only a filter entry can be selected"))
+  (when (and (memq (plist-get entry :type) '(search-simple search-lambda))
              (or (altodo--with-sidebar-buffer
                   (lambda () (member entry altodo-sidebar--selected-filters)))
                  (altodo--entry-code-permitted-p entry t)))
@@ -6330,7 +6535,7 @@ Combines predicates using altodo-sidebar--combine-mode."
                                             combined-predicate)))
 
           ;; Apply combined filter
-          (altodo--filter-lines combined-predicate t 'heading-only))))))
+          (altodo--filter-lines combined-predicate 'auto 'heading-only))))))
 
 (defun altodo-sidebar-toggle-selection ()
   "Toggle multiple selection for filter at point.

@@ -239,8 +239,8 @@ buffer-invisibility-spec により非表示
 #### altodo--filter-lines
 
 **説明**: predicate に合致しない行を非表示にする
-**入力**: `predicate` 関数
-**出力**: overlay のリスト
+**入力**: `predicate` 関数。オプションとして、`show-multiline-comment`（`t`、`nil`、または既定の `auto`。13.3 節の `:multiline-comment`）と `display-context`（13.3.1 節）
+**出力**: なし（戻り値は使わない）。overlay は `altodo--filter-overlays` に残る
 
 
 #### altodo--compile-filter-predicate
@@ -314,21 +314,21 @@ buffer-invisibility-spec により非表示
 1. `altodo--collect-dynamic-values-*` でバッファから値を収集
    - `person`: `@person` タグの値を収集
    - `tag`: `#tag` の値を収集
-   - `due`: `#due:DATE` の値を収集
-   - `start`: `#start:DATE` の値を収集
+   - `due`: 期日（`-> DATE`）を収集
+   - `start`: 開始日（`DATE ->`）を収集
+   - 収集の対象は、タスク行（完了・廃止を含む）。見出しと `///` 行は対象外
 
 2. `altodo--sort-dynamic-values` でソート
-   - `alpha`: アルファベット順
-   - `count`: マッチ数順
-   - `reverse-count`: マッチ数逆順
+   - `alpha`: 昇順（日付は時系列）
+   - `count`: 件数の多い順（同数は昇順）
 
 3. `altodo--limit-dynamic-values` で制限
    - `:limit` で指定された数まで制限
    - `nil` または `0` の場合は制限なし
 
 4. 各値から `search-simple` エントリを生成
-   - `:title` の `%s` を値に置換
-   - `:pattern` を自動生成（例: `person:NAME`）
+   - `:title` の `%s` を値に置換（`due` と `start` は、`altodo-date-format` の書式の日付）
+   - `:pattern` を自動生成（例: `person:NAME`、`due-date:2026-03-05`）
 
 
 #### altodo--expand-heading-filter
@@ -458,8 +458,8 @@ buffer-invisibility-spec により非表示
 
 - `@person` - 担当者の一覧
 - `#tag` - タグの一覧
-- `#due` - 期限日の一覧
-- `#start` - 開始日の一覧
+- 期日（`-> DATE`）の一覧
+- 開始日（`DATE ->`）の一覧
 - 見出し - 見出しの一覧（選ぶと見出しの行へ移る。絞り込みは変えない）
 
 
@@ -469,6 +469,24 @@ buffer-invisibility-spec により非表示
 
 - `altodo-sidebar--combine-mode` で AND/OR を切り替え
 - `altodo--combine-predicates` で述語を結合
+- 選べるのは、`search-simple` と `search-lambda` のエントリである。見出し（`heading-jump`）や `command` など、他の種類は選べず、メッセージを表示する
+- 件数（`altodo-sidebar-dynamic-count-enabled` が `t` のとき）: AND は、エントリと結合した述語の両方に一致する行の数である。OR は、エントリ単独の件数のままである。動的フィルタの一覧は、AND、OR とも、結合した述語に一致する行から集める
+
+
+### サイドバーの更新
+
+サイドバーは、次のときに描画し直す。
+
+- ファイルの保存時（サイドバーが表示されているときだけ）
+- `r`、`C-c C-v s r`
+- フィルタの適用、選択、AND/OR の切り替え、カレンダーの月の移動
+
+バッファを編集しただけでは、件数は変わらない。保存するか、`r` で更新する。
+
+
+### 描画できないエントリ
+
+エントリの値が不正で描画できないとき（数える lambda がエラーを出す、`:nest` が整数でない、`:exclude-tag` がリストでない、`:days` が数でない、など）は、そのエントリだけを除き、メッセージ `altodo: ignored the sidebar entry ...` を、エントリごとに 1 回表示する。他のエントリは描画する。
 
 
 ## 8. キーバインド
@@ -508,7 +526,7 @@ buffer-invisibility-spec により非表示
 [AND] (Single)
 ```
 
-- `[AND]` と `[OR]`: 結合モード。クリックで切り替える
+- `[AND]` と `[OR]`: 結合モード。クリックで切り替える。複数選択は残り、新しいモードで絞り込み直す（`C-c C-t` と同じ）
 - `(Single)` と `(Multiple)`: 選択モード
 
 
@@ -607,42 +625,46 @@ Selected と Active のエントリは、タイトルの face を取り除き、
 
 ### 13.3 共通プロパティ
 
-| プロパティ              | 必須       | 説明                                                            |
-| ----------------------- | ---------- | --------------------------------------------------------------- |
-| `:title`                | 必須       | サイドバーに表示するタイトル。`%n` でマッチ数を表示             |
-| `:type`                 | 必須       | エントリタイプ（後述）                                          |
-| `:nest`                 | オプション | インデントレベル（デフォルト: 0）                               |
-| `:count-format`         | オプション | `nil` で `%n` を置換しない（デフォルト: `t`）                   |
-| `:face`                 | オプション | 行全体に適用する face（形は 13.6 参照）                         |
-| `:face-count`           | オプション | カウント部分 `%n` に適用する face                               |
-| `:face-rules`           | オプション | カウントに応じた行全体の face（13.6 参照）                      |
-| `:count-face-rules`     | オプション | カウントに応じたカウント部分の face（13.6 参照）                |
-| `:display-context`      | オプション | 表示コンテキスト（詳細は 13.3.1 参照）                          |
-| `:multiline-comment`    | オプション | `nil` でマッチ行の複数行コメントを表示しない（デフォルト: `t`） |
-| `:count-exclude-others` | オプション | カウント対象（詳細は 13.3.2 参照、デフォルト: `t`）             |
+| プロパティ              | 必須       | 説明                                                     |
+| ----------------------- | ---------- | -------------------------------------------------------- |
+| `:title`                | 必須       | サイドバーに表示するタイトル。`%n` でマッチ数を表示      |
+| `:type`                 | 必須       | エントリタイプ（後述）                                   |
+| `:nest`                 | オプション | インデントレベル（デフォルト: 0）                        |
+| `:count-format`         | オプション | `nil` で `%n` を置換しない（デフォルト: `t`）            |
+| `:face`                 | オプション | 行全体に適用する face（形は 13.6 参照）                  |
+| `:face-count`           | オプション | カウント部分 `%n` に適用する face                        |
+| `:face-rules`           | オプション | カウントに応じた行全体の face（13.6 参照）               |
+| `:count-face-rules`     | オプション | カウントに応じたカウント部分の face（13.6 参照）         |
+| `:display-context`      | オプション | 表示コンテキスト（詳細は 13.3.1 参照）                   |
+| `:multiline-comment`    | オプション | `t` で表示、`nil` で非表示（省略: `all` のときだけ表示） |
+| `:count-exclude-others` | オプション | カウント対象（詳細は 13.3.2 参照、デフォルト: `t`）      |
 
 
 #### 13.3.1 `:display-context` - 表示コンテキスト
 
-フィルタ適用時に、マッチ行に加えて表示する行を制御する。指定しない場合は `'heading-only` である。
+フィルタ適用時に、マッチ行に加えて表示する行を制御する。指定しない場合は `heading-only` である。
 
-| 値              | 説明                                                 |
-| --------------- | ---------------------------------------------------- |
-| `'heading-only` | マッチ行と、その見出し（デフォルト）                 |
-| `'all`          | マッチ行、その見出し、およびマッチ行の複数行コメント |
-| `'none`         | マッチ行のみ                                         |
+| 値             | 説明                                                 |
+| -------------- | ---------------------------------------------------- |
+| `heading-only` | マッチ行と、その見出し（デフォルト）                 |
+| `all`          | マッチ行、その見出し、およびマッチ行の複数行コメント |
+| `none`         | マッチ行のみ                                         |
+
+- 見出しは、ATX 見出しと Setext 見出し（題と下線の行）である
+- マッチ行の複数行コメントは、`:multiline-comment` を省略したとき、`all` のときだけ表示する。`heading-only` と `none` は表示しない。`:multiline-comment t` はどの値でも表示し、`nil` は `all` でも表示しない
+- 値はシンボルで、引用符を付けずに書く。`.altodo-locals.el` と `altodo-default-filter-patterns` の中の `'all` は、`(quote all)` のリストになるため、未知の値として扱う。未知の値は、メッセージを 1 回表示して、`heading-only` として動作する
 
 **例**:
 
 ```elisp
 ;; マッチ行と見出しを表示（デフォルト）
-(:title "Open - %n" :type search-simple :pattern "open" :display-context 'heading-only)
+(:title "Open - %n" :type search-simple :pattern "open" :display-context heading-only)
 
 ;; マッチ行、見出し、複数行コメントを表示
-(:title "Open (all) - %n" :type search-simple :pattern "open" :display-context 'all)
+(:title "Open (all) - %n" :type search-simple :pattern "open" :display-context all)
 
 ;; マッチ行のみ表示
-(:title "Open (lines only) - %n" :type search-simple :pattern "open" :display-context 'none)
+(:title "Open (lines only) - %n" :type search-simple :pattern "open" :display-context none)
 ```
 
 
@@ -664,8 +686,12 @@ __具体例__
     /// Comment for Task 2
 ```
 
+パターンを `any-line` とすると、次のようになる。
+
 - `:count-exclude-others t` の場合: マッチ数は _2_（タスク行のみ）
 - `:count-exclude-others nil` の場合: マッチ数は _4_（タスク行 + コメント行）
+
+`open` のように、コメント行に一致しないパターンでは、どちらも _2_ になる。`nil` が意味を持つのは、`any-line`、`comment`、`text:STRING` のように、コメント行にも一致するパターンのときである。
 
 **設定例**:
 
@@ -684,36 +710,39 @@ __具体例__
 
 クリック不可、フィルタ非適用。視覚的な区切りや説明文に使用。
 
-| プロパティ              | 必須/オプション | 説明                       |
-| ----------------------- | --------------- | -------------------------- |
-| `:face`                 | オプション      | 適用する face              |
-| `:count-exclude-others` | オプション      | `t` でタスク行のみカウント |
+| プロパティ | 必須/オプション | 説明          |
+| ---------- | --------------- | ------------- |
+| `:face`    | オプション      | 適用する face |
 
 
 #### `group-header`（グループヘッダー）
 
-クリック不可、視覚的な区切り。
+クリック不可、視覚的な区切り。フィルタとして機能しない。
 
-| プロパティ | 必須/オプション | 説明                     |
-| ---------- | --------------- | ------------------------ |
-| なし       | -               | フィルタとして機能しない |
+| プロパティ | 必須/オプション | 説明          |
+| ---------- | --------------- | ------------- |
+| `:face`    | オプション      | 適用する face |
 
 
 #### `dynamic`（動的フィルタ）
 
 表示時に値を自動収集しリスト表示する。
 
-| プロパティ           | 必須/オプション | 説明                                                         |
-| -------------------- | --------------- | ------------------------------------------------------------ |
-| `:dynamic-type`      | 必須            | 収集対象（`person`, `tag`, `due`, `start`, `heading`）       |
-| `:tag-mode`          | オプション      | タグ抽出モード（`"all"`, `"name-only"`, `"with-value"`）     |
-| `:exclude-person`    | オプション      | 除外する `@person` リスト                                    |
-| `:exclude-tag`       | オプション      | 除外する `#tag` リスト                                       |
-| `:exclude-tag-value` | オプション      | 除外する `#tag:value` リスト                                 |
-| `:sort-by`           | オプション      | 並べ替え（`"alpha"`: 昇順（既定）、`"count"`: 件数の多い順） |
-| `:limit`             | オプション      | 表示数制限（デフォルト: nil。nil または 0 は無制限）         |
+| プロパティ           | 必須/オプション | 説明                                                                           |
+| -------------------- | --------------- | ------------------------------------------------------------------------------ |
+| `:dynamic-type`      | 必須            | 収集対象（`"person"`、`"tag"`、`"due"`、`"start"`、`"heading"`。シンボルも可） |
+| `:tag-mode`          | オプション      | タグ抽出モード（`"all"`, `"name-only"`, `"with-value"`）                       |
+| `:exclude-person`    | オプション      | 除外する担当者のリスト（例: `("bob")`）                                        |
+| `:exclude-tag`       | オプション      | 除外するタグ名のリスト（例: `("id" "dep")`）                                   |
+| `:exclude-tag-value` | オプション      | 除外する `name:value` のリスト（例: `("priority:high")`）                      |
+| `:sort-by`           | オプション      | 並べ替え（`"alpha"`: 昇順（既定）、`"count"`: 件数の多い順）                   |
+| `:limit`             | オプション      | 表示数制限（デフォルト: nil。nil または 0 は無制限）                           |
 
-`:sort-by` は `person` と `tag` にだけ効く。`due` と `start` は常に昇順（日付の文字列順）である。
+除外の指定は、名前の全体に一致する（部分一致ではない）。大文字小文字は区別せず、先頭の `#`、`@` は付けても付けなくてもよい。`("id")` は `#id` を除き、`#idea` は除かない。リストでない値は、エントリを描画できない値として扱う（`doc/design.md` の 4.4 節）。
+
+担当者とタグは、大文字小文字を区別せず、最初に現れた表記の 1 つにまとめる（`@bob` と `@Bob`）。並べ替えの `"alpha"` も、大文字小文字を区別しない。
+
+`:sort-by` は、すべての `:dynamic-type` に効く。`due` と `start` の `"alpha"` は、日付の時系列である。`due` と `start` は、一覧の `%s` を `altodo-date-format` の書式で表示し、パターンを `due-date:DATE`、`start-date:DATE` にする。存在しない日付（`2026-02-30` など）は、一覧に入れない。
 
 `:tag-mode` のオプションは以下の通り。
 
@@ -740,9 +769,10 @@ __具体例__
 
 DSL パターンマッチ。DSL パターン文字列でフィルタ条件を記述。詳細は「13.5 DSL 構文」を参照
 
-| プロパティ | 必須/オプション | 説明               |
-| ---------- | --------------- | ------------------ |
-| `:pattern` | 必須            | DSL パターン文字列 |
+| プロパティ              | 必須/オプション | 説明                                         |
+| ----------------------- | --------------- | -------------------------------------------- |
+| `:pattern`              | 必須            | DSL パターン文字列                           |
+| `:count-pattern-simple` | オプション      | `%n` の件数を数えるときだけ使う DSL パターン |
 
 **DSL パターン例**:
 
@@ -766,9 +796,10 @@ DSL パターンマッチ。DSL パターン文字列でフィルタ条件を記
 
 直接 predicate 関数を指定。lambda 関数は引数なしで現在の行で評価され、t を返すと表示、nil を返すと非表示。
 
-| プロパティ | 必須/オプション | 説明        |
-| ---------- | --------------- | ----------- |
-| `:pattern` | 必須            | lambda 関数 |
+| プロパティ              | 必須/オプション | 説明                                        |
+| ----------------------- | --------------- | ------------------------------------------- |
+| `:pattern`              | 必須            | lambda 関数                                 |
+| `:count-pattern-lambda` | オプション      | `%n` の件数を数えるときだけ使う lambda 関数 |
 
 `.altodo-locals.el` に書いた lambda は、既定では実行しない（`altodo-locals-code-policy`。詳細は `doc/design.md` の 4.5）。`altodo-default-filter-patterns` に書いた lambda は、常に実行する。
 
@@ -881,9 +912,10 @@ Tomorrow
 
 視覚的な区切り
 
-| プロパティ | 必須/オプション | 説明                   |
-| ---------- | --------------- | ---------------------- |
-| `:pattern` | オプション      | 区切り線に表示する文字 |
+| プロパティ | 必須/オプション | 説明                                  |
+| ---------- | --------------- | ------------------------------------- |
+| `:pattern` | オプション      | 区切り線に表示する文字（既定は `─`） |
+| `:title`   | オプション      | 区切り線の中央に表示する文字列        |
 
 
 #### `command`（コマンド実行）
@@ -920,7 +952,12 @@ Tomorrow
 - 引数付きパターン: `種類:引数`。例: `"tag:java"`
 - 論理演算パターン: `演算:パターン,パターン,...`。例: `"and:open,priority"`
 
-書式の誤りや未知の種類のパターンは、どの行にも一致しない。
+書式の誤りや未知の種類のパターンは、どの行にも一致しない。サイドバーは、メッセージを表示して、そのパターンをどの行にも一致しないものとして扱う。`altodo-filter-by-pattern` は、`user-error` にして、何も変えない。
+
+- 演算子名とパターン名は、小文字だけを受け付ける（`AND:open` と `Open` は誤り）
+- 引数の空白は、論理演算の引数と複数の値を取るパターンでは取り除く。他のパターンの引数（`text:`、`tag-value:` の値など）では、空白も内容である
+- 正規表現を取るパターン（`regexp`、`heading`、`parent-task-regexp`、`root-task-regexp`、`multiline-comment-contains`）は、不正な正規表現を、パターンのコンパイルでエラーにする
+- フェンス付きコードブロック（`` ``` `` と `~~~`）の中の行は、タスク、コメント、見出しとして扱わない。これは、状態・フラグのパターン（`done`、`open`、`priority`、`star` など）、`task`、`comment`、`heading`、日付条件などに共通する。インデント付きコードブロックは扱わない（インデントはネストを表す）
 
 
 #### 13.5.2 単純パターン
@@ -932,11 +969,11 @@ Tomorrow
 | `"waiting"`               | 待機タスク                                                              |
 | `"open"`                  | オープンタスク                                                          |
 | `"cancelled"`             | 廃止タスク                                                              |
-| `"priority"`              | 優先度フラグ付き                                                        |
+| `"priority"`              | 優先度フラグ付き（段階は区別しない）                                    |
 | `"star"`                  | スターフラグ付き                                                        |
 | `"has-multiline-comment"` | 複数行コメント付き                                                      |
 | `"task"`                  | タスク行                                                                |
-| `"comment"`               | `///` 行                                                                |
+| `"comment"`               | `/// ` で始まる行                                                       |
 | `"multiline-comment"`     | 複数行コメントの行                                                      |
 | `"heading"`               | 見出し行（ATX 見出しと Setext 見出しの題。Setext の下線の行は含まない） |
 | `"empty-line"`            | 空行（空白だけの行を含む）                                              |
@@ -945,32 +982,42 @@ Tomorrow
 
 #### 13.5.3 引数付きパターン
 
-| 種類                         | 書式                                | 説明                             |
-| ---------------------------- | ----------------------------------- | -------------------------------- |
-| `tag`                        | `tag:NAME`                          | 指定タグを持つ行                 |
-| `person`                     | `person:NAME`                       | 指定担当者を持つ行               |
-| `text`                       | `text:STRING`                       | 文字列を含む行                   |
-| `regexp`                     | `regexp:REGEXP`                     | 正規表現にマッチする行           |
-| `level`                      | `level:N`                           | ネストレベル N の行              |
-| `heading`                    | `heading:REGEXP`                    | 見出しの範囲内のタスク行（下記） |
-| `due-date`                   | `due-date:CONDITION`                | 期日で絞り込む                   |
-| `start-date`                 | `start-date:CONDITION`              | 開始日で絞り込む                 |
-| `tag-value`                  | `tag-value:KEY VALUE`               | タグの値で絞り込む               |
-| `state-any`                  | `state-any:S1,S2,...`               | いずれかの状態の行               |
-| `has-any-flag`               | `has-any-flag:F1,F2,...`            | いずれかのフラグを持つ行         |
-| `has-any-tag`                | `has-any-tag:T1,T2,...`             | いずれかのタグを持つ行           |
-| `has-all-tags`               | `has-all-tags:T1,T2,...`            | 全てのタグを持つ行               |
-| `has-any-person`             | `has-any-person:P1,P2,...`          | いずれかの担当者を持つ行         |
-| `parent-task-regexp`         | `parent-task-regexp:REGEXP`         | 親タスクが正規表現にマッチ       |
-| `root-task-regexp`           | `root-task-regexp:REGEXP`           | ルート親タスクが正規表現にマッチ |
-| `multiline-comment-contains` | `multiline-comment-contains:REGEXP` | 複数行コメントが正規表現にマッチ |
+| 種類                         | 書式                                | 説明                                     |
+| ---------------------------- | ----------------------------------- | ---------------------------------------- |
+| `tag`                        | `tag:NAME`                          | 指定タグを持つ行（下記）                 |
+| `person`                     | `person:NAME`                       | 指定担当者を持つ行（下記）               |
+| `text`                       | `text:STRING`                       | 文字列を含む行                           |
+| `regexp`                     | `regexp:REGEXP`                     | 正規表現にマッチする行                   |
+| `level`                      | `level:N`                           | ネストレベル N の行                      |
+| `heading`                    | `heading:REGEXP`                    | 見出しの範囲内のタスク行（下記）         |
+| `due-date`                   | `due-date:CONDITION`                | 期日で絞り込む                           |
+| `start-date`                 | `start-date:CONDITION`              | 開始日で絞り込む                         |
+| `tag-value`                  | `tag-value:KEY VALUE`               | タグの値で絞り込む                       |
+| `state-any`                  | `state-any:S1,S2,...`               | いずれかの状態の行                       |
+| `has-any-flag`               | `has-any-flag:F1,F2,...`            | いずれかのフラグを持つ行                 |
+| `has-any-tag`                | `has-any-tag:T1,T2,...`             | いずれかのタグを持つ行                   |
+| `has-all-tags`               | `has-all-tags:T1,T2,...`            | 全てのタグを持つ行                       |
+| `has-any-person`             | `has-any-person:P1,P2,...`          | いずれかの担当者を持つ行                 |
+| `parent-task-regexp`         | `parent-task-regexp:REGEXP`         | 親タスクが正規表現にマッチ（下記）       |
+| `root-task-regexp`           | `root-task-regexp:REGEXP`           | ルート親タスクが正規表現にマッチ（下記） |
+| `multiline-comment-contains` | `multiline-comment-contains:REGEXP` | 複数行コメントが正規表現にマッチ         |
 
 論理演算の引数は、カンマで分割される。そのため、カンマを含む引数は論理演算の中に書けない。
+
+`tag`、`person`、`text`、`regexp`、`has-any-tag`、`has-all-tags`、`has-any-person` は、タスク行と `///` 行にだけ一致する。見出しや通常の文には一致しない。これらは、大文字小文字を区別しない。
+
+- タグ: 色付けと動的フィルタの一覧と同じ定義である。`#` は、行頭または空白の直後に置き、名前は英数字、`_`、`-` である。`tag:java` は、`#java` と `#java:値` に一致し、`#java-x`、`x#java`、`(#java)` には一致しない。`tag:priority:high` は、値付きのタグ `#priority:high` に一致する
+- 担当者: `@` は、行頭または空白の直後に置き、名前は次の空白までである。`person:bob` は、`@bob` と `@Bob` に一致し、`@bob,`、`@bob.smith` には一致しない（それぞれの名前は `bob,`、`bob.smith`）
+- レベル: `level:N` の N は 0 以上の整数である。レベルは、インデントの桁数を 4 で割った商（切り捨て）である。整数でない値は誤りである
+- 優先度: `priority` は、`!`、`!!`、`!!!` のどれにも一致する。段階で絞り込むときは、`regexp:` を使う（例: `regexp:^\[.\] !! `）
+- コメント: `comment` は、インデントとして空白とタブを許す。`///` だけの行と `///x` は、コメントではない
+- 状態の印: タスク行の判定は、`[]`（印がない）と `[ ]foo`（`]` の後に空白がない）も受け付ける。`done` などの状態パターンは、`[X]` を `[x]` と同じに扱う。仕様どおりの記法で書くこと
+- 親タスク: `parent-task-regexp` の親は、すぐ上にあって、インデントが浅い、直接のタスクである。親のタスクと、その子（`///` 行と複数行コメントを含む）に一致する。照合する文字列は、親の行の全体（状態の印、フラグ、タグを含む）である。`root-task-regexp` は、インデントのない最も近い上のタスクを、同じ方法で照合する。見出しは、その上のタスクとの関係を断つ。見出しの下のインデント付きタスクは、親もルートも持たない
 
 複数の値を取る `state-any`、`has-any-flag`、`has-any-tag`、`has-all-tags`、`has-any-person` は、値をカンマまたは縦棒（`|`）で区切る。論理演算の中では、カンマが演算の引数の区切りになるため、縦棒を使う。例: `and:open,has-any-tag:a|b`。`state-any` の値は `done`、`progress`、`waiting`、`open`、`cancelled`、`has-any-flag` の値は `star`、`priority` である。未知の値は、メッセージを表示し、どの行にも一致しないパターンになる。
 
 
-`heading:REGEXP` の `REGEXP` は正規表現で、見出しの文字列の中から探す（先頭固定ではない）。`^Work$` のように `^` と `$` で固定すると、`Workshop` を除ける。`C++` のように特殊文字を含む見出しは、`C\+\+` と書く。一致した見出しすべてが対象で、見出しの範囲には、子の見出しの下の行を含む。正規表現が不正なときは、パターンのコンパイルでエラーにする。
+`heading:REGEXP` の `REGEXP` は正規表現で、見出しの文字列の中から探す（先頭固定ではない）。`^Work$` のように `^` と `$` で固定すると、`Workshop` を除ける。`C++` のように特殊文字を含む見出しは、`C\+\+` と書く。一致した見出しすべてが対象で、見出しの範囲には、子の見出しの下の行を含む。見出しは、ATX 見出しと Setext 見出しである。一致する行は、範囲内のタスク行、`///` 行、複数行コメントの行である。正規表現が不正なときは、パターンのコンパイルでエラーにする。
 
 
 #### 13.5.4 日付条件（due-date / start-date）
@@ -987,8 +1034,8 @@ Tomorrow
 | `overdue`           | 期日超過          | `due-date:overdue`                       |
 | `today`             | 本日期日          | `due-date:today`                         |
 | `tomorrow`          | 明日期日          | `due-date:tomorrow`                      |
-| `this-week`         | 今週の期日        | `due-date:this-week`                     |
-| `this-month`        | 今月の期日        | `due-date:this-month`                    |
+| `this-week`         | 今日から週末まで  | `due-date:this-week`                     |
+| `this-month`        | 今日から月末まで  | `due-date:this-month`                    |
 | `before:DATE`       | DATE より前       | `due-date:before:2024-12-31`             |
 | `after:DATE`        | DATE より後       | `due-date:after:2024-01-01`              |
 | `between:START:END` | 範囲内            | `due-date:between:2024-01-01:2024-12-31` |
@@ -1010,7 +1057,9 @@ Tomorrow
 | `not` | `not:P`         | マッチしない（先頭のパターンのみ使う） |
 
 - `not` は、タスク行以外の行（見出し、通常の文）にも作用する
-- 入れ子は 1 段までである。同じ階層の演算子が複数ある場合のみ分割できる。例: `or:and:open,priority,and:progress,star` は「オープンかつ優先度付き」または「進行中かつスター付き」を表す。2 段以上の入れ子は未対応である
+- 各階層に演算子が 1 つなら、入れ子は何段でも書ける。例: `and:and:open,priority,star`
+- 同じ階層に演算子が複数並ぶときは、1 段目だけを分割できる。例: `or:and:open,priority,and:progress,star` は「オープンかつ優先度付き」または「進行中かつスター付き」を表す。2 段目以降で並べる書き方は未対応である
+- 演算子の後に引数がない（`and:`）パターンと、空の引数がある（`and:open,,priority`、`and:open,priority,`）パターンは、誤りである。引数の前後の空白は取り除く
 
 
 #### 13.5.6 タグ値条件（tag-value）
@@ -1021,7 +1070,11 @@ Tomorrow
 | `tag-value:KEY (V1 V2)` | いずれかに一致（OR）                  |
 | `tag-value:KEY (OP N)`  | 数値比較（`>`、`<`、`=`、`>=`、`<=`） |
 
-例: `tag-value:priority (> 5)`
+`tag-value:priority (> 5)` のように書く。
+
+- `(OP N)` は、`>`、`<`、`=`、`>=`、`<=` と数だけで書く。演算子で始まる他の書式（`(!= 5)`、`(> abc)`、`(> 5 6)`）は、誤りである
+- 値に空白があるときは、タグの値を `#owner:"john doe"` と書き、`tag-value:owner john doe` で照合する（引用符は外して比較する）
+- 同じタグが複数あるときは、最初のものを使う。タグ名は大文字小文字を区別せず、値の比較は区別する。タグの定義は、`tag` と同じである
 
 
 ### 13.6 face-rules および count-face-rules 仕様
@@ -1075,15 +1128,15 @@ __face-spec__ は以下の通り指定できる。`:face`、`:face-count` の値
    ;; ステータスグループ
    (:title "Status" :type group-header :nest 0)
    (:title "Open [ ] - %n" :type search-simple :pattern "open" :count-format t :nest 1
-           :count-exclude-others t :display-context 'all)
+           :count-exclude-others t :display-context all)
    (:title "In Progress [@] - %n" :type search-simple :pattern "progress" :count-format t :nest 1
-           :count-exclude-others t :display-context 'all)
+           :count-exclude-others t :display-context all)
    (:title "Waiting [w] - %n" :type search-simple :pattern "waiting" :count-format t :nest 1
-           :count-exclude-others t :display-context 'all)
+           :count-exclude-others t :display-context all)
    (:title "Done [x] - %n" :type search-simple :pattern "done" :count-format t :nest 1
-           :count-exclude-others t :display-context 'all)
+           :count-exclude-others t :display-context all)
    (:title "Cancelled [~] - %n" :type search-simple :pattern "cancelled" :count-format t :nest 1
-           :count-exclude-others t :display-context 'all)
+           :count-exclude-others t :display-context all)
    
    ;; フラググループ
    (:title "Flags" :type group-header :nest 0)
@@ -1109,12 +1162,12 @@ __face-spec__ は以下の通り指定できる。`:face`、`:face-count` の値
    (:title "Tags" :type group-header :nest 0)
    (:title "#%s - %n" :type dynamic :dynamic-type "tag" :count-format t :limit 5 :nest 1
            :exclude-tag ("id" "dep" "done") :tag-mode "name-only"
-           :count-exclude-others t :display-context 'all)
+           :count-exclude-others t :display-context all)
    
    ;; 人グループ
    (:title "People" :type group-header :nest 0)
    (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1
-           :count-exclude-others t :display-context 'all)
+           :count-exclude-others t :display-context all)
 
    ;; 見出しグループ
    (:title "Headings" :type group-header :nest 0)

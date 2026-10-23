@@ -7,6 +7,20 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Changes that affect compatibility
 
+- `tag:`, `has-any-tag:`, `has-all-tags:` and `tag-value:` of the DSL use the same definition of a tag as the highlighting and the lists of dynamic filters. `#` comes at the beginning of the line or after a space, and the name is letters, digits, `_` and `-`. `tag:java` no longer matches `#java-x`, `x#java`, `(#java)` or `#java` in a URL
+- `person:` and `has-any-person:` of the DSL match the whole name, which goes up to the next space. `person:bob` no longer matches `@bob,`, `@bob.` or `@bob.smith` (it still matches `@Bob`)
+- The persons and the tags of dynamic filters are merged ignoring the case, in the spelling of the first use. `:sort-by "alpha"` also ignores the case
+- Lines in a fenced code block do not match the state and flag patterns (`done`, `open`, `priority`, `star`, `state-any:`, `has-any-flag:`). A `# comment` there is not a heading
+- A heading cuts the parent-child relation to the tasks above it. `parent-task-regexp:` and `root-task-regexp:` do not treat an indented task under a heading as a child of a task before the heading
+- `N` of `level:N` must be an integer of 0 or more (before, `level:abc` worked as `level:0`)
+- `(OP N)` of `tag-value:` takes `>`, `<`, `=`, `>=`, `<=` and a number only. `(!= 5)`, `(> abc)` and `(> 5 6)` are errors (before, they became a list of values or a condition that matches nothing)
+- An empty operand of a logical operation (`and:open,,priority`, `and:open,priority,`) is an error. Spaces around an operand are removed (before, an operand with spaces was an error)
+- An invalid regular expression is an error of the compilation also for `regexp:`, `parent-task-regexp:`, `root-task-regexp:` and `multiline-comment-contains:` (before, it was an error in the evaluation of each line, which stopped the filter)
+- `:exclude-person`, `:exclude-tag` and `:exclude-tag-value` of a dynamic filter match the whole name (before, they matched a part of it, and `("id")` also left out `#idea`). The case is ignored, and a leading `#` or `@` may or may not be written. A value that is not a list makes the entry one that cannot be drawn
+- `:dynamic-type "due"` and `"start"` of a dynamic filter collect the due dates (`-> DATE`) and the start dates (`DATE ->`) (before, they collected the values of the tags `#due:DATE` and `#start:DATE`, and the count of a selected entry was 0). `%s` of the list is a date in the format of `altodo-date-format`, and `:sort-by` works (`"alpha"` is chronological)
+- `altodo-filter-show-overdue` does not show done and cancelled tasks (before, it included them)
+- An unknown `:display-context` (such as `(quote all)`, written as `'all` in `.altodo-locals.el`) shows a message once and works as `heading-only` (before, it worked silently like `none`, and headings were not shown). Write the value without a quote
+- With `:display-context` `heading-only` (the default) and `none`, the multi-line comments of matched lines are not displayed (before, the default `:multiline-comment t` displayed them). Only `all` displays them. An explicit `:multiline-comment` wins (`t` displays them with any value, `nil` hides them even with `all`). For an entry that should show the comments, give `:display-context all` or `:multiline-comment t`
 - When `:count-format` is omitted in a sidebar entry, it is `t` (before: `nil` for an ordinary entry, `t` for dynamic filters and headings). `%n` in `:title` is replaced with the count. Give `:count-format nil` to keep `%n` as it is
 - `:count-face-rules` applies to the digits of `%n` only. It no longer applies to the whole row when `:face-rules` is absent (as in section 13.6 of the design document)
 - The internal variable `altodo-sidebar--active-entries` and the internal function `altodo-sidebar--update-active-entry` were removed. The clicked entry is held in `altodo-sidebar--selected-filters` (with `altodo-sidebar--selection-mode` `single`)
@@ -54,6 +68,18 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Changed
 
+- `parent-task-regexp:` and `root-task-regexp:` are computed in one pass over the buffer. 5000 indented tasks without a parent took 57 s and now take 0.1 s or less
+- `altodo-sidebar-size` (also the setting of the same name in `.altodo-locals.el`) is applied. Below 1 it is a ratio of the frame; 1 or more is the number of columns (rows for above and below). Before, the width was the Emacs default (a quarter of the frame width) for any value
+- `altodo-sidebar-position` accepts `above` and `below` (before, they caused an error)
+- `:dynamic-type` accepts the symbol `person` as well as the string `"person"`
+- `heading:REGEXP` and `:display-context` handle Setext headings (before, only ATX headings)
+- `start-date:tomorrow` can be used
+- A click on `[AND]` or `[OR]` in the mode line keeps a multiple selection and filters again (the same as `C-c C-t`; before, it cleared all filters)
+- With `s` in the sidebar, an entry other than `search-simple` and `search-lambda` (such as `command`) cannot be selected (before, selecting one hid all lines)
+- An entry that cannot be drawn (a lambda that counts signals an error, `:nest` is not an integer, and so on) is left out with a message shown once. The other entries are drawn (before, the whole sidebar was not drawn)
+- Among equal counts, `:sort-by "count"` of a dynamic filter sorts by name in ascending order
+- The message for a logic operation with empty operands (`and:`) is `The logic operator has no operands` (before, an internal error)
+- The README describes the behavior of the sidebar and the filter commands
 - The expansion of dynamic filters (`:type dynamic`) and headings passes on the properties it does not use itself, such as `:face-rules`, `:count-face-rules`, `:count-exclude-others`, `:display-context` and `:multiline-comment`, to the expanded entries (before: only `:face`, `:face-count` and `:count-format`). `:face-rules` of a heading is evaluated with the number of unfinished tasks under the heading
 - The values of `:face`, `:face-count`, `:face-rules` and `:count-face-rules` can be a face name, a list of face names, a plist (`(:foreground "red")`) or the defface style (`((t (:foreground "red")))`). `:face` ignored a plist before
 - A rule of `:face-rules` or `:count-face-rules` with an invalid form is ignored alone, and a message is shown once (before: the whole sidebar was not drawn)
@@ -74,6 +100,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ### Fixed
 
+- `:display-context all` also displayed the line after a multi-line comment (a line that does not match)
 - A click on a `search-lambda` entry did not end a multiple selection. `:display-context` is applied too
 - After `altodo-filter-by-pattern` or `altodo-filter-show-*`, the selection (color) of the sidebar did not match the actual filter. They now clear the selection of the sidebar and draw it again
 - `c` in the sidebar did not clear the filter of the source buffer
