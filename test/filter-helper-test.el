@@ -31,33 +31,6 @@
       
       (message "test-filter-find-overlay: PASS"))))
 
-(ert-deftest filter-helper-test-filter-invert-visibility ()
-  "Test altodo--filter-invert-visibility."
-  (with-temp-buffer
-    (altodo-mode)
-    (insert "[ ] Task 1\n")
-    (goto-char (point-min))
-    
-    (let* ((line-start (line-beginning-position))
-           (line-end (line-end-position))
-           (ov (altodo--filter-create-overlay line-start line-end nil)))
-      
-      ;; Test: initially visible (invisible = nil)
-      (unless (null (overlay-get ov 'invisible))
-        (error "Initial state should be visible"))
-      
-      ;; Test: invert to invisible
-      (altodo--filter-invert-visibility ov)
-      (unless (overlay-get ov 'invisible)
-        (error "Should be invisible after invert"))
-      
-      ;; Test: invert back to visible
-      (altodo--filter-invert-visibility ov)
-      (unless (null (overlay-get ov 'invisible))
-        (error "Should be visible after second invert"))
-      
-      (message "test-filter-invert-visibility: PASS"))))
-
 (ert-deftest filter-helper-test-filter-create-overlay ()
   "Test altodo--filter-create-overlay."
   (with-temp-buffer

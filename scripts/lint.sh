@@ -18,17 +18,26 @@ err() {
 # バイトコンパイルは、作業ディレクトリを汚さないよう一時ディレクトリで行う。
 #######################################
 count_findings() {
-  local tmp_dir
+  local tmp_dir file byte=0 doc=0 lint=0 n
   tmp_dir="$(mktemp -d)" || return 1
-  cp altodo.el "${tmp_dir}/" || return 1
+  cp altodo.el altodo-calendar.el altodo-debug.el "${tmp_dir}/" || return 1
 
-  echo "byte-compile $("${EMACS_CMD}" --batch -L "${tmp_dir}" \
-    -f batch-byte-compile "${tmp_dir}/altodo.el" 2>&1 | grep -c 'Warning')"
-  echo "checkdoc $("${EMACS_CMD}" --batch --eval \
-    '(checkdoc-file "altodo.el")' 2>&1 | grep -c '^altodo.el:')"
-  echo "package-lint $("${EMACS_CMD}" --batch -L . --eval \
-    '(require (quote package-lint))' -f package-lint-batch-and-exit \
-    altodo.el 2>&1 | grep -c '^altodo.el:')"
+  # altodo-debug.el は altodo.el を require するため、-L に一時ディレクトリを渡す。
+  for file in altodo-calendar.el altodo.el altodo-debug.el; do
+    n="$("${EMACS_CMD}" --batch -L "${tmp_dir}" \
+      -f batch-byte-compile "${tmp_dir}/${file}" 2>&1 | grep -c 'Warning')"
+    byte=$((byte + n))
+    n="$("${EMACS_CMD}" --batch -L . --eval \
+      "(checkdoc-file \"${file}\")" 2>&1 | grep -c "^${file}:")"
+    doc=$((doc + n))
+    n="$("${EMACS_CMD}" --batch -L . --eval \
+      '(require (quote package-lint))' -f package-lint-batch-and-exit \
+      "${file}" 2>&1 | grep -c "^${file}:")"
+    lint=$((lint + n))
+  done
+  echo "byte-compile ${byte}"
+  echo "checkdoc ${doc}"
+  echo "package-lint ${lint}"
   rm -rf "${tmp_dir:?}"
 }
 

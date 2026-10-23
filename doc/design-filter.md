@@ -4,13 +4,12 @@
 
 ### 目的
 
-altodo-mode でタスクやコメントを条件に基づいてフィルタリングする機能を実装する。フィルタリング機能を元に、フィルタを選択しやくく、状態やフィルタのカウントを表示するサイドバー（バッファ）機能を実装する。
+altodo-mode でタスクやコメントを条件に基づいてフィルタリングする機能を実装する。フィルタリング機能を元に、フィルタを選択しやすく、状態やフィルタのカウントを表示するサイドバー（バッファ）機能を実装する。
 
 
 ### 機能一覧
 
 - **非表示フィルタ**: 条件に合わない行を非表示にする
-- **背景色変更**: 条件に合わない行の背景色を変更する（オプション）（WIP）
 - **クリア**: フィルタを解除して全ての行を表示する
 - **複数の条件**: 状態、タグ、優先度、日付などでフィルタリング
 - **複合条件**: AND/OR/NOT 条件での組み合わせ
@@ -133,7 +132,6 @@ altodo-filter
 ├── Internal Functions (altodo--*)
 │   ├── altodo--filter-init          ; 初期化
 │   ├── altodo--filter-lines         ; フィルタリング
-│   ├── altodo--filter-cleanup       ; 終了処理
 │   ├── altodo--compile-filter-predicate ; DSL コンパイル
 │   └── altodo--combine-predicates   ; 述語結合
 ├── Sidebar Functions (altodo-sidebar--*)
@@ -237,12 +235,6 @@ buffer-invisibility-spec により非表示
 **出力**: overlay のリスト
 
 
-#### altodo--filter-cleanup
-
-**説明**: フィルタシステムの終了処理
-**動作**: 全ての overlay を削除
-
-
 #### altodo--compile-filter-predicate
 
 **説明**: フィルタエントリから predicate 関数を生成
@@ -285,20 +277,7 @@ buffer-invisibility-spec により非表示
 
 **説明**: エントリの face を決定（Layer 構造）
 
-**処理順序**:
-
-```
-Layer 1: Selection（最優先）
-  ↓ 選択されたフィルタエントリ
-Layer 2: COUNT（face-rules / count-face-rules）
-  ↓ カウント数に基づく face
-Layer 3: Default（:face 指定）
-  ↓ エントリに :face が指定されている場合
-Layer 4: Type-based（デフォルト face）
-  ↓ :type に基づくデフォルト face
-Layer 5: Non-clickable（コメント行など）
-  ↓ クリック不可のエントリ
-```
+**処理順序**: 11 節の Layer 構造に従う。
 
 **face-rules フォールバック**:
 - face-rules がマッチしない場合、`:face` で指定した face にフォールバック
@@ -341,14 +320,33 @@ Layer 5: Non-clickable（コメント行など）
 
 3. `altodo--limit-dynamic-values` で制限
    - `:limit` で指定された数まで制限
-   - `nil` の場合は制限なし
+   - `nil` または `0` の場合は制限なし
 
 4. 各値から `search-simple` エントリを生成
    - `:title` の `%s` を値に置換
    - `:pattern` を自動生成（例: `person:NAME`）
 
 
-#### 6.4.1 altodo--get-entry-count
+#### altodo--expand-heading-filter
+
+**説明**: `:dynamic-type "heading"` のエントリを展開
+
+**処理**:
+
+1. `altodo--collect-headings` が、バッファを 1 回走査して、見出し（ATX と Setext。コードブロック内は除く）の文字列、レベル、位置、未完了のタスク数を返す
+2. `:level` で絞り、`:limit` で先頭から切る
+3. 見出しごとに `:type heading-jump` のエントリを作る。`:marker` に見出しの行頭のマーカーを設定する。`:nest` には、エントリの `:nest` と `:indent-by-level` の段数の和を設定する
+
+`altodo-sidebar--apply-filter` は、`heading-jump` のエントリを `save-window-excursion` の外で `altodo-sidebar--jump-to-heading` に渡す。この関数は、次の順に処理する。
+
+1. マーカーの行が見出しであることを確認する。見出しでなければ、メッセージを表示して終了する
+2. 見出しがフィルタのオーバーレイで非表示なら、`altodo-filter-clear` を呼ぶ
+3. ソースのウィンドウを選択し、`recenter 0` で見出しを上端に置く
+
+**性能**: 10000 行のバッファで、未完了のタスク数を含む走査は約 13 ms、50000 行で約 60 ms である。
+
+
+#### altodo--get-entry-count
 
 **説明**: エントリにマッチするタスクの数をカウント
 
@@ -374,7 +372,7 @@ Layer 5: Non-clickable（コメント行など）
 **返り値**: マッチしたタスクの数（整数）
 
 
-#### 6.4.2 altodo--format-sidebar-title
+#### altodo--format-sidebar-title
 
 **説明**: エントリのタイトルを書式化して返す
 
@@ -402,7 +400,7 @@ Layer 5: Non-clickable（コメント行など）
 **返り値**: 書式化されたタイトル文字列
 
 
-### 6.6 複合条件フィルタ
+### 6.5 複合条件フィルタ
 
 #### 複数選択時の処理
 
@@ -418,24 +416,25 @@ Layer 5: Non-clickable（コメント行など）
 4. 結合された predicate を `altodo--filter-lines` に適用
 
 
-### 6.7 ユーザーコマンド
+### 6.6 ユーザーコマンド
 
-| コマンド                             | 説明                         |
-| ------------------------------------ | ---------------------------- |
-| `altodo-filter-clear`                | 全てのフィルタを解除         |
-| `altodo-filter-show-done-only`       | done タスクのみ表示          |
-| `altodo-filter-show-progress-only`   | progress タスクのみ表示      |
-| `altodo-filter-show-waiting-only`    | waiting タスクのみ表示       |
-| `altodo-filter-show-open-only`       | open タスクのみ表示          |
-| `altodo-filter-show-cancelled-only`  | cancelled タスクのみ表示     |
-| `altodo-filter-show-tag`             | 指定タグのタスクを表示       |
-| `altodo-filter-show-priority`        | 優先度フラグ付きタスクを表示 |
-| `altodo-filter-show-star`            | スターフラグ付きタスクを表示 |
-| `altodo-filter-show-overdue`         | 期限超過タスクを表示         |
-| `altodo-filter-show-person`          | 指定担当者のタスクを表示     |
-| `altodo-sidebar-set-and-mode`        | AND モードに切り替え         |
-| `altodo-sidebar-set-or-mode`         | OR モードに切り替え          |
-| `altodo-sidebar-toggle-combine-mode` | AND/OR をトグル              |
+| コマンド                             | 説明                             |
+| ------------------------------------ | -------------------------------- |
+| `altodo-filter-clear`                | 全てのフィルタを解除             |
+| `altodo-filter-by-pattern`           | DSL パターンに一致する行のみ表示 |
+| `altodo-filter-show-done-only`       | done タスクのみ表示              |
+| `altodo-filter-show-progress-only`   | progress タスクのみ表示          |
+| `altodo-filter-show-waiting-only`    | waiting タスクのみ表示           |
+| `altodo-filter-show-open-only`       | open タスクのみ表示              |
+| `altodo-filter-show-cancelled-only`  | cancelled タスクのみ表示         |
+| `altodo-filter-show-tag`             | 指定タグのタスクを表示           |
+| `altodo-filter-show-priority`        | 優先度フラグ付きタスクを表示     |
+| `altodo-filter-show-star`            | スターフラグ付きタスクを表示     |
+| `altodo-filter-show-overdue`         | 期限超過タスクを表示             |
+| `altodo-filter-show-person`          | 指定担当者のタスクを表示         |
+| `altodo-sidebar-set-and-mode`        | AND モードに切り替え             |
+| `altodo-sidebar-set-or-mode`         | OR モードに切り替え              |
+| `altodo-sidebar-toggle-combine-mode` | AND/OR をトグル                  |
 
 
 ## 7. サイドバー連携
@@ -453,6 +452,7 @@ Layer 5: Non-clickable（コメント行など）
 - `#tag` - タグの一覧
 - `#due` - 期限日の一覧
 - `#start` - 開始日の一覧
+- 見出し - 見出しの一覧（選ぶと見出しの行へ移る。絞り込みは変えない）
 
 
 ### 複合条件フィルタ
@@ -476,18 +476,20 @@ Layer 5: Non-clickable（コメント行など）
 
 ### サイドバー操作
 
-| キー          | 機能                 |
-| ------------- | -------------------- |
-| `RET`、`SPC`  | フィルタを適用       |
-| `s`           | フィルタを選択/解除  |
-| `C-<mouse-1>` | フィルタを選択/解除  |
-| `c`           | フィルタクリア       |
-| `r`           | サイドバー更新       |
-| `q`           | サイドバーを閉じる   |
-| `n`、`p`      | 次の行、前の行へ移動 |
-| `C-c C-a`     | AND モードに切り替え |
-| `C-c C-o`     | OR モードに切り替え  |
-| `C-c C-t`     | AND/OR をトグル      |
+| キー          | 機能                                                |
+| ------------- | --------------------------------------------------- |
+| `RET`、`SPC`  | フィルタを適用                                      |
+| `s`           | フィルタを選択/解除                                 |
+| `C-<mouse-1>` | フィルタを選択/解除                                 |
+| `c`           | フィルタクリア                                      |
+| `r`           | サイドバー更新                                      |
+| `q`           | サイドバーを閉じる                                  |
+| `?`、`h`      | キーバインドのヘルプを表示（`altodo-sidebar-help`） |
+| `}`、`{`、`.` | カレンダーの次の月、前の月、今月                    |
+| `n`、`p`      | 次の行、前の行へ移動                                |
+| `C-c C-a`     | AND モードに切り替え                                |
+| `C-c C-o`     | OR モードに切り替え                                 |
+| `C-c C-t`     | AND/OR をトグル                                     |
 
 
 ## 9. モードライン表示
@@ -495,12 +497,11 @@ Layer 5: Non-clickable（コメント行など）
 ### フィルタ状態表示
 
 ```
-[Filter: done] [AND] (Single)
+[AND] (Single)
 ```
 
-- **Filter: フィルタ名** - 現在のフィルタ
-- **[AND]/[OR]** - 結合モード
-- **(Single)/(Multiple)** - 選択モード
+- `[AND]` と `[OR]`: 結合モード。クリックで切り替える
+- `(Single)` と `(Multiple)`: 選択モード
 
 
 ## 10. パフォーマンス
@@ -520,7 +521,7 @@ Layer 5: Non-clickable（コメント行など）
 - 目安: 5000 行のバッファで 1 秒以内、動的フィルタの更新で 100ms 以内。いずれも設計時の目安であり、上限ではない。処理時間は短いほどよい
 - 見出し範囲の計算（`altodo--compute-all-heading-ranges`）は、バッファを 1 回走査する（行数に比例する）
 - 表示行の計算（`altodo--compute-display-lines`）は、見出しの範囲を行番号に変換し、マッチした行を昇順に走査して、行を含む見出しを求める。マッチした行ごとに全見出しを調べない。overlay の一覧（`altodo--filter-overlays`）からの削除は、`altodo--filter-lines` の終了時に 1 回で行う
-- 測定値（`tag:work`、表示コンテキストあり）: 10,000 行で 2.99 秒から 0.36 秒、20,000 行で 0.85 秒に短縮した。行数を 2 倍にすると、処理時間は約 2.4 倍になる
+- 測定値（`tag:work`、表示コンテキストあり）: 10,000 行で 0.36 秒、20,000 行で 0.85 秒である。行数を 2 倍にすると、処理時間は約 2.4 倍になる
 
 
 ## 11. Face 適用優先度（Layer 構造）
@@ -554,8 +555,6 @@ Layer 5: Non-clickable（コメント行など）
 
 - `doc/design.md` - 全体設計書
 - `doc/altodo_spec.md` - フォーマット仕様書
-- `project.altodo` - 実装計画
-- `.kiro/memo/` - 開発メモ
 
 
 ## 13. altodo-filter-patterns 仕様
@@ -673,13 +672,13 @@ __具体例__
 
 | プロパティ           | 必須/オプション | 説明                                                     |
 | -------------------- | --------------- | -------------------------------------------------------- |
-| `:dynamic-type`      | 必須            | 収集対象（`person`, `tag`, `due`, `start`）              |
+| `:dynamic-type`      | 必須            | 収集対象（`person`, `tag`, `due`, `start`, `heading`）   |
 | `:tag-mode`          | オプション      | タグ抽出モード（`"all"`, `"name-only"`, `"with-value"`） |
 | `:exclude-person`    | オプション      | 除外する `@person` リスト                                |
 | `:exclude-tag`       | オプション      | 除外する `#tag` リスト                                   |
 | `:exclude-tag-value` | オプション      | 除外する `#tag:value` リスト                             |
 | `:sort`              | オプション      | ソート方法（`alpha`, `count`, `reverse-count`）          |
-| `:limit`             | オプション      | 表示数制限（デフォルト: nil = 無制限）                   |
+| `:limit`             | オプション      | 表示数制限（デフォルト: nil。nil または 0 は無制限）     |
 
 `:tag-mode` のオプションは以下の通り。
 
@@ -690,6 +689,14 @@ __具体例__
 | `"with-value"` | 値ありタグのみ抽出           | `#priority:high` → `["priority:high"]`                  |
 
 **注**: `:tag-ignore-value` と `:tag-mode "name-only"` は同様。
+
+`:dynamic-type "heading"` は、値を収集して絞り込むのではなく、見出しへ移るエントリ（`:type heading-jump`）に展開する。専用のプロパティは次の通り。`:sort`、`:exclude-*`、`:tag-mode` は無視する。
+
+- `:level`（オプション）: 対象のレベル。整数、または整数のリスト。省略は全レベル
+- `:limit`（オプション）: バッファの先頭からの見出しの数の上限。`0` または `nil` は無制限
+- `:indent-by-level`（オプション）: `t`（既定。レベル 1 をインデントなしにする）、整数 N（レベル N までをインデントなしにする）、`nil`（なし）
+
+`:title` の `%s` は見出しの文字列、`%l` はレベル、`%n` は見出しから次の見出しまでの未完了のタスク数（完了・廃止以外。`:count-format` が `nil` でなく、`:title` に `%n` があるときだけ数える）である。
 
 
 #### `search-simple`（シンプル検索）
@@ -747,6 +754,92 @@ DSL パターンマッチ。DSL パターン文字列でフィルタ条件を記
 - 返り値: `t`（表示）または `nil`（非表示）
 
 
+#### `calendar`（月のカレンダー）
+
+サイドバーに月のカレンダーを表示する。描画は、別ファイルのライブラリ `altodo-calendar.el` の `altodo-calendar-insert` が行い、altodo 側は、日ごとの face とボタン（`:day-function`）を渡す。期日と開始日のあるタスクの数に応じて日のセルの face が変わり、タスクのある日はボタンになって、その日のフィルタを適用する。
+
+| プロパティ         | 必須/オプション | 説明                                                         |
+| ------------------ | --------------- | ------------------------------------------------------------ |
+| `:title`           | オプション      | カレンダーの上に表示する見出し。空文字列なら表示しない       |
+| `:nest`            | オプション      | インデントレベル                                             |
+| `:calendar-target` | オプション      | 対象。`due`（期日）、`start`（開始日）、`both`（両方。既定） |
+| `:count-done`      | オプション      | `t` で完了・廃止のタスクも数える（既定は数えない）           |
+
+- 日ごとの種類の決定: 対象の種類のタスクがある日だけがボタンになる。期日と開始日の両方がある日は、`altodo-calendar-priority`（`due` または `start`。既定 `due`）の種類で、face とフィルタ（`due-date:DATE` または `start-date:DATE`）を決める。片方だけがある日は、その種類
+- 1 行目の `<` と `>` で前の月と次の月へ移り、月の名前のボタンで今月に戻る。`altodo-calendar-show-nav` を `nil` にすると、`<` と `>` を表示しない。サイドバーでは、`}`（次の月）、`{`（前の月）、`.`（今月）でも移れる
+- 週の開始日は `altodo-week-start-day`。曜日の名前、月の名前、見出しの書式、祝日の関数は、`altodo-calendar` グループのオプションで変更する（`altodo-calendar-day-names`、`-day-name-faces`、`-month-names`、`-title-format`、`-holiday-function`）。全ての列の幅は、最も幅の広い曜日の名前（2 桁未満なら 2 桁）に合わせる
+- 幅は、列の幅の 7 倍と区切りの 6 桁（既定は 20 桁）とインデントが要る。サイドバーの窓がそれより狭いときは、カレンダーの代わりに注記を表示する
+- 存在しない日付（`2026-02-30` など）を持つタスクは数えない
+- face（優先順位の高い順）: 絞り込み中の日（`altodo-calendar-selected-face`）、期限超過（`altodo-calendar-overdue-face`。期限が過ぎた未完了の期日に、太字と下線を重ねる）、期日が `altodo-calendar-heavy-count` 件以上（`altodo-calendar-due-heavy-face`）、期日あり（`altodo-calendar-due-face`）、開始日あり（`altodo-calendar-start-face`）、今日（`altodo-calendar-today-face`）、祝日（`altodo-calendar-holiday-face`）、日曜日（`altodo-calendar-sunday-face`）、土曜日（`altodo-calendar-saturday-face`）、通常の日（`altodo-calendar-day-face`）。見出しは `altodo-calendar-header-face`、`<` と `>` は `altodo-calendar-nav-face`、曜日の名前は `altodo-calendar-day-name-faces`（既定は `altodo-calendar-weekday-face`、日曜日と土曜日は各曜日の face）
+
+**例**:
+
+```elisp
+(:title "" :type calendar :nest 1)
+(:title "Due" :type calendar :calendar-target due :nest 1)
+```
+
+
+##### ライブラリ altodo-calendar
+
+`altodo-calendar.el` は `calendar` だけに依存し、altodo の関数を使わない。主な関数は `(altodo-calendar-insert MONTH YEAR &rest OPTIONS)` で、オプションは `:indent`、`:week-start`、`:today`、`:day-function`、`:nav-function`、`:show-nav` である。`:day-function` は日付 `(MONTH DAY YEAR)` を受けて、`nil` または `(:faces FACES :action FUNCTION :properties PLIST :help TEXT)` を返す。`:action` があれば、その日はボタンになる。日のセルには、テキストプロパティ `altodo-calendar-date` が付く。
+
+祝日の関数 `altodo-calendar-japanese-holiday` は、国民の祝日に関する法律（1948 年施行）に従う。成人の日、海の日、敬老の日、スポーツの日の月曜日への移動、2019 年の即位に伴う休日、2020 年と 2021 年の東京オリンピックに伴う移動、振替休日（2007 年以降は次の祝日でない日）、国民の休日（前日と翌日が祝日の日）を扱う。春分の日と秋分の日は、近似式で 1980〜2099 年だけを計算する（内閣府は、毎年 2 月に国立天文台が翌年の日を公表すると説明している）。
+
+
+#### `agenda`（日ごとの一覧）
+
+今日から数日分を、1 日 1 行で表示する。各行に、期日（D）と開始日（S）のあるタスクの数を示す。タスクのある行は、ボタンになり、その日のフィルタを適用する（期日と開始日の両方がある日は、`altodo-calendar-priority` の種類だけ）。
+
+| プロパティ         | 必須/オプション | 説明                                                                   |
+| ------------------ | --------------- | ---------------------------------------------------------------------- |
+| `:title`           | オプション      | 一覧の上に表示する見出し                                               |
+| `:nest`            | オプション      | インデントレベル                                                       |
+| `:days`            | オプション      | 表示する日数（既定 7）                                                 |
+| `:calendar-target` | オプション      | `due`、`start`、`both`（既定）                                         |
+| `:count-done`      | オプション      | `t` で完了・廃止のタスクも数える                                       |
+| `:agenda-overdue`  | オプション      | `nil` で、期限超過の行を表示しない（既定は、期限超過があれば表示する） |
+| `:date-format`     | オプション      | 日付の書式。`altodo`（既定）、`done-tag`、または書式の文字列           |
+| `:show-weekday`    | オプション      | `nil` で、日付の後ろの曜日を表示しない（既定 `t`。名前は下記）         |
+| `:today-label`     | オプション      | 今日の行のラベル（既定 `"Today"`）                                     |
+| `:tomorrow-label`  | オプション      | 明日の行のラベル（既定 `"Tomorrow"`）                                  |
+| `:overdue-label`   | オプション      | 期限超過の行のラベル（既定 `"Overdue"`）                               |
+| `:label-newline`   | オプション      | `t` で、ラベルを 1 行にし、日付と件数を次の行にする（既定 `nil`）      |
+
+```
+Overdue  1
+Today    2026-03-10 Tue D2
+Tomorrow 2026-03-11 Wed
+         2026-03-12 Thu D1 S1
+```
+
+`:label-newline t` のとき（日付は `:date-format "%m/%d"`）:
+
+```
+Overdue
+  1
+Today
+  03/10 Tue D2
+Tomorrow
+  03/11 Wed
+  03/12 Thu D1 S1
+```
+
+- 先頭の「Overdue」の行は、期日が今日より前で未完了のタスクの数を示し、`due-date:overdue` のフィルタを適用する（対象に期日を含むとき）
+- 曜日の名前: `altodo-calendar-day-names` が既定値と等しいときは、`calendar-day-abbrev-array`（Emacs の言語の略称。`Tue` など）。既定値から変更したときは、その名前を使い、カレンダーと一覧の表記を揃える。既定と同じ値を明示的に設定した場合も、略称になる
+- 日付の書式（`:date-format`）: `altodo` は `altodo-date-format`（`nil` なら `%Y-%m-%d`）、`done-tag` は `altodo-done-tag-datetime-format`（`nil` なら日付だけの `%Y-%m-%d`）に従う。文字列は `format-time-string` の書式で、`%a` を書けば曜日も出せる（この場合は `:show-weekday nil` にする）。曜日は `calendar-day-abbrev-array` の名前である
+- ラベルの列は、同じ行に置くときに限り、使うラベルのうち最も幅の広いものに揃える。ラベルが空の日は、列が空白になる（全てのラベルが空なら、列はない）。設定は全て、エントリのプロパティで行う（`altodo-filter-patterns`。専用のオプション変数はない）
+- face: 期限超過の行は `altodo-agenda-overdue-face`、今日の行は `altodo-agenda-today-face`、タスクのない行は `altodo-agenda-empty-face`、その他の行は `altodo-agenda-date-face`。件数の部分は、さらに `altodo-agenda-count-face`
+
+**例**:
+
+```elisp
+(:title "Next 7 days" :type agenda :days 7 :nest 1)
+(:title "今後" :type agenda :days 5 :date-format "%m/%d" :today-label "今日"
+ :tomorrow-label "明日" :overdue-label "期限超過" :label-newline t :nest 1)
+```
+
+
 #### `separator`（区切り線）
 
 視覚的な区切り
@@ -795,16 +888,22 @@ DSL パターンマッチ。DSL パターン文字列でフィルタ条件を記
 
 #### 13.5.2 単純パターン
 
-| パターン                  | 説明               |
-| ------------------------- | ------------------ |
-| `"done"`                  | 完了タスク         |
-| `"progress"`              | 進行中タスク       |
-| `"waiting"`               | 待機タスク         |
-| `"open"`                  | オープンタスク     |
-| `"cancelled"`             | 廃止タスク         |
-| `"priority"`              | 優先度フラグ付き   |
-| `"star"`                  | スターフラグ付き   |
-| `"has-multiline-comment"` | 複数行コメント付き |
+| パターン                  | 説明                                                                    |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `"done"`                  | 完了タスク                                                              |
+| `"progress"`              | 進行中タスク                                                            |
+| `"waiting"`               | 待機タスク                                                              |
+| `"open"`                  | オープンタスク                                                          |
+| `"cancelled"`             | 廃止タスク                                                              |
+| `"priority"`              | 優先度フラグ付き                                                        |
+| `"star"`                  | スターフラグ付き                                                        |
+| `"has-multiline-comment"` | 複数行コメント付き                                                      |
+| `"task"`                  | タスク行                                                                |
+| `"comment"`               | `///` 行                                                                |
+| `"multiline-comment"`     | 複数行コメントの行                                                      |
+| `"heading"`               | 見出し行（ATX 見出しと Setext 見出しの題。Setext の下線の行は含まない） |
+| `"empty-line"`            | 空行（空白だけの行を含む）                                              |
+| `"any-line"`              | 全ての行                                                                |
 
 
 #### 13.5.3 引数付きパターン
@@ -816,18 +915,33 @@ DSL パターンマッチ。DSL パターン文字列でフィルタ条件を記
 | `text`                       | `text:STRING`                       | 文字列を含む行                   |
 | `regexp`                     | `regexp:REGEXP`                     | 正規表現にマッチする行           |
 | `level`                      | `level:N`                           | ネストレベル N の行              |
-| `heading`                    | `heading:REGEXP`                    | 見出しの範囲内のタスク行         |
+| `heading`                    | `heading:REGEXP`                    | 見出しの範囲内のタスク行（下記） |
 | `due-date`                   | `due-date:CONDITION`                | 期日で絞り込む                   |
 | `start-date`                 | `start-date:CONDITION`              | 開始日で絞り込む                 |
 | `tag-value`                  | `tag-value:KEY VALUE`               | タグの値で絞り込む               |
+| `state-any`                  | `state-any:S1,S2,...`               | いずれかの状態の行               |
+| `has-any-flag`               | `has-any-flag:F1,F2,...`            | いずれかのフラグを持つ行         |
+| `has-any-tag`                | `has-any-tag:T1,T2,...`             | いずれかのタグを持つ行           |
+| `has-all-tags`               | `has-all-tags:T1,T2,...`            | 全てのタグを持つ行               |
+| `has-any-person`             | `has-any-person:P1,P2,...`          | いずれかの担当者を持つ行         |
 | `parent-task-regexp`         | `parent-task-regexp:REGEXP`         | 親タスクが正規表現にマッチ       |
 | `root-task-regexp`           | `root-task-regexp:REGEXP`           | ルート親タスクが正規表現にマッチ |
 | `multiline-comment-contains` | `multiline-comment-contains:REGEXP` | 複数行コメントが正規表現にマッチ |
 
 論理演算の引数は、カンマで分割される。そのため、カンマを含む引数は論理演算の中に書けない。
 
+複数の値を取る `state-any`、`has-any-flag`、`has-any-tag`、`has-all-tags`、`has-any-person` は、値をカンマまたは縦棒（`|`）で区切る。論理演算の中では、カンマが演算の引数の区切りになるため、縦棒を使う。例: `and:open,has-any-tag:a|b`。`state-any` の値は `done`、`progress`、`waiting`、`open`、`cancelled`、`has-any-flag` の値は `star`、`priority` である。未知の値は、メッセージを表示し、どの行にも一致しないパターンになる。
+
+
+`heading:REGEXP` の `REGEXP` は正規表現で、見出しの文字列の中から探す（先頭固定ではない）。`^Work$` のように `^` と `$` で固定すると、`Workshop` を除ける。`C++` のように特殊文字を含む見出しは、`C\+\+` と書く。一致した見出しすべてが対象で、見出しの範囲には、子の見出しの下の行を含む。正規表現が不正なときは、パターンのコンパイルでエラーにする。
+
 
 #### 13.5.4 日付条件（due-date / start-date）
+
+期日（`-> DATE`）と開始日（`DATE ->`）は、色付け、絞り込み、サイドバーのカレンダーと一覧、日付の入力で、同じ規則で認識する。
+
+- 対象の行: タスク行、`///` コメント行、見出し。複数行コメント、通常の文章、コードブロックの中では、日付として扱わない
+- 空白: 日付の前後、矢印の前後に空白が要る（行頭と行末は空白と同じ）。`a->2026-01-01` や `2026-01-01x ->` は日付ではない
 
 `due-date:CONDITION` の `CONDITION` は次のとおり。日付 `DATE` の書式は `altodo-date-format` に従う。
 
@@ -895,6 +1009,7 @@ DSL パターンマッチ。DSL パターン文字列でフィルタ条件を記
 - `> N` - N より大きい
 - `= N` - N と等しい
 - `<= N` - N 以下
+- `/= N` - N と等しくない
 - `< N` - N より小さい
 
 __face-spec__ は以下の通り指定できる。
@@ -935,21 +1050,13 @@ face-rules 内でマッチしない場合、`:face` で指定した face にフ�
    
    ;; 期限グループ
    (:title "Due" :type group-header :nest 0)
-   (:title "Overdue - %n"
-           :type search-lambda
-           :pattern (lambda ()
-                      (and (altodo--due-date-matches-p 'overdue)
-                           (not (or (altodo--line-state-p altodo-state-done)
-                                    (altodo--line-state-p altodo-state-cancelled)))))
+   (:title "Open and Over Due - %n" :type search-simple
+           :pattern "and:due-date:overdue,not:state-any:done|cancelled"
            :count-format t :nest 1
            :count-exclude-others t
            :face-rules ((>= 1 error)))
-   (:title "Due Today - %n"
-           :type search-lambda
-           :pattern (lambda ()
-                      (and (altodo--due-date-matches-p 'today)
-                           (not (or (altodo--line-state-p altodo-state-done)
-                                    (altodo--line-state-p altodo-state-cancelled)))))
+   (:title "Open and Due Today - %n" :type search-simple
+           :pattern "and:due-date:today,not:state-any:done|cancelled"
            :count-format t :nest 1
            :count-exclude-others t
            :face-rules ((>= 1 error)))
@@ -964,6 +1071,10 @@ face-rules 内でマッチしない場合、`:face` で指定した face にフ�
    (:title "People" :type group-header :nest 0)
    (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1
            :count-exclude-others t :display-context 'all)
+
+   ;; 見出しグループ
+   (:title "Headings" :type group-header :nest 0)
+   (:title "%s - %n" :type dynamic :dynamic-type "heading" :count-format t :nest 1)
    
    ;; 複合条件の例
    (:title "Open + Priority - %n"

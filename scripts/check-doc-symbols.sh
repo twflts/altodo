@@ -1,11 +1,11 @@
 #!/bin/bash
 # ドキュメントにバッククォートで書かれた altodo-*、sidebar-* の名前が、
-# altodo.el に定義されているかを確認する。
+# altodo.el、altodo-calendar.el、altodo-debug.el に定義されているかを確認する。
 # 使い方: scripts/check-doc-symbols.sh
 # 終了コード: 0: 全て定義済み、1: 未定義の名前がある
 # 除外: scripts/doc-symbols-ignore.txt（1 行 1 名称。# から行末はコメント）
 
-readonly SOURCE_FILE="altodo.el"
+readonly SOURCE_FILES=(altodo.el altodo-calendar.el altodo-debug.el)
 readonly IGNORE_FILE="scripts/doc-symbols-ignore.txt"
 readonly DOC_FILES=(README.md README_en.md doc/design.md doc/design_en.md
   doc/design-filter.md doc/design-filter_en.md)
@@ -15,7 +15,7 @@ err() {
 }
 
 #######################################
-# 名前が altodo.el の定義（def*、define-*、defalias）にあるかを調べる。
+# 名前が altodo.el、altodo-calendar.el、altodo-debug.el の定義（def*、define-*、defalias）にあるかを調べる。
 # Arguments:
 #   $1: 名前
 # Returns:
@@ -23,7 +23,7 @@ err() {
 #######################################
 is_defined() {
   grep -qE "^\((def[a-z-]*|define-[a-z-]+|cl-def[a-z-]*) +'?$1($|[ )])" \
-    "${SOURCE_FILE}"
+    "${SOURCE_FILES[@]}"
 }
 
 main() {

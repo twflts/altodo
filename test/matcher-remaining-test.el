@@ -44,15 +44,6 @@
       (should (or (null result) (numberp result)))))
   (cleanup-test-buffer))
 
-(ert-deftest test-multiline-comment-matcher ()
-  (setup-test-buffer)
-  (with-current-buffer test-buffer
-    (altodo-mode)
-    (forward-line 2)
-    (let ((result (altodo--multiline-comment-matcher (line-end-position))))
-      (should (or (null result) (numberp result)))))
-  (cleanup-test-buffer))
-
 (ert-deftest test-multiline-comment-list-matcher ()
   (setup-test-buffer)
   (with-current-buffer test-buffer

@@ -4,19 +4,14 @@ Emacs の major mode（`altodo.el`）と、altodo フォーマット（Markdown 
 グローバルの CLAUDE.md に加えて、次の規則に従う。矛盾する場合は本ファイルを優先する。
 
 
-## Stable 版
-
-- `altodo-stable.el` は、ユーザが「stable 版を更新して」と明示的に指示するまで更新しない
-- テストの完了後、複数フェーズの完了後でも、自動で更新しない
-- 更新を指示されたとき: `cp altodo.el altodo-stable.el`
-
-
 ## 構成
 
-- `altodo.el`: 本体（単一ファイル）
-- `doc/`: 仕様書・設計書（`*_en.md` は英訳）
+- `altodo.el`: 本体
+- `altodo-calendar.el`: ミニカレンダーのライブラリ（`calendar` だけに依存。altodo.el が require する。`altodo.el` と同じ場所に置く）
+- `altodo-debug.el`: 調査用のコマンド（任意。altodo.el は読み込まない。`scripts/debug-line.sh`、`scripts/debug-pattern.sh` が使う。`altodo.el` と一緒に配布するときは同じ場所に置く）
+- `doc/`: 仕様書・設計書（`*_en.md` は英訳。調査用のコマンドは `doc/debug.md`）
 - `test/`: ERT。`project.altodo`: TODO（ルート）
-- `.claude/memo/`: メモ。`.claude/backup/`: バックアップ
+- `.claude/memo/`: メモ（旧い計画のアーカイブは `.claude/memo/etc/project-altodo-archive-20261018.altodo`）。`.claude/backup/`: バックアップ
 - `scripts/`: 開発用スクリプト（`setup-emacs.sh`: Emacs 29.3、markdown-mode、package-lint の導入。Ubuntu 24.04）
 - `LICENSE`: GPL v3（`altodo.el`）。仕様の MIT は `doc/LICENSE-MIT`
 - 動作環境: Emacs 29.1 以上、markdown-mode（2.6 で確認）
@@ -26,8 +21,14 @@ Emacs の major mode（`altodo.el`）と、altodo フォーマット（Markdown 
 
 - 正は `doc/altodo_spec_compact.md`。`doc/altodo_spec.md` と `doc/altodo_spec_en.md` は、同じ内容の詳細版
 - 仕様を変えたときは、上の 3 ファイルに加えて、`README.md`、`README_en.md`、`doc/design*.md` を同期する
+- 利用者に見える挙動を変えたときは、`CHANGELOG.md` と `CHANGELOG_en.md` の「未リリース」にも書く
 - `~/.claude/rules/altodo_spec_compact.md` は別のコピー。ユーザが更新する
 - 解釈が曖昧な点は、推測せずユーザに確認する
+- 動作に関する仕様は、自分で決めずに、実装の前にユーザに確認する（`AskUserQuestion`）。選択肢を示し、推奨を最初に置く
+    - 確認の対象: 機能の振る舞い、既定値、キー割り当て、設定変数の名前と意味、コマンドの名前、エラー時と境界の扱い、日付・書式の解釈、既存の動作の変更
+    - 確認しなくてよいもの: 内部の関数名や構造、テストの書き方、ドキュメントの体裁、docstring の文言
+    - ユーザが「推奨の通り」と答えた場合も、確認の時に示していなかった細部は、実装の前に改めて確認する。確認せずに決めたときは、決めた内容と理由を、報告の冒頭に書く
+    - 調査（関数の有無、既存の挙動の確認）は、確認せずに進めてよい
 
 
 ## コード修正

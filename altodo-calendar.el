@@ -80,7 +80,11 @@
   :group 'calendar
   :prefix "altodo-calendar-")
 
-(defcustom altodo-calendar-day-names ["Su" "Mo" "Tu" "We" "Th" "Fr" "Sa"]
+(defconst altodo-calendar-default-day-names
+  ["Su" "Mo" "Tu" "We" "Th" "Fr" "Sa"]
+  "Default value of `altodo-calendar-day-names'.")
+
+(defcustom altodo-calendar-day-names altodo-calendar-default-day-names
   "Names of the weekdays, from Sunday.  A vector of 7 strings.
 Every column is as wide as the widest name (at least 2 columns)."
   :type '(vector string string string string string string string))

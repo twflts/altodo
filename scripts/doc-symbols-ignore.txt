@@ -2,3 +2,4 @@
 altodo-filter-patterns      # .altodo-locals.el のキー
 altodo-sidebar-face-alist   # .altodo-locals.el のキー
 altodo--line-*-p            # 述語関数の命名規則の説明
+altodo-calendar-date       # 日のセルのテキストプロパティ名

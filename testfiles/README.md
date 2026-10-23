@@ -28,7 +28,7 @@ altodo.el を手動で確認するためのサンプルファイルである。E
 | `test-markdown-integration.altodo` | Markdown との共存。コードブロック内のタスク風の行、インライン コード、空行の直後のインデント付きタスク                   |
 | `test-unicode.altodo`              | 日本語、中国語、韓国語、アラビア語、ロシア語、ギリシャ語、絵文字                                                         |
 | `test-edge-cases.altodo`           | 空のタスク、非常に長い行、深いネスト、連続する空行                                                                       |
-| `phase5-8-seq-tasks-demo.altodo`   | `#seq-tasks` の例（前の兄弟が完了するまで次が実行できない）                                                              |
+| `seq-tasks-demo.altodo`   | `#seq-tasks` の例（前の兄弟が完了するまで次が実行できない）                                                              |
 | `test-face-rules.altodo`           | サイドバーの `:face-rules`・`:count-face-rules`（件数に応じた色）。件数は固定（完了 5、オープン 10、優先度 2、スター 3） |
 
 
@@ -62,4 +62,4 @@ altodo.el を手動で確認するためのサンプルファイルである。E
 2. 複数行コメント: `test-comments.altodo` の NG の行が、通常の文の色であること
 3. サイドバー: `test-sample-project.altodo` で、各フィルタを選び、行が絞り込まれること。`s` で複数選択し、`C-c C-a`（AND）と `C-c C-o`（OR）を切り替える
 4. 性能: `scripts/gen-testfiles.sh --lines 20000` で生成した `generated/test-large.altodo` で、フィルタの応答を確認する。先頭のタスクに 150 行の複数行コメントがある
-5. 完了タスクの移動: `comprehensive-jp.altodo` で `C-c C-t d`。子タスクは移動されない（現在のバージョンの制約）
+5. 完了タスクの移動: `comprehensive-jp.altodo` で `C-c C-t d`。子孫ごと移動する（子孫に未完了のタスクがあるときは移動しない）。`C-c C-t D` は行だけを移動する

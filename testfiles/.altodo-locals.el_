@@ -75,6 +75,7 @@
    (:title "ignore value -> #%s [%n]" :type dynamic :dynamic-type "tag" :tag-mode "name-only" :sort-by "alpha" :limit 10 :count-format t :nest 1)
    (:title "Due: %s [%n]" :type dynamic :dynamic-type "due" :sort-by "alpha" :count-format t :nest 1)
    (:title "Start: %s [%n]" :type dynamic :dynamic-type "start" :sort-by "alpha" :count-format t :nest 1)
+   (:title "Heading L%l: %s [%n]" :type dynamic :dynamic-type "heading" :limit 10 :indent-by-level 2 :count-format t :nest 1)
    
    (:title "" :type separator :nest 0)
    
@@ -141,6 +142,13 @@
                (and (altodo--due-date-matches-p 'today)
                     (not (or (altodo--line-state-p altodo-state-done)
                              (altodo--line-state-p altodo-state-cancelled))))))
+
+   (:title "Calendar and Agenda" :type group-header :nest 0)
+   (:title "" :type calendar :nest 1)
+   (:title "Next 7 days" :type agenda :days 7 :nest 1)
+   (:title "Soon (labels on their own line)" :type agenda :days 5 :date-format "%m/%d"
+    :today-label "Now" :tomorrow-label "Next" :label-newline t :nest 1)
+   (:title "Due dates only (calendar)" :type calendar :calendar-target due :nest 1)
 
    (:title "Quick Actions" :type group-header :nest 0)
    (:title "[Clear Filter]" :type command :nest 1 :command altodo-filter-clear)

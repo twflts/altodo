@@ -85,7 +85,7 @@ Below is an example of tasks written in altodo format.
 
 altodo is a TODO format that can be embedded in Markdown (CommonMark).
 The design avoids conflicts with other Markdown (CommonMark) syntax (headings, lists, code blocks, etc.), so Markdown (CommonMark) syntax including inline elements can be used as-is.
-Text containing altodo syntax enclosed in backticks (`) for inline code or code blocks is treated the same as Markdown (CommonMark) code and does not have the effect of altodo syntax.
+Text with altodo syntax inside inline code (enclosed in backticks) or a fenced code block is treated the same as Markdown (CommonMark) code and does not have the effect of altodo syntax.
 However, because altodo expresses nesting and multi-line comments with indentation, indented task lines, single-line comment lines, and multi-line comments are never treated as Markdown (CommonMark) indented code blocks, even right after a blank line.
 
 
@@ -253,7 +253,7 @@ When placed elsewhere, they are treated as normal text.
 
 Like social media hashtags, tasks can have properties.
 Tags start with `#` and must match the regular expression `[-_a-zA-Z0-9]+` for ASCII strings.
-However, by enclosing only the value in double quotes (`"`), ASCII strings other than half-width characters can be used, including spaces.
+However, by enclosing only the value in double quotes (`"`), characters other than ASCII, and half-width spaces, can be used in the value.
 Tags can be embedded in the body or in headings.
 Multiple tags can be specified for a task.
 Space before and after tag is required. However, if a tag comes at the end of a line, the space at the end of the line is not required.

@@ -7,7 +7,7 @@
 ;; Created: January 27, 2026
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1") (markdown-mode "2.0"))
-;; Keywords: text, todo, markdown
+;; Keywords: outlines, convenience, text
 ;; URL: https://github.com/twflts/altodo
 
 ;; This file is not part of GNU Emacs.
@@ -35,6 +35,16 @@
 ;; - Task state management with keyboard shortcuts
 ;; - Nested task support with proper indentation
 ;; - Integration with markdown-mode for Markdown compatibility
+;; - Sidebar with filters and match counts.  A filter is a DSL pattern
+;;   (for example "and:open,priority") or, in a trusted settings file, a
+;;   lambda.  Several filters can be combined with AND or OR
+;; - Mini calendar and per-day agenda in the sidebar, and a list of the
+;;   headings of the buffer that jumps to a heading
+;; - Per-directory settings in `.altodo-locals.el'.  Code in this file is
+;;   not run unless `altodo-locals-code-policy' allows it
+;; - Moving done tasks to a "_done" file, by hand or with a timer
+;; - Commands for investigating a problem are in the separate file
+;;   `altodo-debug.el'
 ;;
 ;; Usage:
 ;; Add the following to your init file:
@@ -48,28 +58,15 @@
 (require 'calendar)
 (require 'altodo-calendar)
 
-;; Variables and functions defined later in this file or in debug-helper.
-;; A `let' of a variable that is not yet declared special would bind it
-;; lexically.
-(defvar altodo-debug-log-file)
-(defvar altodo-debug-log-to-messages)
+;; Variables defined later in this file.  A `let' of a variable that is not
+;; yet declared special would bind it lexically.
 (defvar altodo-show-auto-move-in-mode-line)
 (defvar altodo-sidebar--combine-mode)
 (defvar altodo-sidebar--buffer-alist)
-(defvar debug-helper--functions)
-(declare-function debug-helper-setup "debug-helper")
-(declare-function debug-helper-enable "debug-helper")
-(declare-function debug-helper-disable "debug-helper")
-(declare-function debug-helper-add-function "debug-helper")
-(declare-function debug-helper-remove-function "debug-helper")
-(declare-function debug-helper-clear-log "debug-helper")
-(declare-function debug-helper-view-log "debug-helper")
+(defvar altodo--count-cache)
+(defvar read-eval)
 
 ;;; Constants and Variables
-
-;; Source code update timestamp
-(defconst altodo--updatedtime 1771120742
-  "Unix timestamp of last source code update.")
 
 ;; Task state constants
 (defconst altodo-state-done "x"
@@ -191,27 +188,6 @@ When nil, count shows total matches in buffer."
   :type 'boolean
   :group 'altodo)
 
-(defcustom altodo-debug-mode nil
-  "Enable debug mode for altodo.
-When non-nil, debug-helper functions are available and debug-helper.el is
-loaded."
-  :type 'boolean
-  :group 'altodo
-  :set (lambda (symbol value)
-         (set-default symbol value)
-         ;; Load debug-helper if debug-mode is enabled
-         (when value
-           (unless (featurep 'debug-helper)
-             (let ((debug-helper-path (expand-file-name "debug-helper"
-                                                         (file-name-directory (or load-file-name buffer-file-name)))))
-               (when (file-exists-p (concat debug-helper-path ".el"))
-                 (load debug-helper-path)))))))
-
-(defcustom altodo-font-lock-maximum-decoration t
-  "Enable maximum font-lock decoration for altodo-mode."
-  :type 'boolean
-  :group 'altodo)
-
 (defcustom altodo-done-tag-datetime-format nil
   "Date format for #done tag timestamp.
 If nil, uses ISO 8601 format with timezone (YYYY-MM-DDTHH:MM:SS+HH:MM).
@@ -251,41 +227,8 @@ The value is one of the following symbols:
 
 ;;; Modeline Variables
 
-(defvar altodo-sidebar-modeline-string ""
-  "Current filter state for sidebar modeline display.")
-
-;;; Debug Helper Function
-
-(defun altodo--debug-log (format-string &rest args)
-  "Log debug message if `altodo-debug-mode' is non-nil.
-Writes directly to log file and *Messages* buffer.
-
-Arguments:
-  FORMAT-STRING - format string
-  ARGS - format arguments
-
-Returns nil."
-  (when altodo-debug-mode
-    (let ((message-text (apply #'format format-string args)))
-      ;; Write to file
-      (when altodo-debug-log-file
-        (condition-case err
-            (let* ((log-file (substitute-in-file-name altodo-debug-log-file))
-                   (log-dir (file-name-directory log-file)))
-              (unless (file-exists-p log-dir)
-                (let ((inhibit-message t))
-                  (make-directory log-dir t)))
-              (with-temp-buffer
-                (insert (format "[%s] %s\n" (format-time-string "%Y-%m-%dT%H:%M:%S%z") message-text))
-                (let ((inhibit-message t))
-                  (append-to-file (point-min) (point-max) log-file))))
-          (error
-           (let ((inhibit-message t))
-             (message "DEBUG LOG ERROR: %s (file: %s)" (error-message-string err) altodo-debug-log-file)))))
-      ;; Log to *Messages*
-      (when altodo-debug-log-to-messages
-        (let ((inhibit-message t))
-          (message "DEBUG: %s" message-text))))))
+(defvar-local altodo-sidebar-modeline-string ""
+  "Current filter state for the mode line of a sidebar buffer.")
 
 ;;; Regular Expressions
 
@@ -299,11 +242,6 @@ Matches # only when preceded by whitespace or at beginning of line.")
   "\\(?:^\\|[ \t]\\)\\(#[a-zA-Z0-9_-]+\\)\\b"
   "Regular expression for matching tags without values.
 Matches # only when preceded by whitespace or at beginning of line.")
-
-(defconst altodo-person-tag-regex
-  "\\(?:^\\|[[:space:]]\\)\\(@[^[:space:]]+\\)"
-  "Regular expression for matching person/place tags like @smith, @田中.
-Matches @ only when preceded by whitespace or at beginning of line.")
 
 (defcustom altodo-date-format nil
   "Date format string for parsing dates.
@@ -324,7 +262,7 @@ Examples:
                  (string :tag "Custom format"))
   :group 'altodo)
 
-(defcustom altodo-week-start-day 1
+(defcustom altodo-week-start-day 0
   "Day of week that starts the week (0=Sunday, 1=Monday, ..., 6=Saturday).
 Used for \\='this-week\\=' filter condition in due-date and start-date filters."
   :type '(choice (const :tag "Sunday" 0)
@@ -444,11 +382,6 @@ Used for \\='this-week\\=' filter condition in due-date and start-date filters."
   "Face for star flag."
   :group 'altodo)
 
-(defface altodo-flag-priority-face
-  '((t :inherit error :weight bold))
-  "Face for priority flags."
-  :group 'altodo)
-
 ;; 優先度レベル別のface定義
 (defface altodo-flag-priority1-face
   '((t :inherit warning))
@@ -485,6 +418,11 @@ Used for \\='this-week\\=' filter condition in due-date and start-date filters."
   "Face for text in starred tasks."
   :group 'altodo)
 
+(defface altodo-flag-priority-face
+  '((t :inherit error :weight bold))
+  "Face for priority flags."
+  :group 'altodo)
+
 (defface altodo-flag-priority-text-face
   '((t :inherit error :weight bold))
   "Face for text in priority tasks."
@@ -513,11 +451,6 @@ Used for \\='this-week\\=' filter condition in due-date and start-date filters."
 (defface altodo-dep-blocked-tag-face
   '((t :inherit shadow))
   "Face for #dep: value when dependency is not completed (blocked)."
-  :group 'altodo)
-
-(defface altodo-dep-ready-text-face
-  '((t :inherit default))
-  "Face for task text when all dependencies are completed (ready)."
   :group 'altodo)
 
 (defface altodo-dep-ready-tag-face
@@ -627,35 +560,24 @@ UUID can be in format with or without hyphens."
               (substring hex 20 32)))))
 
 (defun altodo--generate-uuidv7 ()
-  "Generate a UUIDv7 string.
-UUIDv7 format (128 bits):
-  - 36 bits: Unix timestamp (seconds)
-  - 12 bits: millisecond precision (subsec_a)
+  "Generate a UUIDv7 string as defined by RFC 9562.
+The 128 bits are:
+  - 48 bits: Unix timestamp in milliseconds
   - 4 bits: version (0111 = 7)
-  - 12 bits: millisecond precision (subsec_b)
+  - 12 bits: random data (rand_a)
   - 2 bits: variant (10)
-  - 62 bits: random data
+  - 62 bits: random data (rand_b)
 
 Returns a string in the format: xxxxxxxx-xxxx-7xxx-xxxx-xxxxxxxxxxxx"
-  (let* ((time (current-time))
-         (unix-sec (truncate (time-to-seconds time)))
-         (usec (nth 2 time))
-         (msec (/ usec 1000))
-         (ts-36 (logand unix-sec #xFFFFFFFFF))
-         (msec-12 (logand (/ (* msec 4096) 1000) #xFFF))
-         (ts-high (ash ts-36 -4))
-         (ts-low-subsec-a (logior (ash (logand ts-36 #xF) 12) msec-12))
-         (ver-subsec-b (ash 7 12))
-         (var-rand-14 (logior (ash 2 14) (random (expt 2 14))))
-         (rand-48 (+ (random (expt 2 16))
-                     (ash (random (expt 2 16)) 16)
-                     (ash (random (expt 2 16)) 32))))
+  (let* ((unix-ms (floor (* 1000 (float-time))))
+         (version-and-rand-a (logior (ash 7 12) (random (ash 1 12))))
+         (variant-and-rand-b (logior (ash 2 62) (random (ash 1 62)))))
     (format "%08x-%04x-%04x-%04x-%012x"
-            ts-high
-            ts-low-subsec-a
-            ver-subsec-b
-            var-rand-14
-            rand-48)))
+            (ash unix-ms -16)
+            (logand unix-ms #xFFFF)
+            version-and-rand-a
+            (ash variant-and-rand-b -48)
+            (logand variant-and-rand-b #xFFFFFFFFFFFF))))
 
 (defun altodo--generate-short-id-sortable ()
   "Generate a sortable short ID (15 characters).
@@ -724,8 +646,7 @@ Returns a string in the format specified by `altodo-insert-id-format':
     (_ (altodo--generate-tiny-id-random))))
 
 (defun altodo-insert-id ()
-  "Insert #id: tag with generated ID at the end of current line.
-Returns nil."
+  "Insert #id: tag with generated ID at the end of current line."
   (interactive)
   (if (or (altodo--task-p) (altodo--comment-p))
       (progn
@@ -777,9 +698,10 @@ Returns t if completed, nil otherwise."
       (nreverse deps))))
 
 (defun altodo--check-circular-dependency (id &optional visited)
-  "Check if ID has circular dependency.
+  "Check whether ID is in a circular dependency.
 VISITED is a list of IDs already visited in the dependency chain.
-Returns t if circular dependency detected, nil otherwise."
+Call it inside (catch \\='circular ...): when a circle is found it throws
+`circular' with the value `circular'.  Otherwise it returns nil."
   ;; Strip text properties for comparison
   (let ((id-clean (substring-no-properties id)))
     (when (cl-some (lambda (v) (string= id-clean (substring-no-properties v))) visited)
@@ -868,11 +790,7 @@ Returns face symbol or face list."
       base-face)))
 
 ;;; ============================================================================
-;;; Date-based face functions (REWRITTEN 2026-02-10)
-;;; ============================================================================
-;;; ロールバック方法:
-;;; このセクション全体を .kiro/backup/altodo.el.20260210065603 の
-;;; 行 379-502 の内容で置き換える
+;;; Date-based face functions
 ;;; ============================================================================
 
 (defun altodo--format-to-regex (format-str)
@@ -927,6 +845,49 @@ DATE-STR is written in the format of `altodo-date-format'."
 (defun altodo--date-regex-match ()
   "Return date regex for matching (for font-lock, without capture groups)."
   (nth 1 (altodo--date-regex-info)))
+
+(defun altodo--due-date-regex (&optional date-regex)
+  "Return the regexp of the due date \"-> DATE\", with the date in group 1.
+The arrow needs a space or the beginning of the line before it, and the date
+a space or the end of the line after it.  DATE-REGEX is the regexp of the
+date without groups; by default it is the date format in use."
+  (concat "\\(?:^\\| \\)-> \\(" (or date-regex (altodo--date-regex-match))
+          "\\)\\(?: \\|$\\)"))
+
+(defun altodo--start-date-regex (&optional date-regex)
+  "Return the regexp of the start date \"DATE ->\", with the date in group 1.
+The date needs a space or the beginning of the line before it, and the arrow
+a space or the end of the line after it.  DATE-REGEX is as for
+`altodo--due-date-regex\'."
+  (concat "\\(?:^\\| \\)\\(" (or date-regex (altodo--date-regex-match))
+          "\\) ->\\(?: \\|$\\)"))
+
+(defun altodo--date-line-p ()
+  "Return non-nil if dates are recognized in the current line.
+Dates are an element of the task lines, the \"///\" comment lines and the
+headings.  They are not an element of a multi-line comment, which is text of
+the task above it, nor of a fenced code block."
+  (save-excursion
+    (beginning-of-line)
+    (and (not (altodo--in-fenced-code-block-p))
+         (or (looking-at altodo-task-regex)
+             (looking-at altodo-comment-regex)
+             (looking-at "^#+[ \t]+")
+             (altodo--line-heading-p))
+         t)))
+
+(defun altodo--search-date (regex limit)
+  "Search REGEX forward up to LIMIT on the lines where dates are recognized.
+A match on another line is skipped.  Return non-nil if a match is found, with
+the match data set."
+  (let ((found nil))
+    (while (and (not found) (re-search-forward regex limit t))
+      (when (save-match-data
+              (save-excursion
+                (goto-char (match-beginning 0))
+                (altodo--date-line-p)))
+        (setq found t)))
+    found))
 
 (defun altodo--valid-date-p (year month day)
   "Return non-nil if YEAR, MONTH and DAY are a date that exists.
@@ -1019,14 +980,12 @@ Returns face symbol."
 (defun altodo--start-date-matcher (limit)
   "Match start dates (DATE ->) up to LIMIT.
 Requires exactly one space before ->, and space or end-of-line after ->."
-  (let ((regex (concat "\\(" (altodo--date-regex-match) "\\) " (regexp-quote "->") "\\(?: \\|$\\)")))
-    (re-search-forward regex limit t)))
+  (altodo--search-date (altodo--start-date-regex) limit))
 
 (defun altodo--due-date-matcher (limit)
   "Match due dates (-> DATE) up to LIMIT.
 Requires exactly one space before and after ->, or end-of-line after DATE."
-  (let ((regex (concat " " (regexp-quote "->") " \\(" (altodo--date-regex-match) "\\)\\(?: \\|$\\)")))
-    (re-search-forward regex limit t)))
+  (altodo--search-date (altodo--due-date-regex) limit))
 
 (defun altodo--arrow-matcher (limit)
   "Match arrows (->) up to LIMIT.
@@ -1034,9 +993,9 @@ Requires exactly one space before ->, and space or end-of-line after ->.
 Matches \\='DATE -> DATE\\=', \\='DATE -> \\=', or \\=' -> DATE\\=' pattern.
 Does NOT match bare \\='->\\=' without dates."
   (let ((date-regex (altodo--date-regex-match)))
-    (re-search-forward
+    (altodo--search-date
      (concat "\\(" date-regex " " (regexp-quote "->") "\\|" (regexp-quote "->") " " date-regex "\\)")
-     limit t)))
+     limit)))
 
 
 (defun altodo--tag-matcher (limit)
@@ -1181,7 +1140,7 @@ Skips @ in URLs (where markdown-url-face or markdown-plain-url-face is applied).
                 (text-start (match-beginning 1))
                 (text-end (match-end 1)))
             ;; Check for valid format: " -> DATE"
-            (if (string-match (concat " " (regexp-quote "->") " \\(" (altodo--date-regex-match) "\\)") line-text)
+            (if (string-match (altodo--due-date-regex) line-text)
                 (let ((due-time (altodo--parse-date (match-string 1 line-text))))
                   (if (and due-time (< (altodo--days-diff due-time) -2))
                       (progn
@@ -1199,9 +1158,10 @@ Skips @ in URLs (where markdown-url-face or markdown-plain-url-face is applied).
       (if (re-search-forward "^[ ]*\\[.\\][ ]*" limit t)
           (let ((text-start (point))
                 (line-end (line-end-position)))
-            (goto-char text-start)
+            ;; The space before the date may be the one after the bracket.
+            (goto-char (line-beginning-position))
             ;; Search for "DATE -> " or "DATE ->" pattern anywhere in the line
-            (if (re-search-forward (concat "\\(" (altodo--date-regex-match) "\\) " (regexp-quote "->") "\\(?: \\|$\\)") line-end t)
+            (if (re-search-forward (altodo--start-date-regex) line-end t)
                 (let ((start-time (altodo--parse-date (match-string 1))))
                   (if (and start-time (> (altodo--days-diff start-time) 0))
                       (progn
@@ -1246,8 +1206,7 @@ Flags override tags to ensure consistent highlighting."
      (1 'altodo-task-bracket-face t)
      (2 (let ((state-char (match-string 2)))
           (let ((blocked-p (save-match-data
-                             (or (altodo--line-seq-tasks-blocked-p)
-                                 (altodo--is-seq-tasks-child-blocked-p)))))
+                             (altodo--is-seq-tasks-child-blocked-p))))
             (if blocked-p
                 'altodo-dep-blocked-text-face
               (altodo--get-state-face (altodo--normalize-state state-char)))))
@@ -1261,8 +1220,7 @@ Flags override tags to ensure consistent highlighting."
     ;; 2.5. seq-tasks blocked タスク本文（先に処理）
     ("^[ ]*\\[ \\][ ]*\\(.*\\)$" .
      (1 (let ((blocked-p (save-match-data
-                           (or (altodo--line-seq-tasks-blocked-p)
-                               (altodo--is-seq-tasks-child-blocked-p)))))
+                           (altodo--is-seq-tasks-child-blocked-p))))
           (if blocked-p
               'altodo-task-waiting-text-face
             nil))
@@ -1376,36 +1334,54 @@ Flags override tags to ensure consistent highlighting."
 
 ;;; Keymap
 
+(defun altodo--task-or-comment-p ()
+  "Return non-nil if the current line is a task or a `///' comment."
+  (or (altodo--task-p) (altodo--comment-p)))
+
+(defun altodo--task-comment-or-multiline-p ()
+  "Return non-nil if the current line is a task, a comment or a multi-line comment."
+  (or (altodo--task-p) (altodo--comment-p) (altodo--multiline-comment-p)))
+
+(defun altodo--on-line (predicate command)
+  "Return a command for COMMAND on the lines where PREDICATE is true.
+On any other line, the command of the parent mode for the same key is used,
+so a key keeps its Markdown meaning outside the tasks."
+  (lambda ()
+    (interactive)
+    (if (funcall predicate)
+        (call-interactively command)
+      (altodo--call-parent-command (this-command-keys-vector)))))
+
 (defvar-keymap altodo-mode-map
   :doc "Keymap for altodo-mode."
   :parent markdown-mode-map
   "TAB" #'altodo-indent-line
   "RET" #'altodo-enter
   "<backtab>" #'outline-cycle
-  "C-c C-x" (lambda () (interactive) (if (altodo--task-p) (altodo-toggle-task-state) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-t o" (lambda () (interactive) (if (altodo--task-p) (altodo-set-task-open) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-t x" (lambda () (interactive) (if (altodo--task-p) (altodo-set-task-done) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-t @" (lambda () (interactive) (if (altodo--task-p) (altodo-set-task-progress) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-t w" (lambda () (interactive) (if (altodo--task-p) (altodo-set-task-waiting) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-t ~" (lambda () (interactive) (if (altodo--task-p) (altodo-set-task-cancelled) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-t d" (lambda () (interactive) (if (altodo--task-p) (altodo-move-done-tasks-at-point) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-t D" (lambda () (interactive) (if (altodo--task-p) (altodo-move-done-task-alone) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-a" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-add-task) (altodo--call-parent-command (this-command-keys-vector))))
-  "M-RET" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-add-subtask) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-m" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-start-multiline-comment) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-s" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-toggle-star-flag) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-f 1" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-set-priority-1) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-f 2" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-set-priority-2) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-f 3" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-set-priority-3) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-e d" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-select-due-calendar) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-e s" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-select-start-calendar) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-i" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-insert-id) (altodo--call-parent-command (this-command-keys-vector))))
-  "M-<right>" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p) (altodo--multiline-comment-p)) (altodo-indent-increase) (altodo--call-parent-command (this-command-keys-vector))))
-  "M-<left>" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p) (altodo--multiline-comment-p)) (altodo-indent-decrease) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-v f c" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-filter-clear) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-v s t" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-sidebar-toggle) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-v s r" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-sidebar-refresh) (altodo--call-parent-command (this-command-keys-vector))))
-  "C-c C-j" (lambda () (interactive) (if (or (altodo--task-p) (altodo--comment-p)) (altodo-goto-dependency) (altodo--call-parent-command (this-command-keys-vector)))))
+  "C-c C-x" (altodo--on-line #'altodo--task-p #'altodo-toggle-task-state)
+  "C-c C-t o" (altodo--on-line #'altodo--task-p #'altodo-set-task-open)
+  "C-c C-t x" (altodo--on-line #'altodo--task-p #'altodo-set-task-done)
+  "C-c C-t @" (altodo--on-line #'altodo--task-p #'altodo-set-task-progress)
+  "C-c C-t w" (altodo--on-line #'altodo--task-p #'altodo-set-task-waiting)
+  "C-c C-t ~" (altodo--on-line #'altodo--task-p #'altodo-set-task-cancelled)
+  "C-c C-t d" (altodo--on-line #'altodo--task-p #'altodo-move-done-tasks-at-point)
+  "C-c C-t D" (altodo--on-line #'altodo--task-p #'altodo-move-done-task-alone)
+  "C-c C-a" (altodo--on-line #'altodo--task-or-comment-p #'altodo-add-task)
+  "M-RET" (altodo--on-line #'altodo--task-or-comment-p #'altodo-add-subtask)
+  "C-c C-m" (altodo--on-line #'altodo--task-or-comment-p #'altodo-start-multiline-comment)
+  "C-c C-s" (altodo--on-line #'altodo--task-or-comment-p #'altodo-toggle-star-flag)
+  "C-c C-f 1" (altodo--on-line #'altodo--task-or-comment-p #'altodo-set-priority-1)
+  "C-c C-f 2" (altodo--on-line #'altodo--task-or-comment-p #'altodo-set-priority-2)
+  "C-c C-f 3" (altodo--on-line #'altodo--task-or-comment-p #'altodo-set-priority-3)
+  "C-c C-e d" (altodo--on-line #'altodo--task-or-comment-p #'altodo-select-due-calendar)
+  "C-c C-e s" (altodo--on-line #'altodo--task-or-comment-p #'altodo-select-start-calendar)
+  "C-c C-i" (altodo--on-line #'altodo--task-or-comment-p #'altodo-insert-id)
+  "M-<right>" (altodo--on-line #'altodo--task-comment-or-multiline-p #'altodo-indent-increase)
+  "M-<left>" (altodo--on-line #'altodo--task-comment-or-multiline-p #'altodo-indent-decrease)
+  "C-c C-v f c" #'altodo-filter-clear
+  "C-c C-v s t" #'altodo-sidebar-toggle
+  "C-c C-v s r" #'altodo-sidebar-refresh
+  "C-c C-j" (altodo--on-line #'altodo--task-or-comment-p #'altodo-goto-dependency))
 
 ;;; Mode Definition
 
@@ -1437,9 +1413,6 @@ tags, and dates.
   (setq-local markdown-hide-markup nil)
 
   ;; === altodo-mode の設定 ===
-  ;;; ロールバック方法:
-  ;;; このセクションを .kiro/backup/altodo.el.20260210065603 の該当部分で置き換える
-
   ;; Add altodo font-lock keywords after markdown keywords
   ;; This allows markdown inline elements (bold, italic, etc.) to be applied first,
   ;; then altodo faces are added as base colors
@@ -1501,15 +1474,23 @@ tags, and dates.
   ;; Initialize filter system
   (altodo--filter-init)
 
-  ;; Phase 2-1: Clean up sidebar buffer when source buffer is killed
+  ;; Clean up sidebar buffer when source buffer is killed
   (add-hook 'kill-buffer-hook #'altodo-sidebar--on-source-buffer-kill nil t)
 
-  ;; Phase 2-2: Update sidebar when file is saved
-  (add-hook 'after-save-hook #'altodo-sidebar-refresh nil t))
+  ;; Update the sidebar when the file is saved
+  (add-hook 'after-save-hook #'altodo--sidebar-refresh-after-save nil t))
 
 ;;; Interactive Commands
 
 ;;; Helper function for keymap fallback
+
+(defun altodo--sidebar-refresh-after-save ()
+  "Redraw the sidebar of the current buffer after a save, if it is shown.
+A hidden sidebar is drawn when it is shown again, so drawing it now would
+only make each save slower."
+  (let ((sidebar (altodo--get-sidebar-buffer)))
+    (when (and sidebar (get-buffer-window sidebar t))
+      (altodo-sidebar-refresh))))
 
 (defun altodo--call-parent-command (key)
   "Call parent mode command for KEY.
@@ -1532,8 +1513,7 @@ If no parent binding exists, do nothing."
      ;; No parent binding - do nothing
      (t nil))))
 (defun altodo-toggle-task-state ()
-  "Toggle task state between open and done.
-Returns nil."
+  "Toggle task state between open and done."
   (interactive)
   (save-excursion
     (beginning-of-line)
@@ -1548,65 +1528,46 @@ Returns nil."
             (altodo-set-task-done))))
       (message "Not on a task line"))))
 
-(defun altodo-set-task-open ()
-  "Set current task to open state.
-Returns nil."
-  (interactive)
+(defun altodo--change-task-state (state done-tag)
+  "Set the task at point to STATE.
+DONE-TAG is `add' to add a #done tag, `remove' to remove it, or nil."
   (save-excursion
     (beginning-of-line)
     (if (looking-at altodo-task-regex)
         (progn
-          (altodo--set-task-state altodo-state-open)
-          (altodo--remove-done-tag))
+          (altodo--set-task-state state)
+          (pcase done-tag
+            ('add (altodo--add-done-tag))
+            ('remove (altodo--remove-done-tag))))
       (message "Not on a task line"))))
+
+(defun altodo-set-task-open ()
+  "Set current task to open state and remove its #done tag."
+  (interactive)
+  (altodo--change-task-state altodo-state-open 'remove))
 
 (defun altodo-set-task-done ()
-  "Set current task to done state.
-Returns nil."
+  "Set current task to done state and add a #done tag."
   (interactive)
-  (save-excursion
-    (beginning-of-line)
-    (if (looking-at altodo-task-regex)
-        (progn
-          (altodo--set-task-state altodo-state-done)
-          (altodo--add-done-tag))
-      (message "Not on a task line"))))
+  (altodo--change-task-state altodo-state-done 'add))
 
 (defun altodo-set-task-progress ()
-  "Set current task to progress state.
-Returns nil."
+  "Set current task to progress state."
   (interactive)
-  (save-excursion
-    (beginning-of-line)
-    (if (looking-at altodo-task-regex)
-        (altodo--set-task-state altodo-state-progress)
-      (message "Not on a task line"))))
+  (altodo--change-task-state altodo-state-progress nil))
 
 (defun altodo-set-task-waiting ()
-  "Set current task to waiting state.
-Returns nil."
+  "Set current task to waiting state."
   (interactive)
-  (save-excursion
-    (beginning-of-line)
-    (if (looking-at altodo-task-regex)
-        (altodo--set-task-state altodo-state-waiting)
-      (message "Not on a task line"))))
+  (altodo--change-task-state altodo-state-waiting nil))
 
 (defun altodo-set-task-cancelled ()
-  "Set current task to cancelled state.
-Returns nil."
+  "Set current task to cancelled state and add a #done tag."
   (interactive)
-  (save-excursion
-    (beginning-of-line)
-    (if (looking-at altodo-task-regex)
-        (progn
-          (altodo--set-task-state altodo-state-cancelled)
-          (altodo--add-done-tag))
-      (message "Not on a task line"))))
+  (altodo--change-task-state altodo-state-cancelled 'add))
 
 (defun altodo-indent-increase ()
-  "Increase indentation of current line or region.
-Returns value."
+  "Increase indentation of current line or region."
   (interactive)
   (if (or (altodo--task-p) (altodo--comment-p) (altodo--multiline-comment-p))
       (if (use-region-p)
@@ -1626,8 +1587,7 @@ Returns value."
     (message "Not on a task, comment, or multiline comment line")))
 
 (defun altodo-indent-decrease ()
-  "Decrease indentation of current line or region.
-Returns value."
+  "Decrease indentation of current line or region."
   (interactive)
   (if (or (altodo--task-p) (altodo--comment-p) (altodo--multiline-comment-p))
       (if (use-region-p)
@@ -1757,10 +1717,6 @@ comment."
            (not (altodo--comment-p))
            (altodo--multiline-comment-indent-ok-p indent)))))
 
-(defun altodo--multiline-comment-matcher (limit)
-  "Font-lock matcher for multiline comments up to LIMIT."
-  (altodo--multiline-comment-matcher-new limit))
-
 (defun altodo--multiline-comment-list-matcher (limit)
   "Match list items in multiline comments up to LIMIT.
 Only matches when `altodo-enable-markdown-in-multiline-comments' is non-nil."
@@ -1787,28 +1743,40 @@ Only matches when `altodo-enable-markdown-in-multiline-comments' is non-nil."
       (when altodo-auto-save
         (save-buffer)))))
 
+(defconst altodo--done-tag-value-regex
+  "\\(?:\"[^\"]*\"\\|[^[:space:]]+\\)"
+  "Regexp for the value of the #done tag: a word or a double-quoted string.")
+
+(defun altodo--done-tag-timestamp ()
+  "Return the timestamp for a new #done tag.
+Without `altodo-done-tag-datetime-format', it is ISO 8601 with the time zone
+offset.  With a format, it is the result of the format alone.  A result that
+has a space is double-quoted, as the tag syntax requires."
+  (let* ((now (current-time))
+         (zone (if altodo-use-local-timezone nil t))
+         (timestamp
+          (if altodo-done-tag-datetime-format
+              (format-time-string altodo-done-tag-datetime-format now zone)
+            (format-time-string "%Y-%m-%dT%H:%M:%S%:z" now zone))))
+    (if (string-match-p "[[:space:]]" timestamp)
+        (concat "\"" (replace-regexp-in-string "\"" "" timestamp) "\"")
+      timestamp)))
+
 (defun altodo--add-done-tag ()
-  "Add #done tag with current timestamp in ISO 8601 format with timezone."
+  "Add a #done tag with the current time at the end of the current line.
+Nothing is added when the line already ends with a #done tag."
   (save-excursion
     (end-of-line)
-    (unless (looking-back "#done:[0-9/:T+-]+" (line-beginning-position))
-      (let* ((now (current-time))
-             (use-local altodo-use-local-timezone)
-             (tz-info (when use-local (current-time-zone now)))
-             (offset-seconds (if use-local (car tz-info) 0))
-             (offset-hours (/ offset-seconds 3600))
-             (offset-minutes (abs (/ (% offset-seconds 3600) 60)))
-             (offset-string (format "%+03d:%02d" offset-hours offset-minutes))
-             (format (or altodo-done-tag-datetime-format "%Y-%m-%dT%H:%M:%S"))
-             (timestamp-base (format-time-string format now (if use-local nil t)))
-             (timestamp (concat timestamp-base offset-string)))
-        (insert (format " #done:%s" timestamp))))))
+    (unless (looking-back (concat "#done:" altodo--done-tag-value-regex)
+                          (line-beginning-position))
+      (insert " #done:" (altodo--done-tag-timestamp)))))
 
 (defun altodo--remove-done-tag ()
   "Remove #done tag from current line."
   (save-excursion
     (beginning-of-line)
-    (when (re-search-forward " #done:\\([0-9/:T+-]+\\)?" (line-end-position) t)
+    (when (re-search-forward (concat " #done:\\(?:" altodo--done-tag-value-regex "\\)?")
+                             (line-end-position) t)
       (replace-match ""))))
 
 (defun altodo--find-previous-task-line ()
@@ -1859,15 +1827,13 @@ Returns the indentation string if true, nil otherwise."
     (length (match-string 0))))
 
 (defun altodo--get-line-indent (pos)
-  "Get indentation level of line at position POS.
-Returns value or nil."
+  "Get indentation level of line at position POS."
   (save-excursion
     (goto-char pos)
     (altodo--get-current-indent)))
 
 (defun altodo--normalize-indent (indent)
-  "Normalize INDENT to next multiple of `altodo-indent-size`.
-Returns value."
+  "Normalize INDENT to next multiple of `altodo-indent-size`."
   (let ((remainder (mod indent altodo-indent-size)))
     (if (zerop remainder)
         indent
@@ -1887,8 +1853,7 @@ Returns value."
       0)))
 
 (defun altodo--set-line-indent (indent)
-  "Set current line indentation to INDENT spaces.
-Returns value."
+  "Set current line indentation to INDENT spaces."
   (save-excursion
     (beginning-of-line)
     (delete-horizontal-space)
@@ -1924,12 +1889,6 @@ Returns the overlay if found, nil otherwise."
                    (= (overlay-start ov) line-start)
                    (= (overlay-end ov) line-end)))
             (overlays-in line-start line-end)))
-
-(defun altodo--filter-invert-visibility (overlay)
-  "Invert the visibility of OVERLAY.
-If visible, make invisible.  If invisible, make visible."
-  (let ((invisible (overlay-get overlay 'invisible)))
-    (overlay-put overlay 'invisible (not invisible))))
 
 (defun altodo--filter-create-overlay (line-start line-end invisible)
   "Create a new filter overlay from LINE-START to LINE-END.
@@ -1975,23 +1934,34 @@ Removes overlays for all lines in the range to make them visible."
       (forward-line 1))))
 
 
-;;; Filter Heading Cache (Phase 1 Optimization)
+;;; Filter Heading Cache
 
 (defvar-local altodo--heading-cache nil
-  "Cache of heading ranges for optimization.
-Format: ((heading-regexp . (start . end)) ...)")
+  "Cache of heading ranges: ((heading-text . (start . end)) ...).
+It is valid while `altodo--heading-cache-tick' is the modification tick of
+the buffer.")
 
-(defun altodo--get-cached-heading-range (heading-regexp)
-  "Get heading range from cache.
-Returns (start . end) or nil if not found.
-Matches if HEADING-REGEXP is a substring of cached heading text."
-  (let ((result nil)
-        (pattern (regexp-quote heading-regexp)))
-    (dolist (entry altodo--heading-cache)
-      (when (and (not result)
-                 (string-match-p pattern (car entry)))
-        (setq result (cdr entry))))
-    result))
+(defvar-local altodo--heading-cache-tick nil
+  "Value of `buffer-chars-modified-tick' when the heading cache was made.")
+
+(defvar-local altodo--heading-range-table nil
+  "Hash table from a regexp to the ranges of the headings that match it.")
+
+(defun altodo--heading-ranges-matching (regexp)
+  "Return the ranges (START . END) of the headings that match REGEXP.
+REGEXP is searched in the text of each heading, so every heading with a
+match counts, and the range of a heading includes its child headings.  The
+ranges come from the heading cache, which is made again after the buffer
+changes."
+  (unless (eql altodo--heading-cache-tick (buffer-chars-modified-tick))
+    (altodo--compute-all-heading-ranges))
+  (let ((ranges (gethash regexp altodo--heading-range-table 'miss)))
+    (when (eq ranges 'miss)
+      (setq ranges (cl-loop for entry in altodo--heading-cache
+                            when (string-match-p regexp (car entry))
+                            collect (cdr entry)))
+      (puthash regexp ranges altodo--heading-range-table))
+    ranges))
 
 
 ;;; Modeline Helper Functions
@@ -2043,13 +2013,17 @@ Returns string like \\='[AND] (Single)\\=' or \\='[OR] (Multiple)\\='."
               selection-str))))
 
 (defun altodo--update-sidebar-modeline ()
-  "Update sidebar modeline with current filter state."
+  "Update the mode line of the sidebar of the current buffer.
+The state shown is that of the sidebar buffer, whichever buffer is current,
+so two sidebars do not show each other's state."
   (when altodo-sidebar-modeline-enabled
-    (setq altodo-sidebar-modeline-string
-          (or (altodo--get-sidebar-modeline-string) ""))
-    (force-mode-line-update)))
+    (altodo--with-sidebar-buffer
+     (lambda ()
+       (setq altodo-sidebar-modeline-string
+             (or (altodo--get-sidebar-modeline-string) ""))))
+    (force-mode-line-update t)))
 
-;;; Phase 2-1: Multiple sidebar buffer support
+;;; Multiple sidebar buffer support
 
 (defun altodo-sidebar--get-buffer (&optional source-buffer)
   "Return sidebar buffer for SOURCE-BUFFER from alist.
@@ -2058,8 +2032,7 @@ If SOURCE-BUFFER is nil, use current buffer."
     (when (and buf (buffer-live-p buf)) buf)))
 
 (defun altodo-sidebar--get-or-create-buffer (source-buffer)
-  "Get or create sidebar buffer for SOURCE-BUFFER.
-Returns created value."
+  "Get or create sidebar buffer for SOURCE-BUFFER."
   (or (altodo-sidebar--get-buffer source-buffer)
       (let ((buf (generate-new-buffer
                   (format "*altodo-sidebar<%s>*" (buffer-name source-buffer)))))
@@ -2069,16 +2042,14 @@ Returns created value."
         buf)))
 
 (defun altodo-sidebar--cleanup-buffer (source-buffer)
-  "Clean up sidebar buffer for SOURCE-BUFFER.
-Returns value."
+  "Clean up sidebar buffer for SOURCE-BUFFER."
   (when-let ((buf (altodo-sidebar--get-buffer source-buffer)))
     (kill-buffer buf))
   (setq altodo-sidebar--buffer-alist
         (assoc-delete-all source-buffer altodo-sidebar--buffer-alist)))
 
 (defun altodo-sidebar--on-source-buffer-kill ()
-  "Clean up sidebar buffer when source buffer is killed.
-Returns value."
+  "Clean up sidebar buffer when source buffer is killed."
   (altodo-sidebar--cleanup-buffer (current-buffer)))
 
 (defun altodo--get-sidebar-buffer (&optional source-buffer)
@@ -2170,7 +2141,7 @@ comment lines:
         (matched-line-numbers nil)
         (current-line-number 1))
 
-    ;; Phase 1 Optimization: Initialize heading cache
+    ;; Fill the heading cache
     (altodo--compute-all-heading-ranges)
 
     (unwind-protect
@@ -2229,26 +2200,6 @@ comment lines:
     (redisplay t)))
 
 ;;; Display Context Helper Functions
-
-(defun altodo--get-heading-range-lines (heading-ranges current-pos)
-  "Get list of line numbers in the range of HEADING-RANGES that has CURRENT-POS."
-  (let ((result nil))
-    (dolist (entry heading-ranges)
-      (let ((range (cdr entry)))
-        (when (and (>= current-pos (car range))
-                   (<= current-pos (cdr range)))
-          ;; Get start and end line numbers
-          (save-excursion
-            (goto-char (car range))
-            (let ((start-line (line-number-at-pos)))
-              (goto-char (cdr range))
-              (let ((end-line (line-number-at-pos)))
-                ;; Add normal text lines in range
-                (dotimes (i (- end-line start-line -1))
-                  (let ((line-num (+ start-line i)))
-                    (when (altodo--normal-text-p line-num)
-                      (push line-num result))))))))))
-    result))
 
 (defun altodo--normal-text-p (line-num)
   "Check if line at LINE-NUM is normal text (not task, comment, heading, or blank)."
@@ -2484,8 +2435,7 @@ Supports integers, floats, and scientific notation."
       (string-to-number str))))
 
 (defun altodo--extract-tag-value (match-string)
-  "Extract tag value from MATCH-STRING, removing quotes if present.
-Returns value."
+  "Extract tag value from MATCH-STRING, removing quotes if present."
   (let ((value match-string))
     (if (and (string-prefix-p "\"" value)
              (string-suffix-p "\"" value))
@@ -2551,15 +2501,6 @@ It may follow a priority flag."
     (when (looking-at altodo-task-regex)
       (altodo--has-star-flag-p (match-string 3)))))
 
-(defun altodo--line-state-any-p (states)
-  "Return t if current line has any of the STATES.
-STATES should be a list of altodo-state-* constants."
-  (catch 'found
-    (dolist (state states)
-      (when (altodo--line-state-p state)
-        (throw 'found t)))
-    nil))
-
 (defun altodo--line-has-any-tag-p (tags)
   "Return t if current line has any of the TAGS, nil otherwise.
 TAGS should be a list of tag strings (without @)."
@@ -2578,13 +2519,19 @@ TAGS should be a list of tag strings (without @)."
         (throw 'found nil)))
     t))
 
+(defun altodo--person-search-regex (person)
+  "Return the regexp that matches @PERSON in a line.
+The @ must be at the beginning of the line or after a space, so the @ in a
+URL such as https://example.com/a@b is not a person."
+  (concat "\\(?:^\\|[[:space:]]\\)@" (regexp-quote person) "\\>"))
+
 (defun altodo--line-has-person-p (person)
   "Return t if the current line has PERSON.
 PERSON should be a string like \"john\" (without @)."
   (save-excursion
     (beginning-of-line)
     (and (or (altodo--task-p) (altodo--comment-p))
-         (re-search-forward (concat "@" (regexp-quote person) "\\>")
+         (re-search-forward (altodo--person-search-regex person)
                             (line-end-position)
                             t))))
 
@@ -2597,37 +2544,42 @@ PERSONS should be a list of person strings (without @)."
         (throw 'found t)))
     nil))
 
-(defun altodo--line-due-date-p ()
-  "Check if current line has due date.
-Returns t if due date exists, nil otherwise."
+(defun altodo--line-date-value (kind)
+  "Return the date of KIND on the current line as \"YYYY-MM-DD\", or nil.
+KIND is `due' (\"-> DATE\") or `start' (\"DATE ->\").  The date is looked for
+only on the lines where dates are recognized (see `altodo--date-line-p'),
+with the spaces that the format specification requires, whatever
+`altodo-date-format' is."
   (save-excursion
     (beginning-of-line)
-    (let ((line-end (line-end-position))
-          (regex-match (altodo--date-regex-match)))
-      (and (re-search-forward (concat "-> " regex-match) line-end t) t))))
+    (when (altodo--date-line-p)
+      (let* ((regex-info (altodo--date-regex-info))
+             (regex (if (eq kind 'due)
+                        (concat "\\(?:^\\| \\)-> " (nth 0 regex-info)
+                                "\\(?: \\|$\\)")
+                      (concat "\\(?:^\\| \\)" (nth 0 regex-info)
+                              " ->\\(?: \\|$\\)"))))
+        (when (re-search-forward regex (line-end-position) t)
+          (format "%s-%s-%s"
+                  (match-string (nth 2 regex-info))
+                  (match-string (nth 3 regex-info))
+                  (match-string (nth 4 regex-info))))))))
+
+(defun altodo--line-due-date-p ()
+  "Return non-nil if the current line has a due date."
+  (and (altodo--line-date-value 'due) t))
 
 (defun altodo--line-due-date-value ()
   "Get due date from current line.
 Returns date string (e.g., \"2026-01-31\") or nil."
-  (save-excursion
-    (beginning-of-line)
-    (let* ((line-end (line-end-position))
-           (regex-info (altodo--date-regex-info))
-           (regex (nth 0 regex-info))
-           (year-idx (nth 2 regex-info))
-           (month-idx (nth 3 regex-info))
-           (day-idx (nth 4 regex-info)))
-      (when (re-search-forward (concat "-> " regex) line-end t)
-        (let ((year (match-string year-idx))
-              (month (match-string month-idx))
-              (day (match-string day-idx)))
-          (format "%s-%s-%s" year month day))))))
+  (altodo--line-date-value 'due))
 
 (defun altodo--days-to-week-end ()
   "Return the number of days from today to the last day of this week.
-The week starts on `altodo-week-start-day' (0 is Sunday, 1 is Monday)."
+The week starts on `altodo-week-start-day' (0 is Sunday, 1 is Monday).
+If the variable is nil, the week starts on Sunday."
   (let ((today-wday (nth 6 (decode-time (current-time))))
-        (week-start (or altodo-week-start-day 1)))
+        (week-start (or altodo-week-start-day 0)))
     (mod (- (+ week-start 6) today-wday) 7)))
 
 (defun altodo--days-to-month-end ()
@@ -2745,30 +2697,13 @@ Signals error on invalid date format."
 ;; ========================================
 
 (defun altodo--line-start-date-p ()
-  "Check if current line has start date.
-Returns t if start date exists, nil otherwise."
-  (save-excursion
-    (beginning-of-line)
-    (let ((line-end (line-end-position))
-          (regex-match (altodo--date-regex-match)))
-      (and (re-search-forward (concat regex-match " ->") line-end t) t))))
+  "Return non-nil if the current line has a start date."
+  (and (altodo--line-date-value 'start) t))
 
 (defun altodo--line-start-date-value ()
   "Get start date from current line.
 Returns date string (e.g., \"2026-01-01\") or nil."
-  (save-excursion
-    (beginning-of-line)
-    (let* ((line-end (line-end-position))
-           (regex-info (altodo--date-regex-info))
-           (regex (nth 0 regex-info))
-           (year-idx (nth 2 regex-info))
-           (month-idx (nth 3 regex-info))
-           (day-idx (nth 4 regex-info)))
-      (when (re-search-forward (concat regex " ->") line-end t)
-        (let ((year (match-string year-idx))
-              (month (match-string month-idx))
-              (day (match-string day-idx)))
-          (format "%s-%s-%s" year month day))))))
+  (altodo--line-date-value 'start))
 
 (defun altodo--start-date-matches-p (condition)
   "Check if current line\\='s start date matches CONDITION.
@@ -2936,11 +2871,6 @@ Returns t if condition is true, nil otherwise."
 Return t if condition is true, nil otherwise."
   (string-match-p (concat "^" altodo--dsl-logic-operators-regex) string))
 
-(defun altodo--find-next-logic-operator (string &optional start)
-  "Find position of next logic operator in STRING after START.
-Returns position or nil if not found."
-  (string-match altodo--dsl-logic-operators-regex string (or start 0)))
-
 ;; ============================================================================
 ;; DSL Pattern Compiler
 ;; ============================================================================
@@ -2959,8 +2889,7 @@ Supports:
 Limitations:
 - Nested logic operators are NOT split: \"or:and:done,priority,cancelled\"
   → (\"or:and:done,priority,cancelled\") - treated as single element
-- Deep nesting (2+ levels) is not supported
-- See .kiro/memo/dsl_parser_limitations.md for details"
+- Deep nesting (2+ levels) is not supported"
   (let ((result nil)
         (i 0)
         (len (length args-string))
@@ -3112,7 +3041,15 @@ Returns a lambda function that returns t/nil."
        ("regexp" (lambda () (altodo--line-contains-regexp-p arg)))
        ("level" (let ((level (string-to-number arg)))
                   (lambda () (altodo--line-nest-level-p level))))
-       ("heading" (lambda () (altodo--line-in-heading-range-with-filter-p arg t 'only-tasks)))
+       ("heading" (progn
+                    ;; Report an invalid regexp when the pattern is compiled.
+                    (condition-case nil
+                        (string-match-p arg "")
+                      (invalid-regexp
+                       (error "Invalid regexp for heading: %s" arg)))
+                    (lambda ()
+                      (altodo--line-in-heading-range-with-filter-p
+                       arg t 'only-tasks))))
        ("multiline-comment-contains" (lambda () (altodo--multiline-comment-contains-regexp-p arg)))
        ;; Parse the condition once here, so that an invalid condition is
        ;; reported when the pattern is compiled, not on every line.
@@ -3192,8 +3129,7 @@ Returns nil if no multiline comments follow."
       (nreverse lines))))
 
 (defun altodo--indent-multiline-comments (lines indent-delta)
-  "Indent multiline comment LINES by INDENT-DELTA spaces.
-Returns value."
+  "Indent multiline comment LINES by INDENT-DELTA spaces."
   (save-excursion
     (dolist (line-num lines)
       (goto-char (point-min))
@@ -3202,8 +3138,7 @@ Returns value."
         (altodo--set-line-indent (max 0 (+ current-indent indent-delta)))))))
 
 (defun altodo-indent-line ()
-  "Indent current line for altodo-mode with smart task hierarchy.
-Returns nil."
+  "Indent current line for altodo-mode with smart task hierarchy."
   (interactive)
   (let* ((current-line (line-number-at-pos))
          (current-indent (altodo--get-current-indent))
@@ -3372,8 +3307,7 @@ CURRENT-INDENT is current indentation."
       normalized)))
 
 (defun altodo-enter ()
-  "Handle RET key in altodo-mode.
-Returns nil."
+  "Handle RET key in altodo-mode."
   (interactive)
   ;; SKK compatibility: similar to skk-wrap-newline-command
   ;; See: https://github.com/skk-dev/ddskk/issues/176
@@ -3393,8 +3327,7 @@ Returns nil."
     (altodo-enter-internal))))
 
 (defun altodo-enter-internal ()
-  "Internal function for altodo-enter processing.
-Returns value."
+  "Internal function for altodo-enter processing."
   (cond
    ;; 空のタスク行 → タスクマーカーを削除して改行
    ((altodo--empty-task-line-p)
@@ -3421,8 +3354,7 @@ Returns value."
 
 (defun altodo-add-task (&optional indent-deeper)
   "Add a new task at current indentation level.
-If INDENT-DEEPER is non-nil, add as subtask (one level deeper).
-Returns nil."
+If INDENT-DEEPER is non-nil, add as subtask (one level deeper)."
   (interactive)
   (if (or (altodo--task-p) (altodo--comment-p))
       (progn
@@ -3441,16 +3373,14 @@ Returns nil."
     (message "Not on a task or comment line")))
 
 (defun altodo-add-subtask ()
-  "Add a new subtask (indented one level deeper).
-Returns nil."
+  "Add a new subtask (indented one level deeper)."
   (interactive)
   (if (or (altodo--task-p) (altodo--comment-p))
       (altodo-add-task t)
     (message "Not on a task or comment line")))
 
 (defun altodo-toggle-comment ()
-  "Toggle between task and comment.
-Returns value."
+  "Toggle between task and comment."
   (interactive)
   (save-excursion
     (beginning-of-line)
@@ -3561,27 +3491,23 @@ The star flag is kept."
      (altodo--format-flags star level rest))))
 
 (defun altodo-set-priority-1 ()
-  "Set priority flag to level 1 (!).
-Returns nil."
+  "Set priority flag to level 1 (!)."
   (interactive)
   (altodo--set-priority-flag 1))
 
 (defun altodo-set-priority-2 ()
-  "Set priority flag to level 2 (!!).
-Returns nil."
+  "Set priority flag to level 2 (!!)."
   (interactive)
   (altodo--set-priority-flag 2))
 
 (defun altodo-set-priority-3 ()
-  "Set priority flag to level 3 (!!!).
-Returns nil."
+  "Set priority flag to level 3 (!!!)."
   (interactive)
   (altodo--set-priority-flag 3))
 
 (defun altodo-toggle-star-flag ()
   "Toggle star flag (+) on current task or comment line.
-The priority flag is kept.
-Returns nil."
+The priority flag is kept."
   (interactive)
   (altodo--replace-flags
    (lambda (star priority rest)
@@ -3589,8 +3515,7 @@ Returns nil."
   nil)
 
 (defun altodo-start-multiline-comment ()
-  "Start a multiline comment at current indentation level + 4.
-Returns nil."
+  "Start a multiline comment at current indentation level + 4."
   (interactive)
   (if (or (altodo--task-p) (altodo--comment-p))
       (let ((indent (altodo--get-current-indent)))
@@ -3610,11 +3535,6 @@ Returns nil."
 (defcustom altodo-done-file-prefix "_done"
   "Prefix for done task files."
   :type 'string
-  :group 'altodo)
-
-(defcustom altodo-move-single-line-comments-manually t
-  "Whether to move single-line comments (///) when moving tasks manually."
-  :type 'boolean
   :group 'altodo)
 
 (defcustom altodo-auto-move-interval 3600
@@ -3664,16 +3584,14 @@ Returns t if condition is true, nil otherwise."
                     (error-message-string err))))))))
 
 (defun altodo-toggle-auto-move-timer ()
-  "Toggle auto-move timer for done tasks.
-Returns nil."
+  "Toggle auto-move timer for done tasks."
   (interactive)
   (if altodo--auto-move-timer
       (altodo-stop-auto-move-timer)
     (altodo-start-auto-move-timer)))
 
 (defun altodo-start-auto-move-timer ()
-  "Start auto-move timer for done tasks.
-Returns value."
+  "Start auto-move timer for done tasks."
   (interactive)
   (unless (and (numberp altodo-auto-move-interval)
                (> altodo-auto-move-interval 0))
@@ -3688,8 +3606,7 @@ Returns value."
   (message "altodo: Auto-move timer started (interval: %d seconds)" altodo-auto-move-interval))
 
 (defun altodo-stop-auto-move-timer ()
-  "Stop auto-move timer for done tasks.
-Returns value."
+  "Stop auto-move timer for done tasks."
   (interactive)
   (when altodo--auto-move-timer
     (cancel-timer altodo--auto-move-timer)
@@ -3698,8 +3615,7 @@ Returns value."
     (message "altodo: Auto-move timer stopped")))
 
 (defun altodo--get-done-file-path ()
-  "Get the path to the done file for current buffer.
-Returns value or nil."
+  "Get the path to the done file for current buffer."
   (let* ((current-file (buffer-file-name))
          (dir (file-name-directory current-file))
          (base (file-name-sans-extension (file-name-nondirectory current-file)))
@@ -3766,7 +3682,9 @@ the heading does not exist.  The current buffer must support
   (let ((heading-found nil)
         (insert-pos nil))
     (when heading
-      (let ((heading-pattern (concat "^" (regexp-quote (car heading)) "[ \t]+" (regexp-quote (cdr heading)))))
+      (let ((heading-pattern (concat "^" (regexp-quote (car heading)) "[ \t]+"
+                                     (regexp-quote (string-trim (cdr heading)))
+                                     "[ \t]*$")))
         (while (and (not heading-found) (not (eobp)))
           (when (looking-at heading-pattern)
             (setq heading-found t)
@@ -3884,12 +3802,14 @@ ignores this option."
                  (natnum :tag "Days since #done")))
 
 (defun altodo--line-done-tag-value ()
-  "Return the value of the `#done' tag on the current line, or nil."
+  "Return the value of the `#done' tag on the current line, or nil.
+The quotes of a double-quoted value are removed."
   (save-excursion
     (beginning-of-line)
-    (when (re-search-forward "\\(?:^\\|[ \t]\\)#done:\\([^[:space:]]+\\)"
+    (when (re-search-forward (concat "\\(?:^\\|[ \t]\\)#done:\\("
+                                     altodo--done-tag-value-regex "\\)")
                              (line-end-position) t)
-      (match-string-no-properties 1))))
+      (string-trim (match-string-no-properties 1) "\"" "\""))))
 
 (defun altodo--done-tag-time (value)
   "Return the time value of the `#done' tag VALUE, or nil if not a date.
@@ -4037,8 +3957,7 @@ Return the number of tasks moved."
 
 (defun altodo-move-done-tasks-at-point ()
   "Move the done or cancelled task at point to the done file.
-The unit is set by `altodo-move-unit'.
-Returns nil."
+The unit is set by `altodo-move-unit'."
   (interactive)
   (altodo--move-task-to-done-file altodo-move-unit)
   nil)
@@ -4102,13 +4021,12 @@ KIND is `due' or `start'.")
 KIND is `due' (the date after \"->\") or `start' (the date before it)."
   (save-excursion
     (beginning-of-line)
-    (let ((regex (altodo--date-regex-match)))
-      (when (re-search-forward
-             (if (eq kind 'due)
-                 (concat "-> \\(" regex "\\)")
-               (concat "\\(" regex "\\) ->"))
-             (line-end-position) t)
-        (cons (match-beginning 1) (match-end 1))))))
+    (when (re-search-forward
+           (if (eq kind 'due)
+               (altodo--due-date-regex)
+             (altodo--start-date-regex))
+           (line-end-position) t)
+      (cons (match-beginning 1) (match-end 1)))))
 
 (defun altodo--current-line-date (kind)
   "Return the date of KIND on the current line as (MONTH DAY YEAR), or nil."
@@ -4220,151 +4138,6 @@ Move to a date and press RET; press q to cancel."
   (altodo--input-date-in-minibuffer 'start))
 
 
-;;; Debug System
-
-;; debug-helper is loaded automatically when altodo-debug-mode is t
-;; (see defcustom altodo-debug-mode above)
-
-(defgroup altodo-debug nil
-  "Debug settings for altodo-mode."
-  :group 'altodo)
-
-(defcustom altodo-debug-log-file nil
-  "Path to debug log file (absolute path).
-If nil, debug log is not written to file."
-  :type '(choice (const :tag "No log file" nil)
-                 (file :tag "Log file path"))
-  :group 'altodo-debug)
-
-(defcustom altodo-debug-log-to-messages nil
-  "Also log to *Messages* buffer."
-  :type 'boolean
-  :group 'altodo-debug)
-
-;; Setup debug helper (only if loaded)
-(when (featurep 'debug-helper)
-  (debug-helper-setup "altodo" "0.1.0" altodo-debug-log-file altodo-debug-log-to-messages))
-
-;; Override message function to also log to file when altodo-debug-mode is enabled
-(when altodo-debug-mode
-  (let ((original-message (symbol-function 'message)))
-    (defun message (format-string &rest args)
-      "Override message to also log to debug file."
-      (let ((msg (apply #'format format-string args)))
-        ;; Call original message
-        (apply original-message format-string args)
-        ;; Also log to file if debug mode is enabled
-        (when altodo-debug-mode
-          (condition-case nil
-              (let* ((log-file (substitute-in-file-name altodo-debug-log-file))
-                     (log-dir (file-name-directory log-file)))
-                (unless (file-exists-p log-dir)
-                  (let ((inhibit-message t))
-                    (make-directory log-dir t)))
-                (with-temp-buffer
-                  (insert (format "%s\n" msg))
-                  (let ((inhibit-message t))
-                    (append-to-file (point-min) (point-max) log-file))))
-            (error nil)))))))
-
-
-(defun altodo-debug-enable ()
-  "Enable debug logging for altodo functions.
-Returns nil."
-  (interactive)
-  (if (featurep 'debug-helper)
-      (progn
-        (debug-helper-setup "altodo" "0.1.0" altodo-debug-log-file altodo-debug-log-to-messages altodo--updatedtime)
-        (debug-helper-enable))
-    (message "debug-helper is not loaded. Set altodo-enable-debug to t and reload altodo.el")))
-
-(defun altodo-debug-disable ()
-  "Disable debug logging for altodo functions.
-Returns value."
-  (interactive)
-  (when (featurep 'debug-helper)
-    (debug-helper-disable)))
-
-(defun altodo-debug-add-function (function-symbol)
-  "Add FUNCTION-SYMBOL to debug list.
-Returns nil."
-  (interactive "aFunction to debug: ")
-  (if (featurep 'debug-helper)
-      (progn
-        (debug-helper-add-function function-symbol)
-        (message "Added %s to debug list" function-symbol))
-    (message "debug-helper is not loaded")))
-
-(defun altodo-debug-remove-function (function-symbol)
-  "Remove FUNCTION-SYMBOL from debug list.
-Returns nil."
-  (interactive
-   (list (when (featurep 'debug-helper)
-           (intern (completing-read "Function to remove: "
-                                    debug-helper--functions nil t)))))
-  (if (featurep 'debug-helper)
-      (progn
-        (debug-helper-remove-function function-symbol)
-        (message "Removed %s from debug list" function-symbol))
-    (message "debug-helper is not loaded")))
-
-(defun altodo-debug-clear-log ()
-  "Clear debug log file.
-Returns value."
-  (interactive)
-  (debug-helper-clear-log))
-
-(defun altodo-debug-view-log ()
-  "Open debug log file.
-Returns value."
-  (interactive)
-  (debug-helper-view-log))
-
-
-;;; Display Line Number Calculation
-
-(defun altodo--get-display-line-number (actual-line)
-  "Get display line number for ACTUAL-LINE considering invisible lines.
-Returns the line number as displayed (counting only visible lines)."
-  (save-excursion
-    (goto-char (point-min))
-    (let ((display-line 1))
-      (while (< (line-number-at-pos) actual-line)
-        (unless (get-char-property (point) 'invisible)
-          (setq display-line (1+ display-line)))
-        (forward-line 1))
-      display-line)))
-
-(defun altodo--get-actual-line-number (display-line)
-  "Get actual line number for DISPLAY-LINE (counting only visible lines).
-Returns the actual line number in the buffer."
-  (catch 'found
-    (save-excursion
-      (goto-char (point-min))
-      (let ((count 0))
-        (while (not (eobp))
-          (unless (get-char-property (point) 'invisible)
-            (setq count (1+ count)))
-          (if (= count display-line)
-              (throw 'found (line-number-at-pos)))
-          (forward-line 1))
-        nil))))
-
-(defun altodo--sidebar-get-line-number-for-entry (entry source-buffer)
-  "Get display line number for ENTRY in SOURCE-BUFFER.
-Returns the line number as displayed (counting only visible lines)."
-  (with-current-buffer source-buffer
-    (let ((pattern (plist-get entry :pattern)))
-      (when pattern
-        (save-excursion
-          (goto-char (point-min))
-          (let ((display-line 1))
-            (while (not (eobp))
-              (unless (get-char-property (point) 'invisible)
-                (setq display-line (1+ display-line)))
-              (forward-line 1))
-            display-line))))))
-
 ;;; Filter Functions
 
 (defun altodo--filter-init ()
@@ -4372,76 +4145,8 @@ Returns the line number as displayed (counting only visible lines)."
   (add-to-invisibility-spec 'altodo-filter))
 
 
-(defun altodo--find-matching-lines (predicate &optional buf)
-  "Find lines matching PREDICATE.
-PREDICATE is a function with no arguments that returns t to match.
-BUF is the target buffer (default: current buffer).
-Returns list of ranges: ((start1 . end1) (start2 . end2) ...)."
-  (let ((target-buf (or buf (current-buffer)))
-        ranges)
-    (with-current-buffer target-buf
-      (save-excursion
-        (goto-char (point-min))
-        (while (not (eobp))
-          (when (funcall predicate)
-            (push (cons (line-beginning-position)
-                        (1+ (line-end-position)))
-                  ranges))
-          (forward-line 1))))
-    (nreverse ranges)))
-
-
-(defun altodo--invert-ranges (ranges)
-  "Invert RANGES to get non-matching ranges.
-If RANGES is ((10 . 20) (30 . 40)), returns ((1 . 10) (20 . 30) (40 . end))."
-  (let ((result nil)
-        (last-end (point-min)))
-    (dolist (range ranges)
-      (when (< last-end (car range))
-        (push (cons last-end (car range)) result))
-      (setq last-end (cdr range)))
-    (when (< last-end (point-max))
-      (push (cons last-end (point-max)) result))
-    (nreverse result)))
-
-
-(defun altodo--merge-consecutive-ranges (ranges)
-  "Merge consecutive RANGES.
-For example, ((1 . 10) (10 . 20)) => ((1 . 20))"
-  (if (null ranges)
-      nil
-    (let ((result (list (car ranges))))
-      (dolist (range (cdr ranges))
-        (let ((last (car result)))
-          (if (= (cdr last) (car range))
-              ;; 連続している → マージ
-              (setcar result (cons (car last) (cdr range)))
-            ;; 連続していない → 追加
-            (push range result))))
-      (nreverse result))))
-
-
-(defun altodo--create-overlays (ranges)
-  "Create overlays for RANGES.
-RANGES is a list of (start . end) cons cells.
-Returns list of created overlays."
-  (mapcar (lambda (range)
-            (let ((ov (make-overlay (car range) (cdr range))))
-              (overlay-put ov 'invisible 'altodo-filter)
-              (overlay-put ov 'evaporate t)
-              ov))
-          ranges))
-
-
-(defun altodo--filter-cleanup ()
-  "Cleanup filter system."
-  (altodo-filter-clear)
-  (remove-from-invisibility-spec 'altodo-filter))
-
-
 (defun altodo-filter-clear ()
-  "Clear all filters.
-Returns nil."
+  "Clear all filters."
   (interactive)
   (mapc #'delete-overlay altodo--filter-overlays)
   (setq altodo--filter-overlays nil)
@@ -4458,120 +4163,95 @@ Returns nil."
   (message "Filter cleared"))
 
 
-(defun altodo-filter-show-done-only ()
-  "Show only done tasks.
-Returns value."
-  (interactive)
-  (altodo--filter-lines
-   (lambda ()
-     (altodo--line-done-p)))
-  (setq altodo--filter-mode 'done))
+;; The commands below apply a DSL pattern (see `altodo--compile-simple-pattern')
+;; to the buffer, so that the commands, the sidebar and the patterns of
+;; `.altodo-locals.el' have one meaning for "done", "overdue" and so on.
 
+(defvar altodo-filter-pattern-history nil
+  "History of the DSL patterns read by `altodo-filter-by-pattern'.")
+
+(defun altodo--apply-dsl-filter (pattern mode)
+  "Show only the lines that match the DSL PATTERN and remember MODE.
+MODE is the symbol stored in `altodo--filter-mode'.  An invalid PATTERN
+signals a `user-error' and changes nothing."
+  (let ((predicate
+         (condition-case err
+             (let ((normalized (altodo--normalize-pattern pattern)))
+               (unless (altodo--validate-pattern normalized)
+                 (error "Invalid pattern structure: %S" normalized))
+               (altodo--compile-normalized-pattern normalized))
+           (error (user-error "Invalid DSL pattern \"%s\": %s" pattern
+                              (error-message-string err))))))
+    (altodo--filter-lines predicate)
+    (setq altodo--filter-mode mode)))
+
+(defun altodo-filter-by-pattern (pattern)
+  "Show only the lines that match the DSL PATTERN.
+PATTERN is written as in the `:pattern' of a sidebar entry, for example
+\"and:open,due-date:overdue\".  See `altodo-debug-explain-pattern' to find
+out why a pattern does not match what you expect."
+  (interactive
+   (list (read-string "DSL pattern: " nil 'altodo-filter-pattern-history)))
+  (altodo--apply-dsl-filter pattern (intern (format "pattern:%s" pattern))))
+
+(defun altodo-filter-show-done-only ()
+  "Show only done tasks."
+  (interactive)
+  (altodo--apply-dsl-filter "done" 'done))
 
 (defun altodo-filter-show-progress-only ()
-  "Show only tasks in progress.
-Returns value."
+  "Show only tasks in progress."
   (interactive)
-  (altodo--filter-lines
-   (lambda ()
-     (altodo--line-progress-p)))
-  (setq altodo--filter-mode 'progress))
+  (altodo--apply-dsl-filter "progress" 'progress))
 
 (defun altodo-filter-show-waiting-only ()
-  "Show only waiting tasks.
-Returns value."
+  "Show only waiting tasks."
   (interactive)
-  (altodo--filter-lines
-   (lambda ()
-     (altodo--line-state-p altodo-state-waiting)))
-  (setq altodo--filter-mode 'waiting))
+  (altodo--apply-dsl-filter "waiting" 'waiting))
 
 (defun altodo-filter-show-open-only ()
-  "Show only open tasks.
-Returns value."
+  "Show only open tasks."
   (interactive)
-  (altodo--filter-lines
-   (lambda ()
-     (altodo--line-open-p)))
-  (setq altodo--filter-mode 'open))
+  (altodo--apply-dsl-filter "open" 'open))
 
 (defun altodo-filter-show-cancelled-only ()
-  "Show only cancelled tasks.
-Returns value."
+  "Show only cancelled tasks."
   (interactive)
-  (altodo--filter-lines
-   (lambda ()
-     (altodo--line-state-p altodo-state-cancelled)))
-  (setq altodo--filter-mode 'cancelled))
+  (altodo--apply-dsl-filter "cancelled" 'cancelled))
 
 (defun altodo-filter-show-priority ()
-  "Show only tasks with priority flag.
-Returns value."
+  "Show only tasks with priority flag."
   (interactive)
-  (altodo--filter-lines
-   (lambda ()
-     (altodo--line-has-priority-p)))
-  (setq altodo--filter-mode 'priority))
+  (altodo--apply-dsl-filter "priority" 'priority))
 
 (defun altodo-filter-show-star ()
-  "Show only tasks with star flag.
-Returns value."
+  "Show only tasks with star flag."
   (interactive)
-  (altodo--filter-lines
-   (lambda ()
-     (altodo--line-has-star-p)))
-  (setq altodo--filter-mode 'star))
-
+  (altodo--apply-dsl-filter "star" 'star))
 
 (defun altodo-filter-show-tag (tag)
-  "Show only tasks with TAG.
-Returns value."
+  "Show only tasks with TAG."
   (interactive "sTag: ")
-  (altodo--filter-lines
-   (lambda ()
-     (altodo--line-has-tag-p tag)))
-  (setq altodo--filter-mode (intern (format "tag:%s" tag)))
+  (altodo--apply-dsl-filter (format "tag:%s" tag) (intern (format "tag:%s" tag)))
   (message "Showing tasks with tag #%s" tag))
 
-
 (defun altodo-filter-show-overdue ()
-  "Show only overdue tasks.
-Returns value."
+  "Show only tasks whose due date has passed."
   (interactive)
-  (altodo--filter-lines
-   (lambda ()
-     (and (altodo--task-p)
-          (save-excursion
-            (re-search-forward "-> [0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}"
-                               (line-end-position) t)
-            (let ((date-str (match-string 0)))
-              (let ((date-time (altodo--parse-date date-str)))
-                (and date-time (< (altodo--days-diff date-time) 0))))))))
-  (setq altodo--filter-mode 'overdue)
+  (altodo--apply-dsl-filter "and:task,due-date:overdue" 'overdue)
   (message "Showing overdue tasks only"))
 
-
 (defun altodo-filter-show-person (person)
-  "Show only tasks with PERSON.
-Returns value."
+  "Show only tasks with PERSON."
   (interactive "sPerson: ")
-  (altodo--filter-lines
-   (lambda ()
-     (save-excursion
-       (re-search-forward (concat "@" (regexp-quote person) "\\>")
-                          (line-end-position) t))))
-  (setq altodo--filter-mode (intern (format "person:%s" person)))
+  (altodo--apply-dsl-filter (format "person:%s" person)
+                            (intern (format "person:%s" person)))
   (message "Showing tasks with person @%s" person))
 
 
-;;; Sidebar UI (Phase 5-2)
+;;; Sidebar UI
 
 ;; Customization Variables
-
-(defcustom altodo-sidebar-buffer-name "*altodo-filters*"
-  "Name of the sidebar buffer."
-  :group 'altodo
-  :type 'string)
 
 (defvar altodo-sidebar--buffer-alist nil
   "Alist mapping source-buffer to sidebar-buffer.")
@@ -4597,12 +4277,10 @@ Can be overridden by .altodo-locals.el."
   :type 'integer)
 
 (defcustom altodo-sidebar-focus-after-activation nil
-  "Whether to focus sidebar after activation."
-  :group 'altodo
-  :type 'boolean)
-
-(defcustom altodo-sidebar-auto-resize nil
-  "Whether to auto-resize sidebar window."
+  "Whether to move the focus to the source window after a filter is applied.
+Selecting a filter entry of the sidebar applies it to the source buffer.
+When this is non-nil, the source window is selected afterward; otherwise the
+sidebar keeps the focus."
   :group 'altodo
   :type 'boolean)
 
@@ -4627,36 +4305,25 @@ Can be overridden by .altodo-locals.el."
 
     (:title "Flags" :type group-header :nest 0)
     (:title "Priority (!) - %n" :type search-simple :pattern "priority" :count-format t :nest 1)
-    (:title "Star (+) - %n" :type search-simple :pattern "star" :count-format t :nest 1
-        :count-face-rules ((>= 5 error)
-                       (>= 1 warning)))
+    (:title "Star (+) - %n" :type search-simple :pattern "star" :count-format t :nest 1)
     (:title "Due" :type group-header :nest 0)
     (:title "Open and Over Due - %n"
-            :type search-lambda
-            :pattern (lambda ()
-                       (and (altodo--due-date-matches-p 'overdue)
-                            (not (or (altodo--line-state-p altodo-state-done)
-                                     (altodo--line-state-p altodo-state-cancelled)))))
-            :count-format t
-            :nest 1
+            :type search-simple
+            :pattern "and:due-date:overdue,not:state-any:done|cancelled"
+            :count-format t :nest 1
+            :face altodo-sidebar-search-lambda-face
             :face-rules ((>= 1 error)))
     (:title "Open and Due Today - %n"
-            :type search-lambda
-            :pattern (lambda ()
-                       (and (altodo--due-date-matches-p 'today)
-                            (not (or (altodo--line-state-p altodo-state-done)
-                                     (altodo--line-state-p altodo-state-cancelled)))))
+            :type search-simple
+            :pattern "and:due-date:today,not:state-any:done|cancelled"
             :count-format t :nest 1
+            :face altodo-sidebar-search-lambda-face
             :face-rules ((>= 1 error)))
     (:title "Open and Due This Week - %n"
-            :type search-lambda
-            :pattern (lambda ()
-                       (and (altodo--due-date-matches-p 'this-week)
-                            (not (altodo--due-date-matches-p 'today))
-                            (not (or (altodo--line-state-p altodo-state-done)
-                                     (altodo--line-state-p altodo-state-cancelled)))))
-            :count-format t :nest 1)
-
+            :type search-simple
+            :pattern "and:due-date:this-week,not:due-date:today,not:state-any:done|cancelled"
+            :count-format t :nest 1
+            :face altodo-sidebar-search-lambda-face)
     (:title "Tags" :type group-header :nest 0)
     (:title "#%s - %n" :type dynamic :dynamic-type "tag" :count-format t :limit 5 :nest 1
             :exclude-tag ("id" "dep" "done") :tag-mode "name-only")
@@ -4684,7 +4351,7 @@ See `doc/design-filter.md` for detailed specification."
 Each element is an entry plist from altodo-filter-patterns.
 Used for applying face to selected filters.")
 
-;; Phase 5-5: Multiple filter selection state management
+;; Multiple filter selection state
 (defvar-local altodo-sidebar--selected-filters nil
   "List of selected filters in multiple selection mode.
 Each element is an entry plist from altodo-filter-patterns.")
@@ -4714,26 +4381,6 @@ Returns the displayed window."
         ;; Render after window is displayed
         (altodo-sidebar--render buf config)
         win))))
-
-(defun altodo-sidebar--update-faces (buffer config &optional source-buffer)
-  "Update faces for all entries in BUFFER based on CONFIG.
-Does not re-render the buffer, only updates face properties.
-SOURCE-BUFFER is the altodo buffer that is used to count matches."
-  (with-current-buffer buffer
-    (let ((inhibit-read-only t)
-          (entries (plist-get config :entries)))
-      (save-excursion
-        (goto-char (point-min))
-        (dolist (entry entries)
-          (let ((face (altodo-sidebar--get-face entry config source-buffer)))
-            ;; Find the button for this entry on the current line
-            (let ((button (button-at (point))))
-              (if button
-                  (progn
-                    ;; Update button face
-                    (put-text-property (button-start button) (button-end button) 'face face))))
-            ;; Move to next line
-            (forward-line)))))))
 
 ;;; Sidebar Calendar and Agenda
 
@@ -4927,6 +4574,15 @@ tasks of the day.  The entry accepts the properties `:count-done' and
       (plist-get entry property)
     default))
 
+(defun altodo--agenda-weekday-name (weekday)
+  "Return the name of WEEKDAY (0 is Sunday) for the agenda.
+When `altodo-calendar-day-names' is changed from its default, use it, so
+that the agenda and the calendar show the same names.  Otherwise use the
+abbreviation of the language of Emacs, such as \"Tue\"."
+  (if (equal altodo-calendar-day-names altodo-calendar-default-day-names)
+      (aref calendar-day-abbrev-array weekday)
+    (aref altodo-calendar-day-names weekday)))
+
 (defun altodo--agenda-format-date (date format)
   "Return DATE, a list (MONTH DAY YEAR), as a string in FORMAT.
 FORMAT is `altodo' (the format `altodo-date-format'), `done-tag' (the format
@@ -5034,8 +4690,8 @@ label on a line of its own)."
              (kind (altodo--day-kind info target))
              (label (pcase index (0 today-label) (1 tomorrow-label) (_ "")))
              (weekday (and show-weekday
-                           (aref calendar-day-abbrev-array
-                                 (calendar-day-of-week date))))
+                           (altodo--agenda-weekday-name
+                            (calendar-day-of-week date))))
              (counts-text (string-join
                            (delq nil (list (and (> due 0) (format "D%d" due))
                                            (and (> start 0) (format "S%d" start))))
@@ -5122,7 +4778,10 @@ Uses the source buffer (altodo main buffer) for counting."
                               altodo-sidebar--current-combined-predicate))
         (combine-mode altodo-sidebar--combine-mode))
     (with-current-buffer buffer
-      (let ((inhibit-read-only t))
+      (let ((inhibit-read-only t)
+            ;; A count is computed once for each entry in a drawing.
+            (altodo--count-cache (make-hash-table :test 'eq)))
+        (altodo--release-heading-markers)
         (erase-buffer)
         (unless (and source-buffer (buffer-live-p source-buffer))
           (setq altodo-sidebar--current-combined-predicate nil
@@ -5267,12 +4926,12 @@ Returns display action (function . alist) per GNU Emacs manual."
 
 (defun altodo-sidebar--setup-buffer (buffer config)
   "Setup BUFFER for sidebar display using CONFIG.
-Enables `special-mode', sets read-only, and configures mode-line."
+Enables `altodo-sidebar-mode', sets read-only, and configures mode-line."
+  (ignore config)
   (with-current-buffer buffer
-    (special-mode)
+    (altodo-sidebar-mode)
     (setq buffer-read-only t)
-    (setq mode-name (format "Sidebar: %s" (plist-get config :name)))
-    ;; Setup sidebar-specific mode-line (must be after special-mode)
+    ;; Setup sidebar-specific mode-line (must be after the mode)
     (if altodo-sidebar-hide-mode-line
         (setq-local mode-line-format nil)
       (setq-local mode-line-format
@@ -5285,9 +4944,7 @@ Enables `special-mode', sets read-only, and configures mode-line."
     (when altodo-sidebar-hide-line-numbers
       (when (fboundp 'display-line-numbers-mode)
         (display-line-numbers-mode -1))
-      (setq-local display-line-numbers nil))
-    ;; Setup keybindings
-    (altodo-sidebar--setup-keybindings)))
+      (setq-local display-line-numbers nil))))
 
 (defvar altodo-sidebar-mode-map
   (let ((map (make-sparse-keymap)))
@@ -5298,7 +4955,7 @@ Enables `special-mode', sets read-only, and configures mode-line."
     (define-key map (kbd "q") 'altodo-sidebar-hide)
     (define-key map (kbd "n") 'next-line)
     (define-key map (kbd "p") 'previous-line)
-    ;; Phase 5-5: Multiple filter selection keybindings
+    ;; Multiple filter selection keybindings
     (define-key map (kbd "s") 'altodo-sidebar-toggle-selection)
     (define-key map (kbd "C-c C-a") 'altodo-sidebar-set-and-mode)
     (define-key map (kbd "C-c C-o") 'altodo-sidebar-set-or-mode)
@@ -5312,6 +4969,14 @@ Enables `special-mode', sets read-only, and configures mode-line."
     map)
   "Keymap for altodo sidebar.")
 
+(define-derived-mode altodo-sidebar-mode special-mode "altodo-sidebar"
+  "Major mode of the altodo sidebar buffer.
+The buffer is read-only and lists the filters, the calendar and the agenda
+of an altodo buffer.  Select an entry with \\[altodo-sidebar--apply-filter-at-point].
+
+\\{altodo-sidebar-mode-map}"
+  :group 'altodo)
+
 (defun altodo-sidebar-help ()
   "Show the key bindings of the altodo sidebar in a help window."
   (interactive)
@@ -5322,14 +4987,8 @@ Enables `special-mode', sets read-only, and configures mode-line."
                    "C-c C-t toggles AND/OR.  Clear the filter with c.\n\n"))
     (princ (substitute-command-keys "\\{altodo-sidebar-mode-map}"))))
 
-(defun altodo-sidebar--setup-keybindings ()
-  "Setup keybindings for sidebar buffer.
-Returns value."
-  (use-local-map altodo-sidebar-mode-map))
-
 (defun altodo-sidebar--apply-filter-at-point ()
-  "Apply filter at point in sidebar.
-Returns value."
+  "Apply filter at point in sidebar."
   (interactive)
   (let ((button (button-at (point))))
     (if button
@@ -5529,31 +5188,59 @@ would otherwise be reported at every redraw."
                   (assoc-delete-all key altodo--locals-warnings)))
       (display-warning 'altodo (format "%s: %s" file message) :warning))))
 
+(defvar altodo--locals-cache nil
+  "Alist (FILE STAMP . DATA) of the .altodo-locals.el files read.
+STAMP identifies the state of the file, so a changed file is read again.")
+
+(defun altodo--locals-file-stamp (file)
+  "Return the modification time, size and inode of FILE."
+  (let ((attributes (file-attributes file)))
+    (list (file-attribute-modification-time attributes)
+          (file-attribute-size attributes)
+          (file-attribute-inode-number attributes))))
+
 (defun altodo--load-locals-file ()
   "Load .altodo-locals.el from the same directory as the current buffer.
 Returns alist with configuration, or nil if the file is not found, cannot be
-read, or is not an alist (a warning is shown once for the last two)."
+read, or is not an alist (a warning is shown once for the last two).
+The sidebar asks for the settings at each drawing, so the content is kept
+until the file changes."
   (when buffer-file-name
-    (let ((locals-file (expand-file-name ".altodo-locals.el"
-                                         (file-name-directory buffer-file-name))))
-      (when (file-exists-p locals-file)
-        (condition-case err
-            (let ((data (with-temp-buffer
-                          (insert-file-contents locals-file)
-                          (read (current-buffer)))))
-              (if (and (proper-list-p data)
-                       (cl-every (lambda (item)
-                                   (and (consp item) (symbolp (car item))))
-                                 data))
-                  data
-                (altodo--warn-locals-once
-                 locals-file "ignored: the content must be an alist")
-                nil))
-          (error
-           (altodo--warn-locals-once
-            locals-file
-            (format "cannot read: %s" (error-message-string err)))
-           nil))))))
+    (let* ((locals-file (expand-file-name ".altodo-locals.el"
+                                          (file-name-directory buffer-file-name)))
+           (stamp (and (file-exists-p locals-file)
+                       (altodo--locals-file-stamp locals-file)))
+           (cached (assoc locals-file altodo--locals-cache)))
+      (cond
+       ((null stamp) nil)
+       ((and cached (equal (cadr cached) stamp)) (cddr cached))
+       (t (let ((data (altodo--read-locals-file locals-file)))
+            (setq altodo--locals-cache
+                  (cons (cons locals-file (cons stamp data))
+                        (assoc-delete-all locals-file altodo--locals-cache)))
+            data))))))
+
+(defun altodo--read-locals-file (locals-file)
+  "Read LOCALS-FILE and return its alist, or nil with a warning."
+  (condition-case err
+      (let ((data (with-temp-buffer
+                    (insert-file-contents locals-file)
+                    ;; `#.' would run code before the policy applies.
+                    (let ((read-eval nil))
+                      (read (current-buffer))))))
+        (if (and (proper-list-p data)
+                 (cl-every (lambda (item)
+                             (and (consp item) (symbolp (car item))))
+                           data))
+            data
+          (altodo--warn-locals-once
+           locals-file "ignored: the content must be an alist")
+          nil))
+    (error
+     (altodo--warn-locals-once
+      locals-file
+      (format "cannot read: %s" (error-message-string err)))
+     nil)))
 
 (defun altodo--valid-filter-entry-p (entry)
   "Return non-nil if ENTRY is a plist with a string :title and a symbol :type."
@@ -5593,36 +5280,6 @@ plist with a string :title is ignored, with a warning shown once."
 Returns value or nil if not found."
   (let ((locals (altodo--load-locals-file)))
     (cdr (assq key locals))))
-
-(defun altodo--parent-task-matches-regexp-p (regexp)
-  "Check if parent task matches REGEXP.
-Returns t if current task has a parent and parent matches REGEXP."
-  (save-excursion
-    (let ((current-indent (current-indentation)))
-      (when (> current-indent 0)
-        (forward-line -1)
-        (while (and (not (bobp))
-                    (>= (current-indentation) current-indent))
-          (forward-line -1))
-        (and (< (current-indentation) current-indent)
-             (altodo--task-p)
-             (re-search-forward regexp (line-end-position) t)
-             t)))))
-
-(defun altodo--root-parent-task-matches-regexp-p (regexp)
-  "Check if root parent task (nest=0) matches REGEXP.
-Returns t if current task has a root parent and it matches REGEXP."
-  (save-excursion
-    (let ((current-indent (current-indentation)))
-      (when (> current-indent 0)
-        ;; Go to beginning of buffer or first line with indent 0
-        (while (and (not (bobp))
-                    (> (current-indentation) 0))
-          (forward-line -1))
-        (and (= (current-indentation) 0)
-             (altodo--task-p)
-             (re-search-forward regexp (line-end-position) t)
-             t)))))
 
 (defun altodo--heading-level ()
   "Get heading level of current line.
@@ -5677,13 +5334,15 @@ of the buffer.  The buffer is scanned once."
               (while (and open (<= level (car (car open))))
                 (setcdr (cdr (cdr (pop open))) line-start))
               (when (looking-at "^#+[ \t]+\\(.+\\)$")
-                (let ((entry (cons (match-string 1)
+                (let ((entry (cons (match-string-no-properties 1)
                                    (cons (line-beginning-position 2) nil))))
                   (push entry entries)
                   (push (cons level entry) open))))))
         (forward-line 1))
       (dolist (item open)
         (setcdr (cdr (cdr item)) (point-max))))
+    (setq altodo--heading-cache-tick (buffer-chars-modified-tick)
+          altodo--heading-range-table (make-hash-table :test 'equal))
     (setq altodo--heading-cache (nreverse entries))))
 
 (defun altodo--find-heading-range (heading-regexp &optional include-children)
@@ -5734,38 +5393,29 @@ Returns t if in range, nil otherwise."
 
 (defun altodo--line-in-heading-range-with-filter-p (heading-regexp &optional include-children headings-option)
   "Check if current line should be displayed based on heading filter.
-HEADING-REGEXP: regex to match heading
-INCLUDE-CHILDREN: if t, include child headings (default: t)
+HEADING-REGEXP: regexp searched in the text of each heading; the lines
+under every heading with a match, including its child headings, are in range
+INCLUDE-CHILDREN: ignored, child headings are always included
 HEADINGS-OPTION: \\='all, \\='all-without-heading-line, \\='only-tasks,
 \\='only-tasks-without-heading-line (default: \\='only-tasks)
-Returns t if line should be displayed, nil otherwise.
-
-Uses cached heading ranges for optimization (Phase 1)."
-  (setq include-children (if include-children t t))
-  (setq headings-option (or headings-option 'only-tasks))
-
-  ;; Try to get range from cache first (Phase 1 optimization)
-  (let ((range (or (altodo--get-cached-heading-range heading-regexp)
-                   (altodo--find-heading-range heading-regexp include-children))))
-    (if (not range)
-        nil
-      ;; Check if current line is in range
-      (if (not (and (>= (point) (car range))
-                    (< (point) (cdr range))))
-          nil
-        ;; Apply headings-option filter
-        (let ((is-heading (altodo--heading-level))
-              (is-task (altodo--task-p))
-              (is-comment (altodo--comment-p))
-              (is-multiline-comment (altodo--multiline-comment-p)))
-          (pcase headings-option
-            ('all t)  ; Show all lines
-            ('all-without-heading-line (not is-heading))  ; Hide heading lines
-            ('only-tasks (and (or is-task is-comment is-multiline-comment)
-                              (not is-heading)))  ; Show only task/comment lines, not headings
-            ('only-tasks-without-heading-line (and (or is-task is-comment is-multiline-comment)
-                                                    (not is-heading)))  ; Show task/comment but not heading
-            (_ nil)))))))
+Returns t if line should be displayed, nil otherwise."
+  (ignore include-children)
+  (let ((position (point))
+        (headings-option (or headings-option 'only-tasks)))
+    (when (seq-some (lambda (range)
+                      (and (>= position (car range))
+                           (< position (cdr range))))
+                    (altodo--heading-ranges-matching heading-regexp))
+      (let ((is-heading (altodo--heading-level))
+            (is-line-with-content (or (altodo--task-p)
+                                      (altodo--comment-p)
+                                      (altodo--multiline-comment-p))))
+        (pcase headings-option
+          ('all t)
+          ('all-without-heading-line (not is-heading))
+          ((or 'only-tasks 'only-tasks-without-heading-line)
+           (and is-line-with-content (not is-heading)))
+          (_ nil))))))
 
 (defun altodo--get-multiline-comment-range ()
   "Get range of multiline comments following current line.
@@ -5831,6 +5481,11 @@ Returns plain text without any face properties."
       (when (re-search-forward "^[ ]*\\[[^]]*\\][ ]*\\(.*\\)$" (line-end-position) t)
         (substring-no-properties (match-string 1))))))
 
+(defconst altodo--person-in-body-regex
+  "\\(?:^\\|[[:space:]]\\)@\\([^[:space:]]+\\)"
+  "Regexp for @person in a task body; group 1 is the name.
+The @ must be at the beginning or after a space.")
+
 (defun altodo--line-extract-person-value ()
   "Extract @person from current line\\='s task body.
 Returns person name or nil if not found.
@@ -5839,7 +5494,7 @@ Supports ASCII and multi-byte characters (Japanese, etc).
 Returns plain text without any face properties."
   (let ((body (altodo--line-task-body)))
     (when body
-      (when (string-match "@\\([^[:space:]]+\\)" body)
+      (when (string-match altodo--person-in-body-regex body)
         (let ((person (match-string 1 body)))
           ;; Exclude @ followed by ] or [
           (unless (or (string-match "^\\]" person)
@@ -5885,7 +5540,7 @@ Returns list of person name strings (without @)."
         (persons nil))
     (when body
       (let ((start 0))
-        (while (string-match "@\\([^[:space:]]+\\)" body start)
+        (while (string-match altodo--person-in-body-regex body start)
           (let ((person (match-string 1 body)))
             (unless (or (string-match "^\\]" person)
                         (string-match "^\\[" person))
@@ -5965,8 +5620,8 @@ Returns alist of (value . count)."
           (lambda (a b) (string< (car a) (car b))))))
 
 (defun altodo--limit-dynamic-values (alist limit)
-  "Limit ALIST to LIMIT rows.  If LIMIT is nil, return all."
-  (if limit
+  "Limit ALIST to LIMIT rows.  If LIMIT is nil or 0, return all."
+  (if (and (integerp limit) (> limit 0))
       (cl-subseq alist 0 (min limit (length alist)))
     alist))
 
@@ -6029,6 +5684,16 @@ treated like t."
                           (max 1 indent-by-level)
                         1))))))
 
+(defvar-local altodo--heading-markers nil
+  "Markers made for the `heading-jump' entries of the last drawing.
+The sidebar releases them before it draws again, because a marker of a
+buffer is updated at each edit until it is released or collected.")
+
+(defun altodo--release-heading-markers ()
+  "Release the markers in `altodo--heading-markers'."
+  (mapc (lambda (marker) (set-marker marker nil)) altodo--heading-markers)
+  (setq altodo--heading-markers nil))
+
 (defun altodo--expand-heading-filter (entry source-buffer)
   "Expand the heading filter ENTRY to `heading-jump' entries.
 The headings are taken from SOURCE-BUFFER in buffer order.  The count of
@@ -6074,7 +5739,10 @@ contains `%n' and :count-format is not nil."
                       title t t)
              :type heading-jump
              :nest ,(+ nest (altodo--heading-indent-offset level indent-by-level))
-             :marker ,(set-marker (make-marker) position source-buffer)
+             :marker ,(let ((marker (set-marker (make-marker) position
+                                                source-buffer)))
+                        (push marker altodo--heading-markers)
+                        marker)
              ,@(when face `(:face ,face)))))
        headings))))
 
@@ -6158,8 +5826,7 @@ Returns line number (1-based) or nil if not found."
 
 (defun altodo-goto-dependency ()
   "Jump to dependency target line.
-If current line has #dep:xxx, jump to line with #id:xxx.
-Returns nil."
+If current line has #dep:xxx, jump to line with #id:xxx."
   (interactive)
   (let ((dep-id (altodo--line-extract-tag-value "dep")))
     (if dep-id
@@ -6180,119 +5847,43 @@ Returns nil."
     (re-search-forward "\\(?:^\\|[ \t]\\)#seq-tasks\\(?:[ \t]\\|$\\)"
                        (line-end-position) t)))
 
-(defun altodo--get-seq-tasks-parent ()
-  "Get parent task with #seq-tasks tag."
-  (save-excursion
-    (let ((current-indent (altodo--get-current-indent))
-          (found nil))
-      (while (and (> current-indent 0) (= (forward-line -1) 0) (not found))
-        (let ((line-indent (altodo--get-current-indent)))
-          (when (and (< line-indent current-indent)
-                     (altodo--task-p)
-                     (altodo--has-seq-tasks-tag))
-            (setq found (cons (line-number-at-pos) (point))))))
-      found)))
-
-(defun altodo--get-seq-tasks-children ()
-  "Get direct child tasks of current task."
-  (save-excursion
-    (let ((parent-indent (altodo--get-current-indent))
-          (children nil))
-      (when (= (forward-line 1) 0)
-        (while (and (not (eobp))
-                    (or (not (altodo--task-p))
-                        (> (altodo--get-current-indent) parent-indent)))
-          (let ((line-indent (altodo--get-current-indent)))
-            (when (and (= line-indent (+ parent-indent altodo-indent-size))
-                       (altodo--task-p))
-              (push (cons (line-number-at-pos) (point)) children)))
-          (when (= (forward-line 1) 1)
-            (goto-char (point-max)))))
-      (nreverse children))))
-
-(defun altodo--get-seq-tasks-status ()
-  "Get status of current seq-tasks task.
-Parent depends on all children:
-- If all children are completed, parent is ready
-- If any child is open/progress, parent is blocked"
-  (if (not (altodo--has-seq-tasks-tag))
-      'none
-    (save-excursion
-      (beginning-of-line)
-      (when (looking-at altodo-task-regex)
-        (let ((state (altodo--normalize-state (match-string 2))))
-          (if (altodo--task-is-completed state)
-              'completed
-            (let ((children (altodo--get-seq-tasks-children)))
-              (if (null children)
-                  'ready
-                ;; Check if all children are completed
-                (let ((all-completed t))
-                  (dolist (child children)
-                    (save-excursion
-                      (goto-char (cdr child))
-                      (beginning-of-line)
-                      (when (looking-at altodo-task-regex)
-                        (let ((child-state (altodo--normalize-state (match-string 2))))
-                          (unless (altodo--task-is-completed child-state)
-                            (setq all-completed nil))))))
-                  (if all-completed 'ready 'blocked))))))))))
-
-;;; seq-tasks Filter Functions
-
-(defun altodo--line-seq-tasks-ready-p ()
-  "Check if current line is a ready seq-tasks task."
-  (and (altodo--task-p)
-       (altodo--has-seq-tasks-tag)
-       (eq (altodo--get-seq-tasks-status) 'ready)))
-
-(defun altodo--line-seq-tasks-blocked-p ()
-  "Check if current line is a blocked seq-tasks task."
-  (and (altodo--task-p)
-       (altodo--has-seq-tasks-tag)
-       (eq (altodo--get-seq-tasks-status) 'blocked)))
-
 (defun altodo--is-seq-tasks-child-blocked-p ()
-  "Check if current line is a child of seq-tasks with incomplete previous sibling."
-  (when (altodo--task-p)
-    (let ((current-indent (altodo--get-current-indent))
-          (current-line (line-number-at-pos)))
+  "Return non-nil if the current line is a blocked child of a seq-tasks task.
+A child of a task with the tag #seq-tasks is blocked while the sibling
+right above it is neither done nor cancelled.  The first child is never
+blocked.  A task without indentation has no parent, so it is not checked;
+searching for its parent would scan up to the beginning of the buffer."
+  (when (and (altodo--task-p)
+             (> (altodo--get-current-indent) 0))
+    (let ((indent (altodo--get-current-indent))
+          (previous-sibling-open nil)
+          (previous-sibling-seen nil)
+          (parent-is-seq-tasks nil)
+          (done nil))
       (save-excursion
         (beginning-of-line)
-        ;; Find direct parent
-        (forward-line -1)
-        (while (and (not (bobp))
-                    (or (not (altodo--task-p))
-                        (>= (altodo--get-current-indent) current-indent)))
-          (forward-line -1))
-        ;; Check if parent is seq-tasks
-        (when (and (altodo--task-p)
-                   (= (altodo--get-current-indent) (- current-indent altodo-indent-size))
-                   (altodo--has-seq-tasks-tag))
-          ;; Check if previous sibling is incomplete
-          (let ((has-incomplete-prev nil))
-            (forward-line 1)
-            ;; Find previous sibling
-            (while (< (line-number-at-pos) current-line)
-              (when (and (= (altodo--get-current-indent) current-indent)
-                         (looking-at altodo-task-regex))
-                ;; Found previous sibling
-                (unless (altodo--task-is-completed (altodo--normalize-state (match-string 2)))
-                  (setq has-incomplete-prev t)))
-              (forward-line 1))
-            has-incomplete-prev))))))
-
-(defun altodo--line-seq-tasks-all-p ()
-  "Check if current line is any seq-tasks task.
-Returns t if condition is true, nil otherwise."
-  (and (altodo--task-p)
-       (altodo--has-seq-tasks-tag)))
+        (while (and (not done) (zerop (forward-line -1)))
+          (when (looking-at altodo-task-regex)
+            ;; `altodo--get-current-indent' changes the match data.
+            (let ((state (match-string 2))
+                  (line-indent (altodo--get-current-indent)))
+              (cond
+               ((and (= line-indent indent) (not previous-sibling-seen))
+                (setq previous-sibling-seen t
+                      previous-sibling-open
+                      (not (altodo--task-is-completed
+                            (altodo--normalize-state state)))))
+               ((< line-indent indent)
+                (setq done t
+                      parent-is-seq-tasks
+                      (and (= line-indent (- indent altodo-indent-size))
+                           (altodo--has-seq-tasks-tag)))))))))
+      (and parent-is-seq-tasks previous-sibling-open))))
 
 ;;; Helper: Check if string has face property
 
 (defun altodo--string-has-face-property (str)
-  "Return t if STR has any face property, nil otherwise.
-Returns value."
+  "Return t if STR has any face property, nil otherwise."
   (let ((has-face nil))
     (dotimes (i (length str))
       (when (get-text-property i 'face str)
@@ -6321,7 +5912,26 @@ RULES: ((OP N FACE) ...) e.g. ((>= 10 \\='face1) (>= 1 \\='face2) (= 0
                  (funcall (nth 0 rule) count (nth 1 rule)))
         (throw 'found (nth 2 rule))))))
 
+(defvar altodo--count-cache nil
+  "Hash table (ENTRY to count) while the sidebar is drawn, otherwise nil.
+The buffer does not change during a drawing, so the title and the face of an
+entry can share one count.")
+
 (defun altodo--get-entry-count (entry &optional source-buffer combined-predicate combine-mode)
+  "Get match count for ENTRY from SOURCE-BUFFER, using `altodo--count-cache'.
+COMBINED-PREDICATE and COMBINE-MODE are as in `altodo--compute-entry-count'."
+  (if (null altodo--count-cache)
+      (altodo--compute-entry-count entry source-buffer combined-predicate
+                                   combine-mode)
+    (let ((cached (gethash entry altodo--count-cache 'miss)))
+      (if (not (eq cached 'miss))
+          cached
+        (puthash entry
+                 (altodo--compute-entry-count entry source-buffer
+                                              combined-predicate combine-mode)
+                 altodo--count-cache)))))
+
+(defun altodo--compute-entry-count (entry &optional source-buffer combined-predicate combine-mode)
   "Get match count for ENTRY from SOURCE-BUFFER.
 If COMBINED-PREDICATE is provided, count only lines matching both ENTRY and
 COMBINED-PREDICATE.
@@ -6334,7 +5944,10 @@ is not permitted to run."
            (pattern (plist-get entry :pattern))
            (count-pattern-simple (plist-get entry :count-pattern-simple))
            (count-pattern-lambda (plist-get entry :count-pattern-lambda))
-           (exclude-others (plist-get entry :count-exclude-others))
+           ;; Only the task lines are counted unless the entry says nil.
+           (exclude-others (if (plist-member entry :count-exclude-others)
+                               (plist-get entry :count-exclude-others)
+                             t))
            (match-pattern (cond
                            ((eq type 'search-simple) (or count-pattern-simple pattern))
                            ((eq type 'search-lambda) (or count-pattern-lambda pattern))
@@ -6361,7 +5974,6 @@ is not permitted to run."
       (if (null match-pattern)
           0
         (progn
-          (setq exclude-others (if (null exclude-others) t exclude-others))
           (altodo--count-matching-lines effective-predicate exclude-others source-buffer))))))
 
 (defun altodo--count-matching-lines (pattern &optional exclude-others source-buffer)
@@ -6444,8 +6056,7 @@ Disables `tooltip-mode', sets source buffer, and positions cursor."
 
 (defun altodo-sidebar-show ()
   "Display altodo sidebar.
-Creates sidebar buffer with filter patterns from .altodo-locals.el.
-Returns nil."
+Creates sidebar buffer with filter patterns from .altodo-locals.el."
   (interactive)
   (altodo--register-sidebar-faces)
   (let ((source-buffer (current-buffer)))
@@ -6459,8 +6070,7 @@ Returns nil."
               (altodo--update-sidebar-modeline))))))))
 
 (defun altodo-sidebar--update-active-entry (entry)
-  "Update active ENTRY in sidebar buffer and refresh.
-Returns value."
+  "Update active ENTRY in sidebar buffer and refresh."
   (let ((sidebar-buffer (altodo--get-sidebar-buffer)))
     (when sidebar-buffer
       (with-current-buffer sidebar-buffer
@@ -6478,12 +6088,15 @@ The value is `all', `heading-only' or `none'.  It defaults to `heading-only'."
   "Move point to the heading of the `heading-jump' ENTRY in SOURCE-BUFFER.
 Select the window of SOURCE-BUFFER and put the heading near its top.
 When a filter hides the heading line, clear the filter first."
-  (let ((marker (plist-get entry :marker)))
-    (if (not (and (markerp marker)
-                  (eq (marker-buffer marker) source-buffer)
+  (let* ((marker (plist-get entry :marker))
+         ;; Clearing the filter redraws the sidebar, which releases MARKER.
+         (position (and (markerp marker)
+                        (eq (marker-buffer marker) source-buffer)
+                        (marker-position marker))))
+    (if (not (and position
                   (with-current-buffer source-buffer
                     (save-excursion
-                      (goto-char marker)
+                      (goto-char position)
                       (altodo--heading-level)))))
         (message "The heading no longer exists.  Refresh the sidebar")
       (with-current-buffer source-buffer
@@ -6491,11 +6104,11 @@ When a filter hides the heading line, clear the filter first."
                           (and (eq (overlay-get overlay 'category)
                                    'altodo-filter)
                                (overlay-get overlay 'invisible)))
-                        (overlays-at marker))
+                        (overlays-at position))
           (altodo-filter-clear)))
       (select-window (or (get-buffer-window source-buffer)
                          (display-buffer source-buffer)))
-      (goto-char marker)
+      (goto-char position)
       (recenter 0))))
 
 (defun altodo-sidebar--apply-filter (button)
@@ -6552,20 +6165,28 @@ Extracts pattern from button and applies filter to altodo buffer."
 
            ;; No pattern or unknown type
            (t
-            (message "No action for type=%s pattern=%s" type pattern))))))))
+            (message "No action for type=%s pattern=%s" type pattern))))
+        ;; Outside `save-window-excursion', which would restore the focus.
+        (when (and altodo-sidebar-focus-after-activation
+                   (memq type '(search-simple search-lambda)))
+          (altodo-sidebar--select-source-window source-buffer))))))
+
+(defun altodo-sidebar--select-source-window (source-buffer)
+  "Select the window of SOURCE-BUFFER, if the buffer is shown."
+  (let ((window (get-buffer-window source-buffer)))
+    (when window
+      (select-window window))))
 
 
 (defun altodo-sidebar-hide ()
-  "Hide altodo sidebar.
-Returns nil."
+  "Hide altodo sidebar."
   (interactive)
   (let ((buf (altodo--get-sidebar-buffer)))
     (when buf
       (delete-windows-on buf))))
 
 (defun altodo-sidebar-toggle ()
-  "Toggle altodo sidebar visibility.
-Returns value."
+  "Toggle altodo sidebar visibility."
   (interactive)
   (let ((buf (altodo--get-sidebar-buffer)))
     (if (and buf (get-buffer-window buf))
@@ -6573,8 +6194,7 @@ Returns value."
       (altodo-sidebar-show))))
 
 (defun altodo-sidebar-refresh ()
-  "Refresh altodo sidebar.
-Returns value."
+  "Refresh altodo sidebar."
   (interactive)
   (let ((buf (if altodo-sidebar--source-buffer
                  (current-buffer)
@@ -6590,7 +6210,7 @@ Returns value."
             ;; Restore cursor position
             (goto-char (min cursor-pos (point-max)))))))))
 
-;;; Phase 5-5: Multiple Filter Selection Functions
+;;; Multiple Filter Selection Functions
 
 (defun altodo-sidebar--toggle-filter-selection (entry)
   "Toggle ENTRY in multiple selection mode.
@@ -6713,8 +6333,7 @@ Command: `altodo-sidebar-toggle-combine-mode'"
        (altodo-sidebar-refresh)))))
 
 (defun altodo-sidebar--toggle-combine-mode ()
-  "Toggle between AND and OR combine modes.
-Returns value."
+  "Toggle between AND and OR combine modes."
   (interactive)
   (setq altodo-sidebar--combine-mode
         (if (eq altodo-sidebar--combine-mode 'and) 'or 'and))

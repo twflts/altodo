@@ -31,7 +31,6 @@
 (ert-deftest seq-tasks-tag-test-status-of-a-longer-tag ()
   "A parent with #seq-tasks-foo does not block its children."
   (altodo-test-with-buffer "[ ] parent #seq-tasks-foo\n    [ ] a\n    [ ] b\n"
-    (should (eq (altodo--get-seq-tasks-status) 'none))
     (forward-line 2)
     (should-not (altodo--is-seq-tasks-child-blocked-p))))
 

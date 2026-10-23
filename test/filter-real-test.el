@@ -6,7 +6,7 @@
 (ert-deftest filter-real-test-filter-with-real-file ()
   "Test filtering with real altodo file."
   (with-temp-buffer
-    (insert-file-contents "test/filter-test.altodo")
+    (insert-file-contents "test/fixtures/filter-test.altodo")
     (altodo-mode)
     
     (message "=== Test 1: Show only done tasks ===")

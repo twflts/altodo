@@ -10,7 +10,6 @@ Implement filtering functionality in altodo-mode to filter tasks and comments ba
 ### Feature List
 
 - **Hide Filter**: Hide lines that don't match conditions
-- **Background Color Change**: Change background color of lines that don't match conditions (optional) (WIP)
 - **Clear**: Remove filters and display all lines
 - **Multiple Conditions**: Filter by state, tags, priority, dates, etc.
 - **Compound Conditions**: Combination with AND/OR/NOT conditions
@@ -133,7 +132,6 @@ altodo-filter
 ├── Internal Functions (altodo--*)
 │   ├── altodo--filter-init          ; Initialization
 │   ├── altodo--filter-lines         ; Filtering
-│   ├── altodo--filter-cleanup       ; Cleanup
 │   ├── altodo--compile-filter-predicate ; DSL compilation
 │   └── altodo--combine-predicates   ; Predicate combination
 ├── Sidebar Functions (altodo-sidebar--*)
@@ -237,12 +235,6 @@ Hidden by buffer-invisibility-spec
 **Output**: List of overlays
 
 
-#### altodo--filter-cleanup
-
-**Description**: Cleanup filter system
-**Operation**: Delete all overlays
-
-
 #### altodo--compile-filter-predicate
 
 **Description**: Generate a predicate function from a filter entry
@@ -285,20 +277,7 @@ Hidden by buffer-invisibility-spec
 
 **Description**: Determine entry face (Layer structure)
 
-**Processing Order**:
-
-```
-Layer 1: Selection (highest priority)
-  ↓ Selected filter entry
-Layer 2: COUNT (face-rules / count-face-rules)
-  ↓ Face based on count
-Layer 3: Default (:face specification)
-  ↓ If :face is specified in entry
-Layer 4: Type-based (default face)
-  ↓ Default face based on :type
-Layer 5: Non-clickable (comment lines, etc.)
-  ↓ Non-clickable entries
-```
+**Processing Order**: Follows the Layer structure in section 11.
 
 **face-rules Fallback**:
 - If face-rules don't match, fallback to face specified by `:face`
@@ -341,14 +320,33 @@ Layer 5: Non-clickable (comment lines, etc.)
 
 3. Limit with `altodo--limit-dynamic-values`
    - Limit to number specified by `:limit`
-   - If `nil`, no limit
+   - If `nil` or `0`, no limit
 
 4. Generate `search-simple` entry from each value
    - Replace `%s` in `:title` with value
    - Auto-generate `:pattern` (e.g., `person:NAME`)
 
 
-#### 6.4.1 altodo--get-entry-count
+#### altodo--expand-heading-filter
+
+**Description**: Expand an entry with `:dynamic-type "heading"`
+
+**Processing**:
+
+1. `altodo--collect-headings` scans the buffer once and returns the text, level, position and number of unfinished tasks of each heading (ATX and Setext; lines in a code block are skipped)
+2. The expansion narrows by `:level` and cuts from the top by `:limit`
+3. It makes a `:type heading-jump` entry per heading. `:marker` is a marker at the start of the heading line. `:nest` is the `:nest` of the entry plus the steps of `:indent-by-level`
+
+`altodo-sidebar--apply-filter` passes a `heading-jump` entry to `altodo-sidebar--jump-to-heading` outside `save-window-excursion`. That function does the following in order.
+
+1. It checks that the marker's line is a heading. If not, it shows a message and stops
+2. If a filter overlay hides the heading, it calls `altodo-filter-clear`
+3. It selects the source window and puts the heading at the top with `recenter 0`
+
+**Performance**: The scan including the count of unfinished tasks takes about 13 ms for a 10000-line buffer and about 60 ms for 50000 lines.
+
+
+#### altodo--get-entry-count
 
 **Description**: Count number of tasks matching entry
 
@@ -374,7 +372,7 @@ Layer 5: Non-clickable (comment lines, etc.)
 **Return Value**: Number of matched tasks (integer)
 
 
-#### 6.4.2 altodo--format-sidebar-title
+#### altodo--format-sidebar-title
 
 **Description**: Format and return entry title
 
@@ -402,7 +400,7 @@ Layer 5: Non-clickable (comment lines, etc.)
 **Return Value**: Formatted title string
 
 
-### 6.6 Compound Condition Filter
+### 6.5 Compound Condition Filter
 
 #### Processing for Multiple Selection
 
@@ -418,24 +416,25 @@ Layer 5: Non-clickable (comment lines, etc.)
 4. Apply combined predicate to `altodo--filter-lines`
 
 
-### 6.7 User Commands
+### 6.6 User Commands
 
-| Command                              | Description                     |
-| ------------------------------------ | ------------------------------- |
-| `altodo-filter-clear`                | Clear all filters               |
-| `altodo-filter-show-done-only`       | Show only done tasks            |
-| `altodo-filter-show-progress-only`   | Show only progress tasks        |
-| `altodo-filter-show-waiting-only`    | Show only waiting tasks         |
-| `altodo-filter-show-open-only`       | Show only open tasks            |
-| `altodo-filter-show-cancelled-only`  | Show only cancelled tasks       |
-| `altodo-filter-show-tag`             | Show tasks with specified tag   |
-| `altodo-filter-show-priority`        | Show tasks with priority flag   |
-| `altodo-filter-show-star`            | Show tasks with star flag       |
-| `altodo-filter-show-overdue`         | Show overdue tasks              |
-| `altodo-filter-show-person`          | Show tasks for specified person |
-| `altodo-sidebar-set-and-mode`        | Switch to AND mode              |
-| `altodo-sidebar-set-or-mode`         | Switch to OR mode               |
-| `altodo-sidebar-toggle-combine-mode` | Toggle AND/OR                   |
+| Command                              | Description                            |
+| ------------------------------------ | -------------------------------------- |
+| `altodo-filter-clear`                | Clear all filters                      |
+| `altodo-filter-by-pattern`           | Show only lines matching a DSL pattern |
+| `altodo-filter-show-done-only`       | Show only done tasks                   |
+| `altodo-filter-show-progress-only`   | Show only progress tasks               |
+| `altodo-filter-show-waiting-only`    | Show only waiting tasks                |
+| `altodo-filter-show-open-only`       | Show only open tasks                   |
+| `altodo-filter-show-cancelled-only`  | Show only cancelled tasks              |
+| `altodo-filter-show-tag`             | Show tasks with specified tag          |
+| `altodo-filter-show-priority`        | Show tasks with priority flag          |
+| `altodo-filter-show-star`            | Show tasks with star flag              |
+| `altodo-filter-show-overdue`         | Show overdue tasks                     |
+| `altodo-filter-show-person`          | Show tasks for specified person        |
+| `altodo-sidebar-set-and-mode`        | Switch to AND mode                     |
+| `altodo-sidebar-set-or-mode`         | Switch to OR mode                      |
+| `altodo-sidebar-toggle-combine-mode` | Toggle AND/OR                          |
 
 
 ## 7. Sidebar Integration
@@ -453,6 +452,7 @@ A filter entry is a plist. The properties are described in section 13.3, and the
 - `#tag` - List of tags
 - `#due` - List of due dates
 - `#start` - List of start dates
+- Headings - List of headings (selecting one moves to the heading line; the filter is not changed)
 
 
 ### Compound Condition Filter
@@ -476,18 +476,20 @@ Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse bu
 
 ### Sidebar Operations
 
-| Key           | Function                   |
-| ------------- | -------------------------- |
-| `RET`, `SPC`  | Apply filter               |
-| `s`           | Select/deselect filter     |
-| `C-<mouse-1>` | Select/deselect filter     |
-| `c`           | Clear filter               |
-| `r`           | Refresh sidebar            |
-| `q`           | Close sidebar              |
-| `n`, `p`      | Move to next/previous line |
-| `C-c C-a`     | Switch to AND mode         |
-| `C-c C-o`     | Switch to OR mode          |
-| `C-c C-t`     | Toggle AND/OR              |
+| Key           | Function                                         |
+| ------------- | ------------------------------------------------ |
+| `RET`, `SPC`  | Apply filter                                     |
+| `s`           | Select/deselect filter                           |
+| `C-<mouse-1>` | Select/deselect filter                           |
+| `c`           | Clear filter                                     |
+| `r`           | Refresh sidebar                                  |
+| `q`           | Close sidebar                                    |
+| `?`, `h`      | Show the key bindings (`altodo-sidebar-help`)    |
+| `}`, `{`, `.` | Calendar: next month, previous month, this month |
+| `n`, `p`      | Move to next/previous line                       |
+| `C-c C-a`     | Switch to AND mode                               |
+| `C-c C-o`     | Switch to OR mode                                |
+| `C-c C-t`     | Toggle AND/OR                                    |
 
 
 ## 9. Mode Line Display
@@ -495,12 +497,11 @@ Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse bu
 ### Filter Status Display
 
 ```
-[Filter: done] [AND] (Single)
+[AND] (Single)
 ```
 
-- **Filter: filter name** - Current filter
-- **[AND]/[OR]** - Combination mode
-- **(Single)/(Multiple)** - Selection mode
+- `[AND]` and `[OR]`: combination mode. Click to toggle
+- `(Single)` and `(Multiple)`: selection mode
 
 
 ## 10. Performance
@@ -520,7 +521,7 @@ Sidebar entries can be selected multiple times (`s` key, or Ctrl + left mouse bu
 - Guideline: within 1 second for a 5000-line buffer, and within 100ms for a dynamic filter update. Both are design-time guidelines, not upper limits. The shorter the processing time, the better
 - The calculation of heading ranges (`altodo--compute-all-heading-ranges`) scans the buffer once (proportional to the number of lines).
 - The calculation of display lines (`altodo--compute-display-lines`) converts the heading ranges to line numbers and walks the matched lines in ascending order to find the headings that contain each line. It does not check every heading for every matched line. The overlays are removed from the list `altodo--filter-overlays` once at the end of `altodo--filter-lines`
-- Measured (`tag:work`, with display context): 10,000 lines went from 2.99 s to 0.36 s, and 20,000 lines take 0.85 s. Doubling the number of lines multiplies the time by about 2.4
+- Measured (`tag:work`, with display context): 10,000 lines take 0.36 s, and 20,000 lines take 0.85 s. Doubling the number of lines multiplies the time by about 2.4
 
 
 ## 11. Face Application Priority (Layer Structure)
@@ -554,8 +555,6 @@ Non-clickable entries (`comment`, `group-header`)
 
 - `doc/design.md` - Overall design document
 - `doc/altodo_spec.md` - Format specification
-- `project.altodo` - Implementation plan
-- `.kiro/memo/` - Development notes
 
 
 ## 13. altodo-filter-patterns Specification
@@ -673,15 +672,15 @@ Not clickable, visual separator
 
 Auto-collect values on display
 
-| Property             | Required/Optional | Description                                                  |
-| -------------------- | ----------------- | ------------------------------------------------------------ |
-| `:dynamic-type`      | Required          | Collection target (`person`, `tag`, `due`, `start`)          |
-| `:tag-mode`          | Optional          | Tag extraction mode (`"all"`, `"name-only"`, `"with-value"`) |
-| `:exclude-person`    | Optional          | List of `@person` to exclude                                 |
-| `:exclude-tag`       | Optional          | List of `#tag` to exclude                                    |
-| `:exclude-tag-value` | Optional          | List of `#tag:value` to exclude                              |
-| `:sort`              | Optional          | Sort method (`alpha`, `count`, `reverse-count`)              |
-| `:limit`             | Optional          | Display limit (default: nil = unlimited)                     |
+| Property             | Required/Optional | Description                                                    |
+| -------------------- | ----------------- | -------------------------------------------------------------- |
+| `:dynamic-type`      | Required          | Collection target (`person`, `tag`, `due`, `start`, `heading`) |
+| `:tag-mode`          | Optional          | Tag extraction mode (`"all"`, `"name-only"`, `"with-value"`)   |
+| `:exclude-person`    | Optional          | List of `@person` to exclude                                   |
+| `:exclude-tag`       | Optional          | List of `#tag` to exclude                                      |
+| `:exclude-tag-value` | Optional          | List of `#tag:value` to exclude                                |
+| `:sort`              | Optional          | Sort method (`alpha`, `count`, `reverse-count`)                |
+| `:limit`             | Optional          | Display limit (default: nil; nil or 0 is unlimited)            |
 
 **`:tag-mode` Description**:
 
@@ -692,6 +691,14 @@ Auto-collect values on display
 | `"with-value"` | Extract only tags with values                         | `#priority:high` → `["priority:high"]`                  |
 
 **Note**: `:tag-ignore-value` is deprecated. Use `:tag-mode` instead.
+
+`:dynamic-type "heading"` does not collect values to filter by. It expands to entries that jump to a heading (`:type heading-jump`). The properties for it are below. `:sort`, `:exclude-*` and `:tag-mode` are ignored.
+
+- `:level` (optional): levels to list. An integer or a list of integers. All levels if omitted
+- `:limit` (optional): maximum number of headings from the top of the buffer. `0` or `nil` is unlimited
+- `:indent-by-level` (optional): `t` (default; level 1 is not indented), an integer N (levels up to N are not indented), `nil` (none)
+
+In `:title`, `%s` is the heading text, `%l` the level, and `%n` the number of unfinished tasks (neither done nor cancelled) from the heading to the next heading. `%n` is counted only when `:count-format` is not `nil` and `:title` contains `%n`.
 
 
 #### `search-simple` (Simple Search)
@@ -749,6 +756,92 @@ A lambda written in `.altodo-locals.el` does not run by default (`altodo-locals-
 - Return value: `t` (show) or `nil` (hide)
 
 
+#### `calendar` (Month Calendar)
+
+Shows a month calendar in the sidebar. A separate library file, `altodo-calendar.el`, draws it with `altodo-calendar-insert`; altodo passes the faces and buttons of the days (`:day-function`). The face of a day cell changes with the number of tasks with due and start dates, and a day with tasks is a button that applies the filter of that day.
+
+| Property           | Required/Optional | Description                                                                |
+| ------------------ | ----------------- | -------------------------------------------------------------------------- |
+| `:title`           | Optional          | Heading above the calendar. Not shown if empty                             |
+| `:nest`            | Optional          | Indent level                                                               |
+| `:calendar-target` | Optional          | Target: `due`, `start`, or `both` (default)                                |
+| `:count-done`      | Optional          | `t` also counts done and cancelled tasks (they are not counted by default) |
+
+- Kind of a day: only a day with tasks of the target kind is a button. If a day has both due and start dates, `altodo-calendar-priority` (`due` or `start`; default `due`) decides the face and the filter (`due-date:DATE` or `start-date:DATE`). If it has only one, that kind is used
+- The buttons `<` and `>` on the first line move to the previous and next month, and the button with the month name returns to this month. With `altodo-calendar-show-nav` set to `nil`, `<` and `>` are not shown. In the sidebar, `}` (next month), `{` (previous month) and `.` (this month) also move the month
+- The week starts on `altodo-week-start-day`. The names of the weekdays and months, the format of the title, and the holiday function are options of the `altodo-calendar` group (`altodo-calendar-day-names`, `-day-name-faces`, `-month-names`, `-title-format`, `-holiday-function`). All columns are as wide as the widest weekday name (at least 2 columns)
+- The calendar needs 7 times the column width plus 6 separators (20 columns by default) and the indent. If the sidebar window is narrower, a note is shown instead
+- A task with a date that does not exist (such as `2026-02-30`) is not counted
+- Faces, from the highest precedence: the day being filtered (`altodo-calendar-selected-face`), overdue (`altodo-calendar-overdue-face`; bold and underlined, added to an unfinished due date in the past), `altodo-calendar-heavy-count` or more due dates (`altodo-calendar-due-heavy-face`), due (`altodo-calendar-due-face`), start (`altodo-calendar-start-face`), today (`altodo-calendar-today-face`), holiday (`altodo-calendar-holiday-face`), Sunday (`altodo-calendar-sunday-face`), Saturday (`altodo-calendar-saturday-face`), and a normal day (`altodo-calendar-day-face`). The title is `altodo-calendar-header-face`, `<` and `>` are `altodo-calendar-nav-face`, and the weekday names use `altodo-calendar-day-name-faces` (by default `altodo-calendar-weekday-face`, and the faces of Sunday and Saturday)
+
+**Example**:
+
+```elisp
+(:title "" :type calendar :nest 1)
+(:title "Due" :type calendar :calendar-target due :nest 1)
+```
+
+
+##### The Library altodo-calendar
+
+`altodo-calendar.el` depends only on `calendar` and does not use any function of altodo. The main function is `(altodo-calendar-insert MONTH YEAR &rest OPTIONS)`, with the options `:indent`, `:week-start`, `:today`, `:day-function`, `:nav-function` and `:show-nav`. `:day-function` takes a date `(MONTH DAY YEAR)` and returns `nil` or `(:faces FACES :action FUNCTION :properties PLIST :help TEXT)`. A day with an `:action` is a button. Each day cell has the text property `altodo-calendar-date`.
+
+The holiday function `altodo-calendar-japanese-holiday` follows the law on national holidays (in force since 1948). It handles the Mondays of Coming of Age Day, Marine Day, Respect for the Aged Day and Sports Day, the holidays of the accession in 2019, the moves for the Tokyo Olympics in 2020 and 2021, substitute holidays (since 2007 the next day that is not a holiday), and citizens' holidays (a day between two holidays). The equinox holidays are computed with an approximation formula for 1980 to 2099 only (the Cabinet Office explains that the National Astronomical Observatory announces the dates of the next year every February).
+
+
+#### `agenda` (List by Day)
+
+Shows the next days from today, one line per day, with the number of tasks with due (D) and start (S) dates. A line with tasks is a button that applies the filter of that day (only the kind of `altodo-calendar-priority` if the day has both).
+
+| Property           | Required/Optional | Description                                                                                      |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------------------------ |
+| `:title`           | Optional          | Heading above the list                                                                           |
+| `:nest`            | Optional          | Indent level                                                                                     |
+| `:days`            | Optional          | Number of days shown (default 7)                                                                 |
+| `:calendar-target` | Optional          | `due`, `start`, or `both` (default)                                                              |
+| `:count-done`      | Optional          | `t` also counts done and cancelled tasks                                                         |
+| `:agenda-overdue`  | Optional          | `nil` hides the overdue line (by default it is shown if there are overdue tasks)                 |
+| `:date-format`     | Optional          | Format of the date: `altodo` (default), `done-tag`, or a format string                           |
+| `:show-weekday`    | Optional          | `nil` hides the weekday after the date (default `t`; see below for the names)                    |
+| `:today-label`     | Optional          | Label of the line of today (default `"Today"`)                                                   |
+| `:tomorrow-label`  | Optional          | Label of the line of tomorrow (default `"Tomorrow"`)                                             |
+| `:overdue-label`   | Optional          | Label of the overdue line (default `"Overdue"`)                                                  |
+| `:label-newline`   | Optional          | `t` puts a label on a line of its own, with the date and counts on the next line (default `nil`) |
+
+```
+Overdue  1
+Today    2026-03-10 Tue D2
+Tomorrow 2026-03-11 Wed
+         2026-03-12 Thu D1 S1
+```
+
+With `:label-newline t` (and `:date-format "%m/%d"`):
+
+```
+Overdue
+  1
+Today
+  03/10 Tue D2
+Tomorrow
+  03/11 Wed
+  03/12 Thu D1 S1
+```
+
+- The first line, "Overdue", shows the number of unfinished tasks whose due date is before today, and applies the `due-date:overdue` filter (when the target includes the due date)
+- Weekday names: when `altodo-calendar-day-names` equals its default, `calendar-day-abbrev-array` (the abbreviation of the language of Emacs, such as `Tue`). When it is changed from the default, those names are used so that the calendar and the agenda match. Setting the default value explicitly also gives the abbreviation
+- The date format (`:date-format`): `altodo` follows `altodo-date-format` (`%Y-%m-%d` if it is `nil`), `done-tag` follows `altodo-done-tag-datetime-format` (`%Y-%m-%d`, the date only, if it is `nil`). A string is a format for `format-time-string`; write `%a` to get the weekday (then set `:show-weekday nil`). The weekday names are those of `calendar-day-abbrev-array`
+- The label column is aligned to the widest label in use only when the labels share a line with the date. A day with an empty label has a blank column (with all labels empty there is no column). Everything is set with the properties of the entry (`altodo-filter-patterns`); there are no separate option variables
+- Faces: `altodo-agenda-overdue-face` for the overdue line, `altodo-agenda-today-face` for today, `altodo-agenda-empty-face` for a day without tasks, and `altodo-agenda-date-face` for the others. The counts also get `altodo-agenda-count-face`
+
+**Example**:
+
+```elisp
+(:title "Next 7 days" :type agenda :days 7 :nest 1)
+(:title "Soon" :type agenda :days 5 :date-format "%m/%d" :today-label "Now"
+ :tomorrow-label "Next" :overdue-label "Late" :label-newline t :nest 1)
+```
+
+
 #### `separator` (Separator Line)
 
 Visual separator
@@ -797,39 +890,61 @@ A pattern with a syntax error or an unknown type matches no line.
 
 #### 13.5.2 Simple Patterns
 
-| Pattern                   | Description             |
-| ------------------------- | ----------------------- |
-| `"done"`                  | Completed tasks         |
-| `"progress"`              | In-progress tasks       |
-| `"waiting"`               | Waiting tasks           |
-| `"open"`                  | Open tasks              |
-| `"cancelled"`             | Cancelled tasks         |
-| `"priority"`              | With priority flag      |
-| `"star"`                  | With star flag          |
-| `"has-multiline-comment"` | With multi-line comment |
+| Pattern                   | Description                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| `"done"`                  | Completed tasks                                                                 |
+| `"progress"`              | In-progress tasks                                                               |
+| `"waiting"`               | Waiting tasks                                                                   |
+| `"open"`                  | Open tasks                                                                      |
+| `"cancelled"`             | Cancelled tasks                                                                 |
+| `"priority"`              | With priority flag                                                              |
+| `"star"`                  | With star flag                                                                  |
+| `"has-multiline-comment"` | With multi-line comment                                                         |
+| `"task"`                  | Task line                                                                       |
+| `"comment"`               | `///` line                                                                      |
+| `"multiline-comment"`     | Line of a multi-line comment                                                    |
+| `"heading"`               | Heading line (ATX heading, or the title of a Setext heading; not the underline) |
+| `"empty-line"`            | Empty line (including a line with only spaces)                                  |
+| `"any-line"`              | Every line                                                                      |
 
 
 #### 13.5.3 Patterns with Arguments
 
-| Type                         | Syntax                              | Description                                       |
-| ---------------------------- | ----------------------------------- | ------------------------------------------------- |
-| `tag`                        | `tag:NAME`                          | Lines with the specified tag                      |
-| `person`                     | `person:NAME`                       | Lines with the specified person                   |
-| `text`                       | `text:STRING`                       | Lines containing the string                       |
-| `regexp`                     | `regexp:REGEXP`                     | Lines matching the regular expression             |
-| `level`                      | `level:N`                           | Lines at nest level N                             |
-| `heading`                    | `heading:REGEXP`                    | Task lines within the range of a heading          |
-| `due-date`                   | `due-date:CONDITION`                | Filter by due date                                |
-| `start-date`                 | `start-date:CONDITION`              | Filter by start date                              |
-| `tag-value`                  | `tag-value:KEY VALUE`               | Filter by tag value                               |
-| `parent-task-regexp`         | `parent-task-regexp:REGEXP`         | Parent task matches the regular expression        |
-| `root-task-regexp`           | `root-task-regexp:REGEXP`           | Root parent task matches the regular expression   |
-| `multiline-comment-contains` | `multiline-comment-contains:REGEXP` | Multi-line comment matches the regular expression |
+| Type                         | Syntax                              | Description                                          |
+| ---------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| `tag`                        | `tag:NAME`                          | Lines with the specified tag                         |
+| `person`                     | `person:NAME`                       | Lines with the specified person                      |
+| `text`                       | `text:STRING`                       | Lines containing the string                          |
+| `regexp`                     | `regexp:REGEXP`                     | Lines matching the regular expression                |
+| `level`                      | `level:N`                           | Lines at nest level N                                |
+| `heading`                    | `heading:REGEXP`                    | Task lines within the range of a heading (see below) |
+| `due-date`                   | `due-date:CONDITION`                | Filter by due date                                   |
+| `start-date`                 | `start-date:CONDITION`              | Filter by start date                                 |
+| `tag-value`                  | `tag-value:KEY VALUE`               | Filter by tag value                                  |
+| `state-any`                  | `state-any:S1,S2,...`               | Line with any of the states                          |
+| `has-any-flag`               | `has-any-flag:F1,F2,...`            | Line with any of the flags                           |
+| `has-any-tag`                | `has-any-tag:T1,T2,...`             | Line with any of the tags                            |
+| `has-all-tags`               | `has-all-tags:T1,T2,...`            | Line with all of the tags                            |
+| `has-any-person`             | `has-any-person:P1,P2,...`          | Line with any of the persons                         |
+| `parent-task-regexp`         | `parent-task-regexp:REGEXP`         | Parent task matches the regular expression           |
+| `root-task-regexp`           | `root-task-regexp:REGEXP`           | Root parent task matches the regular expression      |
+| `multiline-comment-contains` | `multiline-comment-contains:REGEXP` | Multi-line comment matches the regular expression    |
 
 The arguments of a logical operation are split at commas. Therefore, an argument that contains a comma cannot be written inside a logical operation.
 
 
+The multi-value patterns `state-any`, `has-any-flag`, `has-any-tag`, `has-all-tags` and `has-any-person` separate the values with commas or vertical bars (`|`). The arguments of a logic operation are split by commas, so use bars inside a logic operation. Example: `and:open,has-any-tag:a|b`. The values of `state-any` are `done`, `progress`, `waiting`, `open` and `cancelled`; those of `has-any-flag` are `star` and `priority`. An unknown value shows a message and gives a pattern that matches no line.
+
+
+`REGEXP` of `heading:REGEXP` is a regular expression searched in the text of each heading (it is not anchored). Anchor it with `^` and `$` (`^Work$`) to leave out `Workshop`. Write `C\+\+` for a heading with a special character such as `C++`. Every heading with a match counts, and the range of a heading includes the lines under its child headings. An invalid regular expression is an error when the pattern is compiled.
+
+
 #### 13.5.4 Date Conditions (due-date / start-date)
+
+The due date (`-> DATE`) and the start date (`DATE ->`) are recognized by the same rule in the coloring, the filters, the sidebar calendar and agenda, and the date input.
+
+- Lines: task lines, `///` comment lines and headings. A date is not recognized in a multi-line comment, in plain text or in a fenced code block
+- Spaces: a space is needed around the date and around the arrow (the beginning and the end of the line count as spaces). `a->2026-01-01` and `2026-01-01x ->` are not dates
 
 `CONDITION` of `due-date:CONDITION` is as follows. The format of `DATE` follows `altodo-date-format`.
 
@@ -897,6 +1012,7 @@ Example: `tag-value:priority (> 5)`
 - `> N` - Greater than N
 - `= N` - Equal to N
 - `<= N` - N or less
+- `/= N` - Not equal to N
 - `< N` - Less than N
 
 __face-spec__ can be specified as follows:
@@ -937,21 +1053,13 @@ If no match in face-rules, fallback to face specified by `:face`. If `:face` is 
    
    ;; Due date group
    (:title "Due" :type group-header :nest 0)
-   (:title "Overdue - %n"
-           :type search-lambda
-           :pattern (lambda ()
-                      (and (altodo--due-date-matches-p 'overdue)
-                           (not (or (altodo--line-state-p altodo-state-done)
-                                    (altodo--line-state-p altodo-state-cancelled)))))
+   (:title "Open and Over Due - %n" :type search-simple
+           :pattern "and:due-date:overdue,not:state-any:done|cancelled"
            :count-format t :nest 1
            :count-exclude-others t
            :face-rules ((>= 1 error)))
-   (:title "Due Today - %n"
-           :type search-lambda
-           :pattern (lambda ()
-                      (and (altodo--due-date-matches-p 'today)
-                           (not (or (altodo--line-state-p altodo-state-done)
-                                    (altodo--line-state-p altodo-state-cancelled)))))
+   (:title "Open and Due Today - %n" :type search-simple
+           :pattern "and:due-date:today,not:state-any:done|cancelled"
            :count-format t :nest 1
            :count-exclude-others t
            :face-rules ((>= 1 error)))
@@ -966,6 +1074,10 @@ If no match in face-rules, fallback to face specified by `:face`. If `:face` is 
    (:title "People" :type group-header :nest 0)
    (:title "@%s - %n" :type dynamic :dynamic-type "person" :count-format t :limit 5 :nest 1
            :count-exclude-others t :display-context 'all)
+
+   ;; Headings group
+   (:title "Headings" :type group-header :nest 0)
+   (:title "%s - %n" :type dynamic :dynamic-type "heading" :count-format t :nest 1)
    
    ;; Compound condition example
    (:title "Open + Priority - %n"

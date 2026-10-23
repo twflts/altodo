@@ -35,93 +35,14 @@ altodo.el functions as a custom extension of __Emacs Markdown Mode__ https://git
 #### Simple Implementation
 
 - Maximize use of Emacs standard features
-- Avoid complex caching or asynchronous processing
+- Cache only results that are expensive to recompute (counts during one rendering, heading ranges, the contents of the configuration file). The only asynchronous processing is the auto-move timer
 - Use font-lock standard features for syntax highlighting
 - Add optimizations incrementally as needed
 
 
-## 3. Implementation Status
+## 3. Specification Definition
 
-### ✅ Completed Features
-
-#### Font-lock
-
-- 5-layer processing (Task brackets → Base → Partial elements → Emphasis → Priority)
-- 50 face definitions (all task states, flags, tags, comments, date-based)
-- Efficiency through integrated processing
-
-
-#### Task State Management
-
-- 5 task states (open, done, progress, waiting, cancelled)
-- State toggle function (`C-c C-x`)
-- State setting commands (`C-c C-t o/x/@/w/~`)
-
-
-#### Flags and Priority
-
-- Star flag (`+`)
-- Priority flags (`!`, `!!`, `!!!`)
-
-
-#### Comments
-
-- Single-line comments (`///` marker)
-- Multi-line comments (function-based detection)
-
-
-#### Tags
-
-- General tags (`#tag`)
-- Value tags (`#key:value`)
-- Special tags (`#id`, `#dep`, `#done`)
-- @person tags
-
-
-#### Task Move Feature
-
-- Manual move (`C-c C-t d`)
-- Auto move (timer-based)
-- Done file management
-
-
-#### Filtering Feature
-
-- Parent task regex filter
-- Compound condition support (AND/OR/NOT)
-- Sidebar `:title` extension feature
-
-
-#### Navigation Feature
-
-- Dependency task jump (`C-c C-j`)
-- Multiple buffer support
-
-
-### 📋 Unimplemented Features
-
-#### Navigation Feature
-
-- imenu integration
-- Folding feature
-- Task search
-
-
-#### Extension Features
-
-- Analysis and report features
-- External tool integration (Vertico/Consult)
-
-
-#### Others
-
-- Key binding for `altodo-toggle-comment` (the command itself is implemented)
-- `#group-start`, `#group-due` tags
-
-
-## 4. Specification Definition
-
-### 4.1 Constant Definitions
+### 3.1 Constant Definitions
 
 #### Task State Characters
 
@@ -153,7 +74,6 @@ The implementation defines the following constants.
 - `altodo-comment-regex`: a single-line comment line. The value is `^\([ \t]*\)/// \(.*\)$`
 - `altodo-tag-with-value-regex`: a tag with a value. The value is `\(?:^\|[ \t]\)\(#[a-zA-Z0-9_-]+\):\("[^"]*"\|[^[:space:]]+\)`. The value can be enclosed in double quotes
 - `altodo-tag-without-value-regex`: a tag without a value. The value is `\(?:^\|[ \t]\)\(#[a-zA-Z0-9_-]+\)\b`
-- `altodo-person-tag-regex`: an @person tag. The value is `\(?:^\|[[:space:]]\)\(@[^[:space:]]+\)`
 - `altodo-special-tag-regex`: special tags. Generated from `altodo-special-tag-names`
 
 The date regular expression is not a constant. `altodo--date-regex-info` generates it at run time from `altodo-date-format` (the default `nil` means `YYYY-MM-DD`).
@@ -161,17 +81,10 @@ The date regular expression is not a constant. `altodo--date-regex-info` generat
 
 #### Task State Character List
 
-```elisp
-(defconst altodo-task-state-chars
-  (concat altodo-state-done altodo-state-progress
-          altodo-state-waiting altodo-state-cancelled)
-  "List of task state characters.")
-```
-
-**Value**: `"x@w~"`
+`altodo-task-state-chars` is the string `"x@w~"`, the state characters of done, in-progress, waiting and cancelled joined together.
 
 
-### 4.2 Customizable Variables
+### 3.2 Customizable Variables
 
 | Variable                                       | Default        | Description                                               |
 | ---------------------------------------------- | -------------- | --------------------------------------------------------- |
@@ -179,23 +92,26 @@ The date regular expression is not a constant. `altodo--date-regex-info` generat
 | `altodo-enable-markdown-in-multiline-comments` | `t`            | Enable Markdown formatting in multi-line comments         |
 | `altodo-auto-save`                             | `nil`          | Save the file automatically when a task state changes     |
 | `altodo-skk-wrap-newline`                      | `t`            | Wrap newline commands for SKK input method compatibility  |
-| `altodo-font-lock-maximum-decoration`          | `t`            | Maximize font-lock decoration                             |
 | `altodo-done-tag-datetime-format`              | `nil`          | Time format of `#done` (`nil` is ISO 8601 with time zone) |
 | `altodo-use-local-timezone`                    | `t`            | Use the local time zone for the `#done` time              |
 | `altodo-insert-id-format`                      | `'tiny-random` | ID format of `#id`                                        |
 | `altodo-date-format`                           | `nil`          | Date format (`nil` is `YYYY-MM-DD`)                       |
-| `altodo-week-start-day`                        | `1`            | First day of the week (0 is Sunday, 1 is Monday)          |
+| `altodo-week-start-day`                        | `0`            | First day of the week (0 is Sunday, 1 is Monday)          |
 | `altodo-done-file-prefix`                      | `"_done"`      | String added to the done file name                        |
-| `altodo-move-single-line-comments-manually`    | `t`            | Enable manual move of single-line comments                |
+| `altodo-move-unit`                             | `'subtree`     | Unit of the move (`subtree` or `line`)                    |
 | `altodo-auto-move-interval`                    | `3600`         | Interval of the automatic move (seconds, positive)        |
+| `altodo-move-after-days`                       | `nil`          | Days from `#done` to the move (`nil`: at once)            |
 | `altodo-auto-save-after-move`                  | `nil`          | Save the source file after a move                         |
 | `altodo-auto-move-skip-done-files`             | `t`            | Exclude done files from the automatic move                |
 | `altodo-show-auto-move-in-mode-line`           | `t`            | Show the automatic move state in the mode line            |
 
-For the sidebar and debug variables, see "Settings" in `README_en.md`.
+For the sidebar variables, see "Settings" in `README_en.md`.
 
 
-### 4.3 Face Definitions
+### 3.3 Face Definitions
+
+The main faces are listed. All faces (including date states, `@person`, the sidebar, the calendar and the agenda) are available with `M-x customize-group RET altodo RET`.
+
 
 #### Task State Faces
 
@@ -257,31 +173,59 @@ For the sidebar and debug variables, see "Settings" in `README_en.md`.
 | `altodo-dep-error-tag-face`    | For dependency error (red bold)  |
 
 
-### 4.4 Keymap
+### 3.4 Keymap
 
-On lines other than task lines and single-line comment lines, each key calls the `markdown-mode` binding.
+The keys fall into four groups by the kind of line where they are active. On any other line, a key calls the `markdown-mode` binding of the same key (`altodo--on-line`).
 
-| Key                             | Function                                                               | Description                           |
-| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------- |
-| `TAB`                           | `altodo-indent-line`                                                   | Make/unmake a subtask                 |
-| `RET`                           | `altodo-enter`                                                         | Context-dependent newline             |
-| `<backtab>`                     | `outline-cycle`                                                        | Cycle the outline                     |
-| `C-c C-x`                       | `altodo-toggle-task-state`                                             | Toggle open ↔ completed              |
-| `C-c C-t o`, `x`, `@`, `w`, `~` | `altodo-set-task-open`, `-done`, `-progress`, `-waiting`, `-cancelled` | Set the state                         |
-| `C-c C-t d`                     | `altodo-move-done-tasks-at-point`                                      | Move a finished task to the done file |
-| `C-c C-a`                       | `altodo-add-task`                                                      | Add a task                            |
-| `M-RET`                         | `altodo-add-subtask`                                                   | Add a subtask                         |
-| `C-c C-m`                       | `altodo-start-multiline-comment`                                       | Start a multi-line comment            |
-| `C-c C-s`                       | `altodo-toggle-star-flag`                                              | Toggle the star flag                  |
-| `C-c C-f 1`, `2`, `3`           | `altodo-set-priority-1`, `-2`, `-3`                                    | Set the priority                      |
-| `C-c C-i`                       | `altodo-insert-id`                                                     | Insert `#id`                          |
-| `C-c C-j`                       | `altodo-goto-dependency`                                               | Jump to the dependency task           |
-| `M-<right>`, `M-<left>`         | `altodo-indent-increase`, `altodo-indent-decrease`                     | Increase/decrease the indentation     |
-| `C-c C-v f c`                   | `altodo-filter-clear`                                                  | Clear the filter                      |
-| `C-c C-v s t`                   | `altodo-sidebar-toggle`                                                | Toggle the sidebar                    |
-| `C-c C-v s r`                   | `altodo-sidebar-refresh`                                               | Refresh the sidebar                   |
 
-`altodo-toggle-comment` (toggle task ↔ comment) has no key binding. Run it with `M-x`.
+#### All Lines
+
+| Key           | Function                 | Description                                            |
+| ------------- | ------------------------ | ------------------------------------------------------ |
+| `TAB`         | `altodo-indent-line`     | Indent/outdent a subtask (depends on the kind of line) |
+| `RET`         | `altodo-enter`           | Context-aware newline                                  |
+| `<backtab>`   | `outline-cycle`          | Cycle the outline                                      |
+| `C-c C-v f c` | `altodo-filter-clear`    | Clear the filter                                       |
+| `C-c C-v s t` | `altodo-sidebar-toggle`  | Toggle the sidebar                                     |
+| `C-c C-v s r` | `altodo-sidebar-refresh` | Refresh the sidebar                                    |
+
+
+#### Task Lines
+
+| Key         | Function                          | Description                           |
+| ----------- | --------------------------------- | ------------------------------------- |
+| `C-c C-x`   | `altodo-toggle-task-state`        | Toggle open ↔ done                   |
+| `C-c C-t o` | `altodo-set-task-open`            | Set to open                           |
+| `C-c C-t x` | `altodo-set-task-done`            | Set to done                           |
+| `C-c C-t @` | `altodo-set-task-progress`        | Set to in progress                    |
+| `C-c C-t w` | `altodo-set-task-waiting`         | Set to waiting                        |
+| `C-c C-t ~` | `altodo-set-task-cancelled`       | Set to cancelled                      |
+| `C-c C-t d` | `altodo-move-done-tasks-at-point` | Move finished tasks to the done file  |
+| `C-c C-t D` | `altodo-move-done-task-alone`     | Move only the line of a finished task |
+
+
+#### Task Lines and Single-line Comment Lines
+
+| Key                   | Function                            | Description                         |
+| --------------------- | ----------------------------------- | ----------------------------------- |
+| `C-c C-a`             | `altodo-add-task`                   | Add a task                          |
+| `M-RET`               | `altodo-add-subtask`                | Add a subtask                       |
+| `C-c C-m`             | `altodo-start-multiline-comment`    | Start a multi-line comment          |
+| `C-c C-s`             | `altodo-toggle-star-flag`           | Toggle the star flag                |
+| `C-c C-f 1`, `2`, `3` | `altodo-set-priority-1`, `-2`, `-3` | Set the priority                    |
+| `C-c C-e d`           | `altodo-select-due-calendar`        | Choose the due date in a calendar   |
+| `C-c C-e s`           | `altodo-select-start-calendar`      | Choose the start date in a calendar |
+| `C-c C-i`             | `altodo-insert-id`                  | Insert `#id`                        |
+| `C-c C-j`             | `altodo-goto-dependency`            | Jump to the dependency task         |
+
+
+#### Task Lines, Single-line Comment Lines and Multi-line Comment Lines
+
+| Key                     | Function                                           | Description              |
+| ----------------------- | -------------------------------------------------- | ------------------------ |
+| `M-<right>`, `M-<left>` | `altodo-indent-increase`, `altodo-indent-decrease` | Increase/decrease indent |
+
+`altodo-toggle-comment` (toggle between task and comment) has no key binding. Run it with `M-x`.
 
 
 ## 4. Configuration File (.altodo-locals.el)
@@ -326,7 +270,7 @@ Multiple variables can be specified in alist format:
 
 ### 4.3 Configurable Variables
 
-`.altodo-locals.el` can specify any variable in alist format. The implementation simply reads the file as Lisp data, so there are no restrictions.
+Only the following five variables are read from `.altodo-locals.el` (`altodo--get-locals-value`). Other variables in the file are not used.
 
 | Variable Name               | Description                                  |
 | --------------------------- | -------------------------------------------- |
@@ -453,7 +397,7 @@ The details of the specification follow section 3.2.3 of `doc/altodo_spec_en.md`
 - A line with a different indentation (shallower or deeper) or a completely empty line (zero characters) ends the comment. A more deeply indented line, such as a nested Markdown list item, is not part of the comment
 - A line starting with a task state mark is always a task line
 
-Detection is performed line by line, using regular expressions and the state of the previous line. An indented line is not treated as a Markdown indented code block (section 6.0).
+Detection is performed line by line, using regular expressions and the state of the previous line. An indented line is not treated as a Markdown indented code block (section 6.1).
 
 
 ### 5.4 Tags
@@ -498,6 +442,15 @@ Detection is performed line by line, using regular expressions and the state of 
 - Both: `YYYY-MM-DD -> YYYY-MM-DD`
 
 
+#### Date Input
+
+The following commands set a date on the task line (or `///` line) at point. On any other line they signal a `user-error`.
+
+- `altodo-select-due-calendar` (`C-c C-e d`) and `altodo-select-start-calendar` (`C-c C-e s`): open a `calendar` window and set the date with `RET`; `q` cancels. The week starts on `altodo-week-start-day`, and the cursor starts at the date on the line
+- `altodo-input-due-date` and `altodo-input-start-date`: enter the date in the minibuffer with `calendar-read-date`
+- The format follows `altodo-date-format`. An existing date of the same kind is replaced. Otherwise a due date is added at the end of the line as `-> DATE` and a start date as `DATE ->`. If the other date exists, the arrow is shared (`START -> DUE`)
+
+
 #### Dates That Do Not Exist
 
 A date that does not exist, such as `2026-02-30`, is not treated as a date. `altodo--parse-date` returns nil, the date gets the plain date face, and it matches no start or due date condition. Relative conditions (`today`, `overdue`, etc.) use the real date whatever `altodo-date-format` is.
@@ -539,7 +492,7 @@ A date that does not exist, such as `2026-02-30`, is not treated as a date. `alt
 
 - Command: `altodo-move-done-tasks-at-point`
 - Key binding: `C-c C-t d`
-- Target: Done (`[x]`) and cancelled (`[~]`) tasks + multi-line comments
+- Target: when the task at point is done (`[x]`) or cancelled (`[~]`), that task is moved. Whether its descendants are included depends on "Unit of the Move"
 
 
 #### Auto Move
@@ -555,10 +508,14 @@ A date that does not exist, such as `2026-02-30`, is not treated as a date. `alt
 - Prefix: Configurable with `altodo-done-file-prefix`
 
 
-#### Limitations
+#### Unit of the Move
 
-- The current version does not keep the nested (tree) structure of tasks. Only the lines of the completed or cancelled task and their multi-line comments are moved under the heading. Subtasks remain in the source buffer
-- A future improvement is planned to move subtasks together
+- The unit of the move is chosen with `altodo-move-unit` (`subtree` or `line`). The default is `subtree`
+- `subtree`: A completed or cancelled task is moved with its descendants (subtasks, `///` lines and multi-line comments). If a descendant is not done, nothing is moved: a `user-error` by hand, skipped by the batch and automatic moves. The batch move and the automatic move handle only tasks without a parent, so a done subtask waits until the whole subtree is done. The manual move moves the subtree of a subtask even if its parent is not done. In the done file, the root is written with indent 0 and the relative indent of the descendants is kept
+- `line`: Only the task line and its multi-line comments are moved. Subtasks stay in the source buffer, and a done subtask leaves its parent
+- `altodo-move-done-task-alone` (`C-c C-t D`) moves in the `line` unit whatever `altodo-move-unit` is
+- If `altodo-move-after-days` is a number N, the batch and automatic moves take only tasks whose `#done` date is N or more days ago. The manual move is not affected. A task without a `#done` tag, or with a value that is not a date, is not moved. With `subtree`, every task of the subtree must meet the condition. The date is read as the date part of ISO 8601, a Unix time in seconds, or a date in `altodo-date-format`
+- The date of `#done` is the date in the time zone of the time that was written, and today's date is counted in the local time zone. If `altodo-use-local-timezone` is `nil` (recorded in UTC), the date of `#done` can differ from the local date by up to one day, so the judgment can be off by up to one day. The UTC offset of an ISO 8601 value is not used. Reason: the implementation judges by the date part only, and using the offset would treat it differently from a value with only a date or a Unix time
 
 
 #### Preconditions and Abnormal Cases of the Move
@@ -572,97 +529,38 @@ A date that does not exist, such as `2026-02-30`, is not treated as a date. `alt
 
 ### 5.8 Filtering Feature
 
-#### Parent Task Regex Filter
+The specifications of sidebar entries, DSL patterns, dynamic filters, the calendar, the agenda and heading jump are in `doc/design-filter.md`. This section gives only an overview.
 
-- Variables: `parent-task-regexp`, `root-task-regexp`
-- Usage: Extract tasks under specific parent task
-
-
-#### Compound Condition Support
-
-- Combination with AND/OR/NOT conditions
-- Simultaneous application of multiple filters
-
-
-#### Sidebar Feature
-
-- Display match count with `%n` placeholder in `:title`
-- `:count-format` option: Enable/disable count processing
-- `:type` option: Specify filter type (`nil`, `comment`, `group-header`, `separator`, `command`, `dynamic`, `search-simple`, `search-lambda`)
-
-
-## 6. Markdown Integration and Code Block Handling
-
-### 6.0 markdown-pre Countermeasures and Code Block Support
-
-**Problem 1**: markdown-mode recognizes indented lines (4+ spaces) as "indented code blocks" and applies the `markdown-pre` text property. This causes altodo task lines and comment lines to be displayed with `markdown-pre-face` (light blue color).
-
-**Solution 1**: Use `font-lock-remove-keywords` to exclude `markdown-match-pre-blocks` from font-lock-keywords.
-
-**Implementation Location**: Inside `define-derived-mode altodo-mode` body
-
-```elisp
-;; Disable markdown-mode's indented code block highlighting
-(font-lock-remove-keywords nil '((markdown-match-pre-blocks (0 'markdown-pre-face))))
-```
-
-**Impact Range**:
-- `markdown-pre-face` is no longer applied within altodo-mode buffers
-- No impact on altodo files since indented code blocks (Markdown spec) are not used
-- Does not modify `syntax-propertize-function`, respecting Emacs design principles
-
----
-
-**Note**: The detection of task lines, single-line comment lines and multi-line comment lines (`altodo--task-p`, `altodo--comment-p`, `altodo--multiline-comment-p`) only checks whether the line is inside a fenced code block (`altodo--in-fenced-code-block-p`). Indented code blocks are not considered, because altodo expresses nesting and multi-line comments with indentation.
-
----
-
-**Problem 2**: altodo-mode faces are applied inside Markdown fenced code blocks (` ``` ` / `~~~`).
-
-**Solution 2**: Use `altodo--restore-code-block-faces` to overwrite altodo faces with markdown faces inside fenced code blocks.
-
-**Implementation Location**: Inside `define-derived-mode altodo-mode` body
-
-```elisp
-;; Restore markdown faces in fenced code blocks
-(let ((orig-fn font-lock-fontify-region-function))
-  (setq-local font-lock-fontify-region-function
-              (lambda (beg end &optional loudly)
-                (funcall orig-fn beg end loudly)
-                (altodo--restore-code-block-faces beg end))))
-```
-
-**Helper Function**:
-
-```elisp
-(defun altodo--restore-code-block-faces (beg end)
-  "Restore markdown faces in fenced code blocks between BEG and END.
-Overwrites altodo faces with markdown-pre-face and markdown-code-face.
-Only targets fenced code blocks (``` or ~~~), not indented code blocks."
-  (save-excursion
-    (goto-char beg)
-    (while (< (point) end)
-      (when (or (get-text-property (point) 'markdown-gfm-code)
-                (get-text-property (point) 'markdown-fenced-code))
-        (put-text-property (line-beginning-position) (line-end-position)
-                           'face '(markdown-pre-face markdown-code-face)))
-      (forward-line 1))))
-```
-
-**Text Property Types**:
-- `markdown-gfm-code`: Backtick fenced blocks (` ``` `)
-- `markdown-fenced-code`: Tilde fenced blocks (`~~~`)
-
-**Impact Range**:
-- altodo faces inside fenced code blocks are overwritten with markdown faces
-- Indented comment lines (multi-line comments) are not affected (no text property)
-
----
+- Entry types: specified with `:type`. `nil`, `comment`, `group-header`, `separator`, `command`, `dynamic`, `search-simple`, `search-lambda`, `calendar`, `agenda`
+- Conditions: written as DSL patterns, combined with `and:`, `or:` and `not:`. Selecting several entries combines them with AND or OR
+- Parent task conditions: the DSL patterns `parent-task-regexp:REGEXP` and `root-task-regexp:REGEXP` extract the tasks under a specific parent task
+- Count: `%n` in `:title` shows the number of matches. `:count-format` specifies whether the count is calculated
 
 
 ## 6. Font-lock Design
 
-### 6.1 Processing Order (Layer Structure)
+### 6.1 Coexistence with markdown-mode
+
+altodo-mode is derived from markdown-mode. When fontifying, it adjusts two behaviors of markdown-mode.
+
+
+#### Excluding Indented Code Blocks
+
+- markdown-mode recognizes lines indented by 4 or more spaces as an "indented code block" and sets the `markdown-pre` text property. altodo expresses nesting and multi-line comments with indentation, so task lines and comment lines would otherwise get `markdown-pre-face` (light blue)
+- The body of `define-derived-mode altodo-mode` calls `font-lock-remove-keywords` to remove `markdown-match-pre-blocks` from font-lock-keywords. `syntax-propertize-function` is not changed
+- altodo does not use indented code blocks, so this exclusion has no effect on altodo files
+
+The detection of task lines, single-line comment lines and multi-line comment lines (`altodo--task-p`, `altodo--comment-p`, `altodo--multiline-comment-p`) only checks whether the line is inside a fenced code block (`altodo--in-fenced-code-block-p`). Indented code blocks are not considered.
+
+
+#### Restoring Faces in Fenced Code Blocks
+
+- altodo faces are also applied inside fenced code blocks (` ``` ` and `~~~`)
+- `altodo--restore-code-block-faces` replaces the faces of the lines in fenced code blocks, within the fontified region, with `markdown-pre-face` and `markdown-code-face`. It wraps `font-lock-fontify-region-function` and runs after the original function
+- The target lines are those with the text property `markdown-gfm-code` (backtick fences) or `markdown-fenced-code` (tilde fences). Indented multi-line comment lines do not have this property and are not affected
+
+
+### 6.2 Processing Order (Layer Structure)
 
 ```
 Layer 1: Task Brackets (apply blocked face to state character)
@@ -717,6 +615,8 @@ Layer 5: Priority (entire comments, strikethrough)
 
 #### seq-tasks blocked State Detection
 
+A child of a task with `#seq-tasks` is blocked while the sibling right above it is neither done nor cancelled. The first child is never blocked. The parent (the task with `#seq-tasks`) is not blocked.
+
 - Layer 1: Apply `altodo-dep-blocked-text-face` to state character
 - Layer 2.5: Apply `altodo-task-waiting-text-face` to entire text (process first)
 - Layer 2: Apply `altodo-task-open-text-face` to normal task text (process later)
@@ -725,167 +625,11 @@ Layer 5: Priority (entire comments, strikethrough)
 #### Helper Functions
 
 - `altodo--has-seq-tasks-tag()`: Check if current line has seq-tasks tag
-- `altodo--get-seq-tasks-parent()`: Get parent task (with seq-tasks tag) of current line
-- `altodo--get-seq-tasks-children()`: Get direct child tasks of current line
-- `altodo--line-seq-tasks-blocked-p()`: Check if current line is seq-tasks blocked
-- `altodo--is-seq-tasks-child-blocked-p()`: Check if current line is seq-tasks child blocked
+- `altodo--is-seq-tasks-child-blocked-p()`: Check if the current line is a child of a task with `#seq-tasks` whose sibling right above it is not done (a line without indentation has no parent and is not checked)
 
 
-## 7. Font-lock Design
-
-### 7.1 Utility Functions
-
-#### `altodo--normalize-state (state-str)`
-
-- Argument: `state-str` - State string
-- Return: Normalized state string
-- Description: Normalize task state string
-
-
-#### `altodo--get-state-face (state)`
-
-- Argument: `state` - Task state character
-- Return: Corresponding face symbol
-- Description: Get face corresponding to task state
-
-
-#### `altodo--get-state-text-face (state)`
-
-- Argument: `state` - Task state character
-- Return: Corresponding text face symbol
-- Description: Get text face corresponding to task state
-
-
-### 7.2 Task State Operation Functions
-
-#### `altodo-toggle-task-state ()`
-
-- Description: Toggle current line task state
-
-
-#### `altodo-set-task-open ()`
-
-- Description: Set current line task to open state
-
-
-#### `altodo-set-task-done ()`
-
-- Description: Set current line task to done state
-
-
-#### `altodo-set-task-progress ()`
-
-- Description: Set current line task to in-progress state
-
-
-#### `altodo-set-task-waiting ()`
-
-- Description: Set current line task to waiting state
-
-
-#### `altodo-set-task-cancelled ()`
-
-- Description: Set current line task to cancelled state
-
-
-### 7.3 Date Processing Functions
-
-#### `altodo--parse-date (date-str)`
-
-- Argument: `date-str` - Date string
-- Return: A time value, or nil (when parsing fails or the date does not exist)
-- Description: Parse a date string and convert it to the time value of 00:00 on that day
-
-
-#### `altodo--days-diff (date-time)`
-
-- Argument: `date-time` - Date
-- Return: Day difference (float with an integer value)
-- Description: Calculate the difference in calendar days between the specified date and today. A day of 23 or 25 hours at the switch of summer time still counts as one day
-
-
-#### `altodo--determine-start-date-face (date-str)`
-
-- Argument: `date-str` - Date string
-- Return: Face symbol or nil
-- Description: Determine face to apply based on start date
-
-
-#### `altodo--determine-due-date-face (date-str)`
-
-- Argument: `date-str` - Date string
-- Return: Face symbol or nil
-- Description: Determine face to apply based on due date
-
-
-### 7.4 Line Detection Functions
-
-#### `altodo--task-p ()`
-
-- Return: t or nil
-- Description: Determine if current line is a task line
-
-
-#### `altodo--comment-p ()`
-
-- Return: t or nil
-- Description: Determine if current line is a single-line comment line
-
-
-#### `altodo--multiline-comment-p ()`
-
-- Return: t or nil
-- Description: Check if current line is a multi-line comment
-
-
-### 7.5 Indent Support Functions
-
-#### `altodo-indent-line ()`
-
-- Description: Smartly adjust current line indent
-
-
-#### `altodo-enter ()`
-
-- Description: Enter key processing (newline and indent)
-
-
-#### `altodo-add-task ()`
-
-- Description: Add subtask or new task based on current line type
-
-
-#### `altodo-start-multiline-comment ()`
-
-- Description: Start multi-line comment from task line or single-line comment line
-
-
-### 7.6 Font-lock Matcher Functions
-
-#### `altodo--start-date-matcher (limit)`
-
-- Argument: `limit` - Search limit position
-- Return: t or nil
-- Description: Start date matcher
-
-
-#### `altodo--due-date-matcher (limit)`
-
-- Argument: `limit` - Search limit position
-- Return: t or nil
-- Description: Due date matcher
-
-
-#### `altodo--multiline-comment-matcher (limit)`
-
-- Argument: `limit` - Search limit position
-- Return: t or nil
-- Description: Font-lock matcher for multi-line comment processing
-
-
-## 8. References
+## 7. References
 
 - `doc/altodo_spec.md` - altodo format specification (Japanese)
 - `doc/altodo_spec_en.md` - altodo format specification (English)
 - `doc/design-filter.md` - Filter design document (includes DSL specification)
-- `.claude/memo/` - Development notes

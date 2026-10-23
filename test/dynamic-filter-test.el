@@ -1,7 +1,7 @@
 ;;; dynamic-filter-test.el --- Tests for dynamic filter tag/person extraction
 
 ;;; Commentary:
-;; Tests for Phase 2-12: Dynamic tag and person filter extraction.
+;; Tests for dynamic tag and person filter extraction.
 
 ;;; Code:
 

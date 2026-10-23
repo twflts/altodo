@@ -1,7 +1,7 @@
 ;;; due-date-filter-test.el --- Tests for due date filter
 
 ;;; Commentary:
-;; Tests for due date filter functionality (Phase 1)
+;; Tests for due date filter functionality
 
 ;;; Code:
 

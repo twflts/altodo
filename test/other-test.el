@@ -25,13 +25,6 @@
     (should-not (altodo--call-parent-command (kbd "C-a"))))
   (cleanup-test-buffer))
 
-(ert-deftest test-debug-log ()
-  (setup-test-buffer)
-  (with-current-buffer test-buffer
-    (altodo-mode)
-    (should-not (altodo--debug-log "Test message")))
-  (cleanup-test-buffer))
-
 (ert-deftest test-outline-level ()
   (setup-test-buffer)
   (with-current-buffer test-buffer

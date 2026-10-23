@@ -19,22 +19,22 @@ ROOT = Path(__file__).resolve().parent.parent
 TEST_DIR = ROOT / "test"
 INDEX_FILE = TEST_DIR / "INDEX.md"
 BASELINE_FILE = ROOT / "scripts" / "test-baseline.txt"
-SOURCE_FILE = ROOT / "altodo.el"
+SOURCE_FILES = [ROOT / "altodo.el", ROOT / "altodo-calendar.el",
+                ROOT / "altodo-debug.el"]
 
 # (区分名, 区分の判定に使う名前の断片)。上から順に最初に一致した区分にする。
 AREAS: list[tuple[str, tuple[str, ...]]] = [
-    ("サイドバー", ("sidebar", "phase2-5", "phase2-7", "phase2-1")),
+    ("サイドバー", ("sidebar",)),
     ("font-lock・face", ("fontlock", "face", "codeblock")),
     ("複数行コメント", ("multiline", "comment")),
     ("インデント・TAB", ("indent", "enter", "input")),
     ("日付", ("date",)),
     ("完了タスクの移動", ("move", "done-file")),
-    ("ID・依存・seq-tasks", ("id-", "-id", "dependency", "goto-dep", "seq",
-                          "phase5-8")),
+    ("ID・依存・seq-tasks", ("id-", "-id", "dependency", "goto-dep", "seq")),
     ("見出し・表示コンテキスト", ("heading", "display-context", "blank-line",
                         "setext", "normal-text")),
     ("フィルタ・DSL", ("filter", "dsl", "predicate", "parent-task",
-                    "phase5", "dynamic", "person", "tag", "heading")),
+                    "dynamic", "person", "tag", "heading")),
 ]
 OTHER_AREA = "その他（コマンド・ユーティリティ・デバッグ）"
 
@@ -76,9 +76,11 @@ class TestFile:
 
 
 def load_definitions() -> set[str]:
-    """altodo.el で定義された名前の集合を返す。"""
-    text = SOURCE_FILE.read_text(encoding="utf-8")
-    return set(DEFINITION_RE.findall(text))
+    """altodo.el、altodo-calendar.el、altodo-debug.el で定義された名前の集合を返す。"""
+    names: set[str] = set()
+    for source in SOURCE_FILES:
+        names.update(DEFINITION_RE.findall(source.read_text(encoding="utf-8")))
+    return names
 
 
 def classify(name: str, targets: list[str]) -> str:

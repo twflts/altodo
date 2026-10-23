@@ -108,13 +108,21 @@ the expected done file."
     (should-error (altodo-move-done-tasks-at-point) :type 'user-error)
     (should-error (altodo-move-all-done-tasks) :type 'user-error)))
 
-(ert-deftest done-file-test-move-keeps-children ()
-  "Subtasks stay in the source buffer (a limitation of the current version)."
+(ert-deftest done-file-test-move-refuses-unfinished-children ()
+  "A done task with an open subtask is not moved (unit `subtree')."
   (done-file-test--with-file "# H\n[x] parent\n    [ ] child\n"
     (forward-line 1)
-    (altodo-move-done-tasks-at-point)
-    (should (equal (buffer-string) "# H\n    [ ] child\n"))
-    (should-not (string-match-p "child" (done-file-test--read done-file)))))
+    (should-error (altodo-move-done-tasks-at-point) :type 'user-error)
+    (should (equal (buffer-string) "# H\n[x] parent\n    [ ] child\n"))))
+
+(ert-deftest done-file-test-move-line-unit-keeps-children ()
+  "With the unit `line', the subtasks stay in the source buffer."
+  (let ((altodo-move-unit 'line))
+    (done-file-test--with-file "# H\n[x] parent\n    [ ] child\n"
+      (forward-line 1)
+      (altodo-move-done-tasks-at-point)
+      (should (equal (buffer-string) "# H\n    [ ] child\n"))
+      (should-not (string-match-p "child" (done-file-test--read done-file))))))
 
 ;;; Moving all tasks
 

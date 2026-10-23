@@ -74,7 +74,11 @@ the two differ."
     (let ((altodo-week-start-day 0))
       (should (= (altodo--days-to-week-end) 3)))
     (let ((altodo-week-start-day nil))
-      (should (= (altodo--days-to-week-end) 4)))))
+      (should (= (altodo--days-to-week-end) 3)))))
+
+(ert-deftest date-range-test-week-starts-on-sunday-by-default ()
+  "The default of `altodo-week-start-day' is Sunday (0)."
+  (should (= (default-value 'altodo-week-start-day) 0)))
 
 (provide 'date-range-test)
 ;;; date-range-test.el ends here

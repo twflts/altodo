@@ -137,7 +137,7 @@
     (ert-info ((plist-get entry :title))
       (should (memq (plist-get entry :type)
                     '(search-simple search-lambda group-header separator
-                      command dynamic comment)))
+                      command dynamic comment calendar agenda)))
       (should (plist-member entry :title)))))
 
 (ert-deftest testfiles-test-locals-patterns-compile ()
@@ -162,7 +162,7 @@
   (dolist (entry (testfiles-test--patterns))
     (when (eq (plist-get entry :type) 'dynamic)
       (should (member (plist-get entry :dynamic-type)
-                      '("person" "tag" "due" "start"))))))
+                      '("person" "tag" "due" "start" "heading"))))))
 
 (ert-deftest testfiles-test-locals-faces-exist ()
   "A face given by name in :face-rules or :count-face-rules is defined."
