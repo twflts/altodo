@@ -144,8 +144,8 @@ Filter conditions can be written as DSL patterns. Predicate functions are availa
 
 ### Installation
 
-- Emacs 29.1 or later (verified with Emacs 29.3 and markdown-mode 2.6)
-- markdown-mode installed (`Package-Requires` says 2.0 or later; verified with 2.6)
+- Emacs 29.1 or later (verified with Emacs 29.3)
+- markdown-mode 2.6 or later installed (`Package-Requires` says 2.6 or later too; verified with 2.6)
     - Follow "Installation" in the [markdown-mode README](https://github.com/jrblevin/markdown-mode), which recommends MELPA Stable
     - `M-x package-install RET markdown-mode RET` (after adding MELPA Stable to the package archives)
 
@@ -201,9 +201,9 @@ altodo-mode inherits from markdown-mode, so markdown-mode keybindings are also a
 #### Flag Operations
 
 - `C-c C-s`: Toggle star flag
-- `C-c C-f 1`: Set priority 1
-- `C-c C-f 2`: Set priority 2
-- `C-c C-f 3`: Set priority 3
+- `C-c C-f 1`: Set priority 1 (removes the priority if it is already 1)
+- `C-c C-f 2`: Set priority 2 (removes the priority if it is already 2)
+- `C-c C-f 3`: Set priority 3 (removes the priority if it is already 3)
 - `C-c C-i`: Insert ID tag (`#id:value` format)
 
 
@@ -222,8 +222,11 @@ In the calendar window, move to a date and press `RET` to set it, or `q` to canc
 #### Adding Tasks
 
 - `RET`: Context-aware newline
-- `C-c C-a`: Add a task
-- `M-RET`: Add a subtask
+    - Task line or `///` line: adds a new task with the same indentation after the multi-line comment and child tasks of the task, wherever point is on the line (the line is not split)
+    - Empty task line (only `[ ] `): removes the marker and ends the list
+    - Multi-line comment line: continues on the next line with the same indentation
+- `C-c C-a`: Add a task (after the multi-line comment and child tasks of the task, with the same indentation)
+- `M-RET`: Add a subtask (as the last child, one level deeper)
 - `C-c C-m`: Start a multi-line comment
 
 
@@ -232,6 +235,7 @@ In the calendar window, move to a date and press `RET` to set it, or `q` to canc
 - `TAB`: Smart indent
 - `M-<right>`: Increase indent
 - `M-<left>`: Decrease indent
+    - On a task line or `///` line, its multi-line comment moves with it. Child tasks do not move
 
 
 #### Other
@@ -310,6 +314,8 @@ If `altodo-move-after-days` is a number N, the batch move (`M-x altodo-move-all-
 
 #### Auto-move Timer
 
+The timer does not start automatically. Start it with the commands below (it stops when Emacs exits).
+
 ```elisp
 ;; Toggle timer start/stop
 M-x altodo-toggle-auto-move-timer
@@ -338,7 +344,8 @@ M-x altodo-stop-auto-move-timer
 #### Done File Customization
 
 ```elisp
-;; Change done file suffix (default: "_done")
+;; Change the string added to the done file name (default: "_done")
+;; The variable name says prefix, but the string goes after the base name (notes.altodo -> notes_archive.altodo)
 (setq altodo-done-file-prefix "_archive")
 ```
 

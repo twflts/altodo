@@ -21,14 +21,12 @@
   (should (equal (altodo--integer-to-base62 62) "10"))
   (should (equal (altodo--integer-to-base62 (* 62 62)) "100")))
 
-(ert-deftest id-generation-uuid-base62-round-trip ()
-  "A UUID converts to Base62 and back."
+(ert-deftest id-generation-uuid-format ()
+  "A generated UUID is a version 7 UUID."
   (let ((uuid (altodo--generate-uuidv7)))
     (should (string-match-p
              "\\`[0-9a-f]\\{8\\}-[0-9a-f]\\{4\\}-7[0-9a-f]\\{3\\}-[0-9a-f]\\{4\\}-[0-9a-f]\\{12\\}\\'"
-             uuid))
-    (should (equal (altodo--base62-to-uuid (altodo--uuid-to-base62 uuid))
-                   uuid))))
+             uuid))))
 
 (ert-deftest id-generation-short-ids-are-base62 ()
   "Short IDs are Base62 strings of up to 16 characters."

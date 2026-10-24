@@ -41,6 +41,15 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - With `altodo-done-tag-datetime-format`, the value of `#done` is the result of the format alone (it used to get the time zone offset). A result with a space is double-quoted
 - `:count-exclude-others nil` counts the lines other than tasks too (the setting used to be ignored)
 - A save does not redraw the sidebar if it is not shown (it is drawn when it is shown)
+- `C-c C-a`, `M-RET` and `RET` (on a task line or `///` line) add the task after the multi-line comment and descendant tasks of the task (they used to insert on the next line and push the children and the multi-line comment below the new task). `RET` does not split the line in the middle. `M-RET` adds the task as the last child
+- `C-c C-f 1`, `2` and `3` remove the priority on a line that already has that priority (they used to leave it; the same as the toggle of the star flag)
+- `C-c C-t @` (in progress) and `C-c C-t w` (waiting) remove the `#done` tag (they used to leave it)
+- `M-<right>` and `M-<left>` move the multi-line comment of a task line or `///` line with it (it used to stay behind and attach to the previous task). Child tasks do not move (the user has yet to confirm this behavior: T20261024-14 in `project.altodo`)
+- A state command does not change a line in a fenced code block
+- `seq-tasks` is a special tag name. A tag that only starts with a special tag name, such as `#idea`, does not get the special tag color
+- The star and priority flags of a `///` line are colored. A date and a tag in inline code are not colored. `@name` in a plain paragraph (not a multi-line comment) is not colored as a person. `#dep:` needs a space before it
+- The faces `altodo-flag-priority-face` and `altodo-flag-priority-text-face` were removed (the old names stay as aliases of `altodo-flag-priority1-face` and `altodo-flag-priority1-text-face`)
+- markdown-mode 2.6 or later is required (`Package-Requires`)
 
 
 ### Added
@@ -95,6 +104,7 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - The done file is written through a temporary file and replaced. For a read-only buffer or a done file that cannot be written, nothing is moved and an error is signaled
 - If a filter predicate signals an error, the filter is cleared
 - `altodo-auto-move-interval` accepts only a positive number
+- `scripts/bench-fontlock.sh` also measures the time to refontify after editing one line (edit-ms)
 - The difference between dates is counted in calendar days. A day at the switch of summer time still counts as one day
 
 

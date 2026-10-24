@@ -137,7 +137,7 @@
     (insert "[@] Task @john @mary\n")
     (insert "[ ] Task @john @designer\n")
     (altodo-mode)
-    (let ((persons (altodo--collect-dynamic-values "person" (current-buffer))))
+    (let ((persons (altodo--collect-dynamic-values-with-exclude "person" (current-buffer))))
       (should (equal 2 (cdr (assoc "john" persons))))
       (should (equal 1 (cdr (assoc "mary" persons))))
       (should (equal 1 (cdr (assoc "designer" persons)))))))
@@ -184,7 +184,7 @@
     (altodo-mode)
     (let ((tags (altodo--collect-dynamic-values-with-exclude
                  "tag" (current-buffer) "name-only" nil '("id" "dep" "done") nil nil))
-          (persons (altodo--collect-dynamic-values "person" (current-buffer))))
+          (persons (altodo--collect-dynamic-values-with-exclude "person" (current-buffer))))
       ;; Tags should include java, git
       (should (assoc "java" tags))
       (should (assoc "git" tags))

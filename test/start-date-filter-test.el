@@ -15,23 +15,6 @@
 ;; Helper function tests
 ;; ========================================
 
-(ert-deftest start-date-test-line-start-date-p ()
-  "Test altodo--line-start-date-p."
-  (start-date-test--with-buffer
-   "[ ] Task 2026-01-01 ->\n"
-   (should (altodo--line-start-date-p)))
-  
-  (start-date-test--with-buffer
-   "[ ] Task 2026-01-01 -> 2026-12-31\n"
-   (should (altodo--line-start-date-p)))
-  
-  (start-date-test--with-buffer
-   "[ ] Task -> 2026-12-31\n"
-   (should-not (altodo--line-start-date-p)))
-  
-  (start-date-test--with-buffer
-   "[ ] Task\n"
-   (should-not (altodo--line-start-date-p))))
 
 (ert-deftest start-date-test-line-start-date-value ()
   "Test altodo--line-start-date-value."
@@ -207,7 +190,6 @@
   "Test behavior when line has no start date."
   (start-date-test--with-buffer
    "[ ] Task without start date\n"
-   (should-not (altodo--line-start-date-p))
    (should-not (altodo--line-start-date-value))
    (should-not (altodo--start-date-matches-p 'today))
    (should-not (altodo--start-date-matches-p "2026-01-01"))))
@@ -216,7 +198,6 @@
   "Test behavior when line has only due date (no start date)."
   (start-date-test--with-buffer
    "[ ] Task -> 2026-12-31\n"
-   (should-not (altodo--line-start-date-p))
    (should-not (altodo--line-start-date-value))))
 
 (ert-deftest start-date-test-invalid-condition ()
@@ -231,14 +212,12 @@
   "Test behavior on empty line."
   (start-date-test--with-buffer
    "\n"
-   (should-not (altodo--line-start-date-p))
    (should-not (altodo--line-start-date-value))))
 
 (ert-deftest start-date-test-comment-line ()
   "Test behavior on comment line."
   (start-date-test--with-buffer
    "/// Comment line\n"
-   (should-not (altodo--line-start-date-p))
    (should-not (altodo--line-start-date-value))))
 
 (ert-deftest start-date-test-matches-nil-condition ()

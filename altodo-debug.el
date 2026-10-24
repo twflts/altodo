@@ -5,7 +5,7 @@
 ;; Author: twofaults
 ;; Maintainer: twofaults
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (markdown-mode "2.0"))
+;; Package-Requires: ((emacs "29.1") (markdown-mode "2.6"))
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/twflts/altodo
 

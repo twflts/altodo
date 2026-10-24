@@ -4,7 +4,7 @@
 
 ## 使い方
 
-- 全体: 114 ファイル、1163 テスト
+- 全体: 115 ファイル、1151 テスト
 - 実行: `scripts/run-tests.sh [test/NAME.el]`。ベースラインとの差分だけを報告する
 - 関数に対応するテストを探す: `grep -l 'altodo--関数名' test/*.el`
 - 共通の道具: `test/altodo-test-helper.el`（`altodo-test-with-buffer`、`-with-temp-dir`、`-with-locals`、`-with-today`、`altodo-test-file`）
@@ -72,6 +72,7 @@
 
 | ファイル | 件数 | 内容 | 主な対象 | 備考 |
 |---|---|---|---|---|
+| `docs-code-review-test` | 20 | Fixes of the documentation and code review | `altodo-add-task`、`altodo-enter`、`altodo-indent-increase` |  |
 | `indent-behavior-test` | 11 | Tests for TAB and the indentation helpers | `altodo-indent-line`、`altodo--normalize-indent`、`altodo--set-line-indent` |  |
 | `indent-function-test` | 5 | Tests for indent functions | `altodo--normalize-irregular-indent`、`altodo--smart-indent`、`altodo--cycle-indent` |  |
 | `indent-test` | 8 | Tests for altodo indent functions | `altodo--normalize-indent`、`altodo--get-line-indent`、`altodo--previous-line-empty-p` |  |
@@ -88,10 +89,10 @@
 | `date-format-test` | 12 | Tests for altodo-date-format handling | `altodo-date-format`、`altodo--parse-due-date-condition`、`altodo--parse-date` |  |
 | `date-range-test` | 4 | Tests for this-week and this-month conditions | `altodo-week-start-day`、`altodo--days-to-week-end`、`altodo--due-date-matches-p` |  |
 | `dsl-date-compile-test` | 4 | Tests for compiling date patterns | `altodo--parse-due-date-condition`、`altodo--compile-simple-pattern` |  |
-| `due-date-filter-test` | 33 | Tests for due date filter | `altodo--parse-due-date-condition`、`altodo--line-due-date-p`、`altodo--line-due-date-value` |  |
+| `due-date-filter-test` | 30 | Tests for due date filter | `altodo--parse-due-date-condition`、`altodo--line-due-date-value`、`altodo--due-date-matches-p` |  |
 | `helper-date-test` | 5 | Tests for date helper functions | `altodo--today-start`、`altodo--parse-date`、`altodo--days-diff` |  |
-| `start-date-filter-test` | 31 | Tests for start date filter | `altodo--start-date-matches-p`、`altodo--parse-start-date-condition`、`altodo--line-start-date-p` |  |
-| `utility-remaining-test` | 5 | Tests for remaining utility functions | `altodo--format-to-regex`、`altodo--date-regex-info`、`altodo--date-regex-match` |  |
+| `start-date-filter-test` | 30 | Tests for start date filter | `altodo--start-date-matches-p`、`altodo--parse-start-date-condition`、`altodo--line-start-date-value` |  |
+| `utility-remaining-test` | 4 | Tests for remaining utility functions | `altodo--format-to-regex`、`altodo--date-regex-info`、`altodo--date-regex-match` |  |
 
 ## 完了タスクの移動
 
@@ -99,7 +100,6 @@
 |---|---|---|---|---|
 | `done-file-abnormal-test` | 7 | Tests for abnormal cases of moving done tasks | `altodo-move-done-tasks-at-point`、`altodo-auto-save-after-move`、`altodo--auto-move-all-buffers` |  |
 | `done-file-test` | 14 | Tests for moving done tasks to the done file | `altodo-move-done-tasks-at-point`、`altodo-move-all-done-tasks`、`altodo--auto-move-timer` |  |
-| `helper-flag-test` | 4 | Tests for flag helper functions | `altodo--remove-star-from-string`、`altodo--has-star-flag-p`、`altodo--remove-priority-from-string` |  |
 | `move-after-days-test` | 9 | Tests for moving done tasks after some days | `altodo--done-tag-days-ago`、`altodo-move-after-days`、`altodo--line-done-tag-value` |  |
 | `move-subtree-test` | 16 | Tests for moving done tasks with their subtasks | `altodo-move-unit`、`altodo-move-done-tasks-at-point`、`altodo-move-all-done-tasks` |  |
 | `move-task-test` | 5 | Tests for altodo move task functions | `altodo--is-done-or-cancelled-task`、`altodo--extract-task-line` |  |
@@ -125,25 +125,25 @@
 | `blank-line-collapse-test` | 3 | Test collapsing consecutive blank lines | `altodo--compute-display-lines` |  |
 | `display-context-option-test` | 8 | Tests for :display-context option | `altodo--filter-find-overlay`、`altodo--get-display-context-option`、`altodo--filter-lines` |  |
 | `display-context-test` | 4 | Tests for :display-context option | `altodo--compute-display-lines`、`altodo--compute-all-heading-ranges` |  |
-| `heading-filter-test` | 15 | Tests for heading filter functionality | `altodo--line-in-heading-range-p`、`altodo--line-in-heading-range-with-filter-p`、`altodo--find-heading-range` |  |
+| `heading-filter-test` | 7 | Tests for heading filter functionality | `altodo--line-in-heading-range-with-filter-p`、`altodo--heading-level`、`altodo--compile-simple-pattern` |  |
 | `heading-jump-test` | 24 | Tests for the heading jump of the sidebar | `altodo--collect-headings`、`altodo-sidebar--jump-to-heading`、`altodo-default-filter-patterns` |  |
 | `heading-newline-test` | 3 | Test heading newline with 'all' display context | `altodo--compute-display-lines` |  |
 | `heading-range-compute-test` | 12 | 見出し範囲の一括計算のテスト | `altodo--heading-level`、`altodo--compute-all-heading-ranges`、`altodo--compute-display-lines` |  |
 | `heading-spacing-display-lines-test` | 1 | Visual test showing display lines | `altodo--compute-display-lines` |  |
 | `heading-spacing-first-heading-test` | 1 | Debug first heading spacing | `altodo--compute-display-lines` |  |
 | `heading-spacing-test` | 3 | Test first heading gets newline after only | `altodo--compute-display-lines` |  |
-| `normal-text-test` | 7 | Test that task lines are not normal text | `altodo--normal-text-p` |  |
-| `setext-test` | 4 | Test Setext heading level detection | `altodo--heading-level`、`altodo--heading-text` |  |
+| `normal-text-test` | 0 | normal-text-test |  |  |
+| `setext-test` | 2 | Test Setext heading level detection | `altodo--heading-level` |  |
 
 ## フィルタ・DSL
 
 | ファイル | 件数 | 内容 | 主な対象 | 備考 |
 |---|---|---|---|---|
-| `combine-predicates-test` | 15 | Tests multiple filter selection | `altodo-sidebar--selected-filters`、`altodo-sidebar--combine-mode`、`altodo--combine-predicates` |  |
+| `combine-predicates-test` | 12 | Tests multiple filter selection | `altodo-sidebar--combine-mode`、`altodo-sidebar--selected-filters`、`altodo--combine-predicates` |  |
 | `dsl-compiler-test` | 33 | Tests for DSL compiler | `altodo--compile-simple-pattern`、`altodo--validate-pattern`、`altodo--normalize-pattern` |  |
 | `dsl-multi-patterns-test` | 13 | Tests for the line type and multi-value DSL patterns | `altodo--compile-simple-pattern`、`altodo--get-entry-count` |  |
 | `dsl-review-test` | 16 | DSL behavior of the design document | `altodo--compile-simple-pattern`、`altodo--count-matching-lines`、`altodo--normalize-pattern` |  |
-| `dynamic-collect-test` | 31 | Tests for dynamic filter functionality | `altodo--expand-dynamic-filter`、`altodo--collect-dynamic-values`、`altodo--format-placeholder` |  |
+| `dynamic-collect-test` | 31 | Tests for dynamic filter functionality | `altodo--expand-dynamic-filter`、`altodo--collect-dynamic-values-with-exclude`、`altodo--format-placeholder` |  |
 | `dynamic-filter-test` | 16 | Tests for dynamic filter tag/person extraction | `altodo--line-extract-all-tags`、`altodo--line-extract-all-persons`、`altodo--collect-dynamic-values-with-exclude` |  |
 | `filter-function-test` | 10 | Tests for altodo filter functions | `altodo--line-has-tag-p`、`altodo--line-done-p`、`altodo--line-progress-p` |  |
 | `filter-helper-test` | 2 | Unit tests for filter helper functions | `altodo--filter-create-overlay`、`altodo--filter-find-overlay`、`altodo--filter-overlays` |  |
@@ -156,8 +156,8 @@
 | `matcher-advanced-test` | 4 | Tests for advanced matcher functions | `altodo--arrow-matcher`、`altodo--tag-with-value-matcher`、`altodo--dep-tag-matcher` |  |
 | `multi-select-filter-test` | 12 | Complex multiple filter tests | `altodo--compile-simple-pattern`、`altodo--combine-predicates`、`altodo--filter-lines` |  |
 | `parent-task-regexp-test` | 33 | Tests for parent task regexp filter | `altodo--line-parent-task-matches-regexp-p`、`altodo--compile-simple-pattern`、`altodo--filter-lines` |  |
-| `person-tag-matcher-test` | 16 | Tests for person tag matcher | `altodo--person-tag-matcher`、`altodo--is-valid-person-tag-position` |  |
-| `person-url-test` | 8 | Tests for @ inside a word and the dynamic :limit | `altodo--limit-dynamic-values`、`altodo--line-extract-person-value`、`altodo--line-has-person-p` |  |
+| `person-tag-matcher-test` | 17 | Tests for person tag matcher | `altodo--person-tag-matcher`、`altodo--is-valid-person-tag-position` |  |
+| `person-url-test` | 7 | Tests for @ inside a word and the dynamic :limit | `altodo--limit-dynamic-values`、`altodo--line-has-person-p`、`altodo-filter-show-person` |  |
 | `review-decisions-test` | 23 | Tests for the decisions of the code review | `altodo--count-matching-lines`、`altodo-filter-by-pattern`、`altodo--generate-uuidv7` |  |
 | `tag-value-filter-test` | 53 | Tests tag-value filter | `altodo--line-has-tag-value-numeric-p`、`altodo--line-has-tag-value-p`、`altodo--string-to-valid-number` |  |
 
@@ -168,9 +168,10 @@
 | `altodo-calendar-test` | 27 | Tests for the library altodo-calendar | `altodo-calendar-japanese-holiday`、`altodo-calendar-insert`、`altodo-calendar-emacs-holiday` |  |
 | `altodo-debug-test` | 14 | Tests for the investigation commands | `altodo-debug-explain-pattern`、`altodo-debug--line-facts`、`altodo--normalize-state` |  |
 | `command-behavior-test` | 22 | Tests for the editing commands | `altodo-set-task-done`、`altodo-toggle-task-state`、`altodo-set-priority-2` |  |
-| `command-test` | 9 | Tests for altodo user commands | `altodo-toggle-task-state`、`altodo-set-task-done`、`altodo-set-task-open` |  |
-| `flag-combination-test` | 7 | Tests for star and priority flags used together | `altodo--format-flags`、`altodo-toggle-star-flag`、`altodo--line-has-star-p` |  |
-| `helper-state-test` | 4 | Tests for state helper functions | `altodo-state-open`、`altodo--normalize-state`、`altodo--task-is-completed` |  |
+| `command-test` | 7 | Tests for altodo user commands | `altodo-toggle-task-state`、`altodo-set-task-done`、`altodo-set-task-open` |  |
+| `flag-combination-test` | 6 | Tests for star and priority flags used together | `altodo--format-flags`、`altodo-toggle-star-flag`、`altodo--parse-flags` |  |
+| `helper-flag-test` | 1 | Tests for flag helper functions | `altodo--has-star-flag-p` |  |
+| `helper-state-test` | 3 | Tests for state helper functions | `altodo-state-open`、`altodo--normalize-state`、`altodo--task-is-completed` |  |
 | `locals-code-policy-test` | 12 | Tests for the code policy of .altodo-locals.el | `altodo-locals-code-policy`、`altodo--entry-code-permitted-p`、`altodo--get-entry-count` |  |
 | `matcher-remaining-test` | 4 | Tests for remaining matcher functions | `altodo--dep-blocked-text-matcher`、`altodo--due-overdue-severe-text-matcher`、`altodo--start-not-yet-text-matcher` |  |
 | `task-operation-test` | 1 | Tests for task operation functions | `altodo-add-task` |  |

@@ -56,12 +56,20 @@
     (should (equal (match-string 0) "@alice"))))
 
 (ert-deftest person-tag-matcher-test-at-line-start ()
-  "Test matching person tag at line start."
+  "Test matching person tag at line start of a `///' line and a heading."
+  (dolist (text '("/// @alice\n" "# @alice\n"))
+    (with-temp-buffer
+      (insert text)
+      (goto-char (point-min))
+      (should (altodo--person-tag-matcher (point-max)))
+      (should (equal (match-string 0) "@alice")))))
+
+(ert-deftest person-tag-matcher-test-only-on-inline-lines ()
+  "Test that a person in a plain line is not matched."
   (with-temp-buffer
-    (insert "@alice\n")
+    (insert "plain text @alice\n")
     (goto-char (point-min))
-    (should (altodo--person-tag-matcher (point-max)))
-    (should (equal (match-string 0) "@alice"))))
+    (should-not (altodo--person-tag-matcher (point-max)))))
 
 (ert-deftest person-tag-matcher-test-multiple ()
   "Test matching multiple person tags."

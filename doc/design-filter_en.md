@@ -311,7 +311,7 @@ This is the only path that applies the face of the row.
 
 **Process**:
 
-1. Collect values from buffer with `altodo--collect-dynamic-values-*`
+1. Collect values from buffer with `altodo--collect-dynamic-values-with-exclude`
    - `person`: Collect `@person` tag values
    - `tag`: Collect `#tag` values
    - `due`: Collect the due dates (`-> DATE`)

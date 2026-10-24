@@ -62,7 +62,7 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 #### コメント・タグ関連
 
 - `altodo-comment-marker`: `"///"` - コメントマーカー
-- `altodo-special-tag-names`: `'("id" "group-start" "group-due" "done")` - 特殊タグ名リスト
+- `altodo-special-tag-names`: `'("id" "group-start" "group-due" "done" "seq-tasks")` - 特殊タグ名リスト
   - 注: `"dep"` は `altodo--dep-tag-matcher` で別途処理される
 
 
@@ -218,12 +218,18 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 | `C-c C-i`             | `altodo-insert-id`                  | `#id` の挿入             |
 | `C-c C-j`             | `altodo-goto-dependency`            | 依存先タスクへジャンプ   |
 
+`altodo-add-task` は、現在行のサブツリー（複数行コメント、`///` 行、子孫のタスク。`altodo--subtree-end`）の後ろに、同じインデントでタスクを追加する。`altodo-add-subtask` は、最後の子として 1 段深く追加する。`RET` は、タスク行・`///` 行で `altodo-add-task` を呼ぶ。空のタスク行ではマーカーを消し、複数行コメント行では同じインデントで次の行に続ける。
+
+`altodo-set-priority-1`、`-2`、`-3` は、既に同じ優先度の行では優先度を外す（スターは残す）。
+
 
 #### タスク行・1 行コメント行・複数行コメント行
 
 | キー                    | 関数名                                             | 機能             |
 | ----------------------- | -------------------------------------------------- | ---------------- |
 | `M-<right>`、`M-<left>` | `altodo-indent-increase`、`altodo-indent-decrease` | インデントの増減 |
+
+`altodo-indent-increase`、`altodo-indent-decrease` は、タスク行・`///` 行では、その行の複数行コメントも同じ幅だけ動かす。子タスクは動かさない。
 
 `altodo-toggle-comment`（タスク ↔ コメントのトグル）は、キーに割り当てていない。`M-x` で実行する。
 
@@ -417,14 +423,14 @@ alist 形式で複数の変数を指定可能：
 
 #### 特殊タグ
 
-| タグ                | 説明                         |
-| ------------------- | ---------------------------- |
-| `#id:value`         | ユニーク識別子               |
-| `#dep:value`        | 依存関係（参照先 ID を指定） |
-| `#group-start:date` | グループのタスクの開始日     |
-| `#group-due:date`   | グループのタスクの期日       |
-| `#done:timestamp`   | タスクが完了・廃止された時刻 |
-| `#seq-tasks`        | 子タスクを上から順に実行     |
+| タグ                | 説明                           |
+| ------------------- | ------------------------------ |
+| `#id:value`         | ユニーク識別子                 |
+| `#dep:value`        | 依存関係（参照先 ID を指定）   |
+| `#group-start:date` | グループの開始日（色付けのみ） |
+| `#group-due:date`   | グループの期日（色付けのみ）   |
+| `#done:timestamp`   | タスクが完了・廃止された時刻   |
+| `#seq-tasks`        | 子タスクを上から順に実行       |
 
 
 #### @person タグ
@@ -459,10 +465,21 @@ alist 形式で複数の変数を指定可能：
 
 #### 日付ベースの色付け
 
-- 開始日超過: グレー
-- 期限超過: 赤色太字
-- 期限当日: 赤色
-- 期限緊急: 太字
+今日との差で、日付とタスク本文の face を決める。日付は `altodo--determine-due-date-face`、`altodo--determine-start-date-face` が、本文は `altodo--due-overdue-severe-text-matcher`、`altodo--start-not-yet-text-matcher` が決める。日の数え方は、ローカル時間帯の暦の日数である。
+
+| 条件               | 日付の face                     | タスク本文の face                      |
+| ------------------ | ------------------------------- | -------------------------------------- |
+| 期日が 3 日以上前  | `altodo-date-due-overdue-face`  | `altodo-due-overdue-severe-text-face`  |
+| 期日が 1〜2 日前   | `altodo-date-due-overdue-face`  | 変更なし                               |
+| 期日が今日         | `altodo-date-due-today-face`    | 変更なし                               |
+| 期日が 1〜3 日後   | `altodo-date-due-soon-face`     | 変更なし                               |
+| 期日が 4 日以上後  | `altodo-date-face`              | 変更なし                               |
+| 開始日が今日以前   | `altodo-date-start-active-face` | 変更なし                               |
+| 開始日が明日以降   | `altodo-date-face`              | `altodo-start-not-yet-text-face`（灰） |
+| 存在しない日付     | `altodo-date-face`              | 変更なし                               |
+| 完了・廃止のタスク | 本文と同じ face（取り消し線）   | 完了・廃止の face                      |
+
+期日と開始日の両方が条件に当たるときは、それぞれの日付が自分の条件で色付けされる。本文の face は、重ねて適用される。
 
 
 ### 5.6 依存関係管理
@@ -575,12 +592,11 @@ Layer 2: ベース（本文全体）
   ├── 待機タスク本文
   └── 進行中タスク本文
   ↓
-Layer 3: （空 - タグは Layer 4 に移動）
-  ↓
-Layer 4: 強調要素（日付ベーステキスト、フラグ本文、タグ、日付）
+Layer 3: 強調要素（日付ベーステキスト、フラグ本文、タグ、日付）
   ├── 日付ベーステキスト（本文全体の色変更）
   ├── 優先度フラグ（3段階）
   ├── スターフラグ
+  ├── `///` 行のフラグ
   ├── 一般タグ（値付き・値なし）
   ├── @person タグ
   ├── 特殊タグ
@@ -589,7 +605,7 @@ Layer 4: 強調要素（日付ベーステキスト、フラグ本文、タグ�
   ├── 開始日
   └── 期限
   ↓
-Layer 5: 最優先（コメント全体、斜線）
+Layer 4: 最優先（コメント全体、斜線）
   ├── 複数行コメント
   ├── 複数行コメント内リスト
   ├── 1行コメント全体
@@ -605,13 +621,12 @@ Layer 5: 最優先（コメント全体、斜線）
 | ----- | -------------------- | --------------- | ---------------------------------------------------------- |
 | 1     | ブラケット・状態文字 | `t`             | ブラケットと状態文字の face を確定させる                   |
 | 2     | 本文全体             | `append`        | markdown-mode の face を優先し、altodo-mode の face を追加 |
-| 3     | （空）               | -               | タグは Layer 4 に移動                                      |
-| 4     | 日付ベーステキスト   | `prepend`       | 複数の face を重ねる                                       |
-| 4     | フラグ（記号部分）   | `t`             | フラグ記号の face を確定させる                             |
-| 4     | フラグ（本文部分）   | `prepend`       | 複数の face を重ねる                                       |
-| 4     | タグ・日付           | `t`             | タグと日付の face を確定させる                             |
-| 5     | コメント             | `prepend`       | 複数の face を重ねる                                       |
-| 5     | 斜線                 | `t`             | 斜線の face を確定させる                                   |
+| 3     | 日付ベーステキスト   | `prepend`       | 複数の face を重ねる                                       |
+| 3     | フラグ（記号部分）   | `t`             | フラグ記号の face を確定させる                             |
+| 3     | フラグ（本文部分）   | `prepend`       | 複数の face を重ねる                                       |
+| 3     | タグ・日付           | `t`             | タグと日付の face を確定させる                             |
+| 4     | コメント             | `prepend`       | 複数の face を重ねる                                       |
+| 4     | 斜線                 | `t`             | 斜線の face を確定させる                                   |
 
 
 ### 6.4 seq-tasks 実装

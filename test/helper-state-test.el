@@ -89,34 +89,5 @@
   (message "test-get-state-face: PASS"))
 
 ;; Test: altodo--get-state-text-face
-(ert-deftest helper-state-test-get-state-text-face ()
-  "Test altodo--get-state-text-face."
-  ;; Test 1: done state
-  (let ((result (altodo--get-state-text-face altodo-state-done)))
-    (unless (eq result 'altodo-task-done-text-face)
-      (error "get-state-text-face(done) should return 'altodo-task-done-text-face', got %s" result)))
-  
-  ;; Test 2: progress state
-  (let ((result (altodo--get-state-text-face altodo-state-progress)))
-    (unless (eq result 'altodo--task-progress-text-face)
-      (error "get-state-text-face(progress) should return 'altodo--task-progress-text-face', got %s" result)))
-  
-  ;; Test 3: waiting state
-  (let ((result (altodo--get-state-text-face altodo-state-waiting)))
-    (unless (eq result 'altodo-task-waiting-text-face)
-      (error "get-state-text-face(waiting) should return 'altodo-task-waiting-text-face', got %s" result)))
-  
-  ;; Test 4: cancelled state
-  (let ((result (altodo--get-state-text-face altodo-state-cancelled)))
-    (unless (eq result 'altodo-task-cancelled-text-face)
-      (error "get-state-text-face(cancelled) should return 'altodo-task-cancelled-text-face', got %s" result)))
-  
-  ;; Test 5: open state
-  (let ((result (altodo--get-state-text-face altodo-state-open)))
-    (unless (eq result 'altodo-task-open-text-face)
-      (error "get-state-text-face(open) should return 'altodo-task-open-text-face', got %s" result)))
-  
-  (message "test-get-state-text-face: PASS"))
-
 (provide 'helper-state-test)
 ;;; helper-state-test.el ends here

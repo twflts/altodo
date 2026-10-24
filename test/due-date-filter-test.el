@@ -19,23 +19,8 @@
 
 ;;; Tests for altodo--line-due-date-p
 
-(ert-deftest due-date-test-line-due-date-p-with-due-date ()
-  "Test altodo--line-due-date-p with due date."
-  (due-date-test--with-buffer
-   "[ ] Task -> 2026-12-31\n"
-   (should (altodo--line-due-date-p))))
 
-(ert-deftest due-date-test-line-due-date-p-without-due-date ()
-  "Test altodo--line-due-date-p without due date."
-  (due-date-test--with-buffer
-   "[ ] Task\n"
-   (should-not (altodo--line-due-date-p))))
 
-(ert-deftest due-date-test-line-due-date-p-with-start-and-due ()
-  "Test altodo--line-due-date-p with start and due date."
-  (due-date-test--with-buffer
-   "[ ] Task 2026-01-01 -> 2026-12-31\n"
-   (should (altodo--line-due-date-p))))
 
 ;;; Tests for altodo--line-due-date-value
 
@@ -165,7 +150,6 @@
   "Test behavior when line has no due date."
   (due-date-test--with-buffer
    "[ ] Task without due date\n"
-   (should-not (altodo--line-due-date-p))
    (should-not (altodo--line-due-date-value))
    (should-not (altodo--due-date-matches-p 'today))
    (should-not (altodo--due-date-matches-p "2026-01-01"))))
@@ -174,7 +158,6 @@
   "Test behavior when line has only start date (no due date)."
   (due-date-test--with-buffer
    "[ ] Task 2026-01-01 ->\n"
-   (should-not (altodo--line-due-date-p))
    (should-not (altodo--line-due-date-value))))
 
 (ert-deftest due-date-test-invalid-condition ()
@@ -189,14 +172,12 @@
   "Test behavior on empty line."
   (due-date-test--with-buffer
    "\n"
-   (should-not (altodo--line-due-date-p))
    (should-not (altodo--line-due-date-value))))
 
 (ert-deftest due-date-test-comment-line ()
   "Test behavior on comment line."
   (due-date-test--with-buffer
    "/// Comment line\n"
-   (should-not (altodo--line-due-date-p))
    (should-not (altodo--line-due-date-value))))
 
 (ert-deftest due-date-test-matches-nil-condition ()

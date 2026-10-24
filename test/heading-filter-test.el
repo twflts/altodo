@@ -54,104 +54,11 @@
     (forward-line 1)
     (should (null (altodo--heading-level)))))
 
-(ert-deftest heading-test-heading-text ()
-  "Test altodo--heading-text function."
-  (with-temp-buffer
-    (insert "# プロジェクト全体\n")
-    (insert "## プロジェクト A\n")
-    (insert "[ ] Task\n")
-    
-    (goto-char (point-min))
-    (should (string= (altodo--heading-text) "プロジェクト全体"))
-    
-    (forward-line 1)
-    (should (string= (altodo--heading-text) "プロジェクト A"))
-    
-    (forward-line 1)
-    (should (null (altodo--heading-text)))))
 
 ;;; Tests for heading range detection
 
-(ert-deftest heading-test-find-heading-range-basic ()
-  "Test altodo--find-heading-range with basic structure."
-  (with-temp-buffer
-    (insert "# プロジェクト全体\n")
-    (insert "説明\n")
-    (insert "## プロジェクト A\n")
-    (insert "[ ] タスク A1\n")
-    (insert "## プロジェクト B\n")
-    (insert "[ ] タスク B1\n")
-    
-    (goto-char (point-min))
-    (let ((range (altodo--find-heading-range "プロジェクト A")))
-      (should range)
-      ;; Start should be after "## プロジェクト A\n"
-      (should (> (car range) (point-min)))
-      ;; End should be before "## プロジェクト B"
-      (should (< (cdr range) (point-max))))))
-
-(ert-deftest heading-test-find-heading-range-with-children ()
-  "Test altodo--find-heading-range with child headings."
-  (with-temp-buffer
-    (insert "## プロジェクト A\n")
-    (insert "[ ] タスク A1\n")
-    (insert "### 要件定義\n")
-    (insert "[x] タスク A1-1\n")
-    (insert "### 基本設計\n")
-    (insert "[x] タスク A1-2\n")
-    (insert "## プロジェクト B\n")
-    (insert "[ ] タスク B1\n")
-    
-    (goto-char (point-min))
-    ;; With include-children = t
-    (let ((range (altodo--find-heading-range "プロジェクト A" t)))
-      (should range)
-      ;; Range should include child headings
-      (goto-char (car range))
-      (forward-line 2)  ; Skip to "### 要件定義"
-      (should (< (point) (cdr range))))
-    
-    ;; With include-children = nil
-    (let ((range (altodo--find-heading-range "プロジェクト A" nil)))
-      (should range)
-      ;; Range should stop at first child heading
-      (goto-char (car range))
-      (forward-line 2)  ; Skip to "### 要件定義"
-      (should (>= (point) (cdr range))))))
-
-(ert-deftest heading-test-find-heading-range-not-found ()
-  "Test altodo--find-heading-range when heading not found."
-  (with-temp-buffer
-    (insert "## プロジェクト A\n")
-    (insert "[ ] タスク A1\n")
-    
-    (goto-char (point-min))
-    (let ((range (altodo--find-heading-range "存在しない見出し")))
-      (should (null range)))))
-
 ;;; Tests for line in heading range
 
-(ert-deftest heading-test-line-in-heading-range-p ()
-  "Test altodo--line-in-heading-range-p function."
-  (with-temp-buffer
-    (insert "## プロジェクト A\n")
-    (insert "[ ] タスク A1\n")
-    (insert "[ ] タスク A2\n")
-    (insert "## プロジェクト B\n")
-    (insert "[ ] タスク B1\n")
-    
-    ;; Line in range
-    (goto-char (point-min))
-    (forward-line 1)  ; "[ ] タスク A1"
-    (should (altodo--line-in-heading-range-p "プロジェクト A"))
-    
-    ;; Line in range
-    (forward-line 1)  ; "[ ] タスク A2"
-    (should (altodo--line-in-heading-range-p "プロジェクト A"))
-    
-    ;; Line not in range
-    (forward-line 2)  ; "[ ] タスク B1"
-    (should (null (altodo--line-in-heading-range-p "プロジェクト A")))))
 
 ;;; Tests for heading range with filter options
 
@@ -234,78 +141,8 @@
 
 ;;; Tests for complex scenarios
 
-(ert-deftest heading-test-nested-headings-include-children-true ()
-  "Test nested headings with include-children = t."
-  (with-temp-buffer
-    (insert "## プロジェクト A\n")
-    (insert "[ ] タスク A1\n")
-    (insert "### 要件定義\n")
-    (insert "[x] タスク A1-1\n")
-    (insert "### 基本設計\n")
-    (insert "[x] タスク A1-2\n")
-    (insert "## プロジェクト B\n")
-    (insert "[ ] タスク B1\n")
-    
-    (goto-char (point-min))
-    ;; All lines under プロジェクト A should be in range
-    (forward-line 1)  ; [ ] タスク A1
-    (should (altodo--line-in-heading-range-p "プロジェクト A" t))
-    
-    (forward-line 1)  ; ### 要件定義
-    (should (altodo--line-in-heading-range-p "プロジェクト A" t))
-    
-    (forward-line 1)  ; [x] タスク A1-1
-    (should (altodo--line-in-heading-range-p "プロジェクト A" t))
-    
-    (forward-line 1)  ; ### 基本設計
-    (should (altodo--line-in-heading-range-p "プロジェクト A" t))
-    
-    (forward-line 1)  ; [x] タスク A1-2
-    (should (altodo--line-in-heading-range-p "プロジェクト A" t))
-    
-    ;; Line under プロジェクト B should NOT be in range
-    (forward-line 1)  ; ## プロジェクト B
-    (should (null (altodo--line-in-heading-range-p "プロジェクト A" t)))))
 
-(ert-deftest heading-test-nested-headings-include-children-false ()
-  "Test nested headings with include-children = nil."
-  (with-temp-buffer
-    (insert "## プロジェクト A\n")
-    (insert "[ ] タスク A1\n")
-    (insert "### 要件定義\n")
-    (insert "[x] タスク A1-1\n")
-    (insert "## プロジェクト B\n")
-    
-    (goto-char (point-min))
-    ;; Task under プロジェクト A should be in range
-    (forward-line 1)  ; [ ] タスク A1
-    (should (altodo--line-in-heading-range-p "プロジェクト A" nil))
-    
-    ;; Child heading should NOT be in range
-    (forward-line 1)  ; ### 要件定義
-    (should (null (altodo--line-in-heading-range-p "プロジェクト A" nil)))))
 
-(ert-deftest heading-test-regex-matching ()
-  "Test heading matching with regex patterns."
-  (with-temp-buffer
-    (insert "## プロジェクト A\n")
-    (insert "[ ] タスク A1\n")
-    (insert "## プロジェクト B\n")
-    (insert "[ ] タスク B1\n")
-    
-    (goto-char (point-min))
-    ;; Exact match
-    (forward-line 1)
-    (should (altodo--line-in-heading-range-p "プロジェクト A"))
-    
-    ;; Regex match
-    (should (altodo--line-in-heading-range-p "プロジェクト.*"))
-    
-    ;; Regex match with anchor (note: $ is added by find-heading-range)
-    (should (altodo--line-in-heading-range-p "プロジェクト A"))
-    
-    ;; No match
-    (should (null (altodo--line-in-heading-range-p "存在しない")))))
 
 (ert-deftest heading-test-dsl-compile-heading ()
   "Test DSL compilation for heading pattern."

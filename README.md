@@ -146,8 +146,8 @@ Emacs 上で altodo フォーマットの TODO を管理する Emacs Lisp パッ
 
 ### インストール
 
-- Emacs 29.1 以上（Emacs 29.3 と markdown-mode 2.6 で動作を確認している）
-- markdown-mode の導入（`Package-Requires` は 2.0 以上。2.6 で動作を確認している）
+- Emacs 29.1 以上（Emacs 29.3 で動作を確認している）
+- markdown-mode 2.6 以上の導入（`Package-Requires` も 2.6 以上。2.6 で動作を確認している）
     - 導入手順は、[markdown-mode の README](https://github.com/jrblevin/markdown-mode) の「Installation」に従う。そこでは MELPA Stable を推奨している
     - `M-x package-install RET markdown-mode RET`（パッケージのアーカイブに MELPA Stable を追加した後）
 
@@ -203,9 +203,9 @@ altodo-mode は markdown-mode を継承しているため、markdown-mode のキ
 #### フラグ操作
 
 - `C-c C-s`: スターフラグトグル
-- `C-c C-f 1`: 優先度 1 に設定
-- `C-c C-f 2`: 優先度 2 に設定
-- `C-c C-f 3`: 優先度 3 に設定
+- `C-c C-f 1`: 優先度 1 に設定（既に優先度 1 のときは優先度を外す）
+- `C-c C-f 2`: 優先度 2 に設定（既に優先度 2 のときは優先度を外す）
+- `C-c C-f 3`: 優先度 3 に設定（既に優先度 3 のときは優先度を外す）
 - `C-c C-i`: ID タグを挿入（`#id:value` 形式）
 
 
@@ -224,8 +224,11 @@ altodo-mode は markdown-mode を継承しているため、markdown-mode のキ
 #### タスクの追加
 
 - `RET`: 文脈に応じた改行
-- `C-c C-a`: タスクを追加
-- `M-RET`: サブタスクを追加
+    - タスク行・`///` 行: 行内の位置に関わらず、そのタスクの複数行コメント・子タスクの後ろに、同じインデントの新しいタスクを追加する（行の途中で分割しない）
+    - 空のタスク行（`[ ] ` だけ）: マーカーを消してリストを終える
+    - 複数行コメント行: 同じインデントで次の行に続ける
+- `C-c C-a`: タスクを追加（そのタスクの複数行コメント・子タスクの後ろに、同じインデントで追加する）
+- `M-RET`: サブタスクを追加（最後の子として、1 段深いインデントで追加する）
 - `C-c C-m`: 複数行コメントを開始
 
 
@@ -234,6 +237,7 @@ altodo-mode は markdown-mode を継承しているため、markdown-mode のキ
 - `TAB`: スマートインデント
 - `M-<right>`: インデント増加
 - `M-<left>`: インデント減少
+    - タスク行・`///` 行では、その行の複数行コメントも一緒に動く。子タスクは動かさない
 
 
 #### その他
@@ -313,6 +317,8 @@ done ファイルには、移動したサブツリーの根をインデント 0 
 
 #### 自動移動タイマー
 
+タイマーは、自動では開始しない。次のコマンドで開始する（Emacs を再起動すると停止する）。
+
 ```elisp
 ;; タイマーを開始/停止（toggle）
 M-x altodo-toggle-auto-move-timer
@@ -341,7 +347,8 @@ M-x altodo-stop-auto-move-timer
 #### done ファイルのカスタマイズ
 
 ```elisp
-;; done ファイルのサフィックスを変更（デフォルト: "_done"）
+;; done ファイル名に付ける文字列を変更（デフォルト: "_done"）
+;; 変数名は prefix だが、文字列は元のファイル名の後ろに付く（notes.altodo → notes_archive.altodo）
 (setq altodo-done-file-prefix "_archive")
 ```
 

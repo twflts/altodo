@@ -58,17 +58,6 @@
                    '(altodo-toggle-star-flag))
                  "[ ] !! a\n")))
 
-(ert-deftest flag-combination-test-predicates ()
-  (dolist (text '("[ ] + !! a\n" "[ ] !! + a\n"))
-    (altodo-test-with-buffer text
-      (should (altodo--line-has-star-p))
-      (should (altodo--line-has-priority-p))
-      (should (= (altodo--get-priority-level) 2))))
-  (altodo-test-with-buffer "[ ] ++ a\n"
-    (should-not (altodo--line-has-star-p))
-    (should-not (altodo--line-has-priority-p)))
-  (altodo-test-with-buffer "/// + !! note\n"
-    (should (= (altodo--get-priority-level) 2))))
 
 (ert-deftest flag-combination-test-dsl-patterns ()
   (altodo-test-with-buffer "[ ] + !! a\n"

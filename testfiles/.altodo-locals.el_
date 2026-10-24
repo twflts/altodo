@@ -85,7 +85,7 @@
                  (>= 1 (:foreground "orange"))
                  (= 0 (:foreground "green"))))
    (:title "Open (Title Color) %n" :type search-simple :pattern "open" :count-format t :nest 1
-    :face-rules ((>= 5 altodo-flag-priority-text-face)
+    :face-rules ((>= 5 altodo-flag-priority1-text-face)
                  (>= 1 altodo-task-done-text-face)
                  (= 0 altodo--task-progress-text-face)))
    (:title "Priority (Count Color) %n" :type search-simple :pattern "priority" :count-format t :nest 1

@@ -311,7 +311,7 @@ buffer-invisibility-spec により非表示
 
 **処理**:
 
-1. `altodo--collect-dynamic-values-*` でバッファから値を収集
+1. `altodo--collect-dynamic-values-with-exclude` でバッファから値を収集
    - `person`: `@person` タグの値を収集
    - `tag`: `#tag` の値を収集
    - `due`: 期日（`-> DATE`）を収集

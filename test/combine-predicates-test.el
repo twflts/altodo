@@ -108,27 +108,8 @@
 
 ;;; Test: altodo-sidebar--get-mode-line-string
 
-(ert-deftest test-get-mode-line-string-empty ()
-  "Test mode-line string with no filters selected."
-  (with-current-buffer (get-buffer-create "*altodo-filters*")
-    (setq-local altodo-sidebar--selected-filters nil)
-    (should-not (altodo-sidebar--get-mode-line-string))))
 
-(ert-deftest test-get-mode-line-string-and ()
-  "Test mode-line string with AND mode."
-  (with-current-buffer (get-buffer-create "*altodo-filters*")
-    (setq-local altodo-sidebar--selected-filters '((:title "Test1") (:title "Test2")))
-    (setq-local altodo-sidebar--combine-mode 'and)
-    (let ((str (altodo-sidebar--get-mode-line-string)))
-      (should (string-match "Multiple: 2 filters, AND" str)))))
 
-(ert-deftest test-get-mode-line-string-or ()
-  "Test mode-line string with OR mode."
-  (with-current-buffer (get-buffer-create "*altodo-filters*")
-    (setq-local altodo-sidebar--selected-filters '((:title "Test1") (:title "Test2")))
-    (setq-local altodo-sidebar--combine-mode 'or)
-    (let ((str (altodo-sidebar--get-mode-line-string)))
-      (should (string-match "Multiple: 2 filters, OR" str)))))
 
 ;;; Test: altodo-sidebar--get-face with multiple selection
 

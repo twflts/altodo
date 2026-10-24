@@ -35,13 +35,6 @@
   (should (equal (person-url-test--persons "[ ] https://a.com/x@y @bob")
                  '("bob"))))
 
-(ert-deftest person-url-single-person-value ()
-  "`altodo--line-extract-person-value' also ignores the @ in a URL."
-  (altodo-test-with-buffer (concat person-url-test--url " @alice\n")
-    (should (equal (altodo--line-extract-person-value) "alice")))
-  (altodo-test-with-buffer (concat person-url-test--url "\n")
-    (should-not (altodo--line-extract-person-value))))
-
 (ert-deftest person-url-dynamic-values ()
   "The values collected for the dynamic filter do not have the URL's @."
   (let ((source (generate-new-buffer " person-url-source")))
@@ -50,7 +43,7 @@
           (with-current-buffer source
             (insert person-url-test--url "\n[ ] review @alice\n")
             (altodo-mode))
-          (should (equal (altodo--collect-dynamic-values "person" source)
+          (should (equal (altodo--collect-dynamic-values-with-exclude "person" source)
                          '(("alice" . 1)))))
       (kill-buffer source))))
 

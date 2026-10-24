@@ -11,7 +11,7 @@
     (insert "[x] Task A @alice\n")
     (insert "[x] Task B @alice\n")
     (insert "[x] Task C @bob\n")
-    (let ((result (altodo--collect-dynamic-values "person" (current-buffer))))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "person" (current-buffer))))
       (should (equal (length result) 2))
       (should (assoc "alice" result))
       (should (assoc "bob" result))
@@ -24,7 +24,7 @@
     (insert "[x] Task A #tag:important\n")
     (insert "[x] Task B #tag:urgent\n")
     (insert "[x] Task C #tag:important\n")
-    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) "name-only")))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "tag" (current-buffer) "name-only")))
       (should (equal (length result) 1))
       (should (assoc "tag" result))
       (should (= (cdr (assoc "tag" result)) 3)))))
@@ -35,7 +35,7 @@
     (insert "[x] Task A #priority:high\n")
     (insert "[x] Task B #priority:high\n")
     (insert "[x] Task C #priority:low\n")
-    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) "with-value")))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "tag" (current-buffer) "with-value")))
       (should (equal (length result) 2))
       (should (assoc "priority:high" result))
       (should (assoc "priority:low" result))
@@ -48,7 +48,7 @@
     (insert "[x] Task A -> 2026-03-05\n")
     (insert "[x] Task B -> 2026-03-05\n")
     (insert "[x] Task C -> 2026-03-10\n")
-    (let ((result (altodo--collect-dynamic-values "due" (current-buffer))))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "due" (current-buffer))))
       (should (equal (length result) 2))
       (should (assoc "2026-03-05" result))
       (should (assoc "2026-03-10" result))
@@ -61,7 +61,7 @@
     (insert "[x] Task A 2026-03-05 ->\n")
     (insert "[x] Task B 2026-03-10 ->\n")
     (insert "[x] Task C 2026-03-10 ->\n")
-    (let ((result (altodo--collect-dynamic-values "start" (current-buffer))))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "start" (current-buffer))))
       (should (equal (length result) 2))
       (should (assoc "2026-03-05" result))
       (should (assoc "2026-03-10" result))
@@ -166,7 +166,7 @@
     (insert "[x] Task B #priority:high\n")
     (insert "[x] Task C #priority:low\n")
     (insert "[x] Task D #status:open\n")
-    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) "with-value")))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "tag" (current-buffer) "with-value")))
       (should (equal (length result) 3))
       (should (assoc "priority:high" result))
       (should (assoc "priority:low" result))
@@ -179,7 +179,7 @@
     (insert "[x] Task B #priority:high\n")
     (insert "[x] Task C #priority:low\n")
     (insert "[x] Task D #status:open\n")
-    (let ((result (altodo--collect-dynamic-values "tag" (current-buffer) "name-only")))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "tag" (current-buffer) "name-only")))
       (should (equal (length result) 2))
       (should (assoc "priority" result))
       (should (assoc "status" result))
@@ -192,7 +192,7 @@
     (insert "[x] Task A @alice\n")
     (insert "[x] Task B @alice\n")
     (insert "[x] Task C @charlie\n")
-    (let ((result (altodo--collect-dynamic-values "person" (current-buffer))))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "person" (current-buffer))))
       ;; Only first person is extracted per line
       (should (equal (length result) 2))
       (should (assoc "alice" result))
@@ -257,7 +257,7 @@
   (with-temp-buffer
     (insert "[ ] A -> 2026-02-30\n")
     (altodo-mode)
-    (should-not (altodo--collect-dynamic-values "due" (current-buffer)))))
+    (should-not (altodo--collect-dynamic-values-with-exclude "due" (current-buffer)))))
 
 (ert-deftest dynamic-collect-test-dynamic-type-as-symbol ()
   "A symbol such as `person' is the same as the string \"person\"."
@@ -306,7 +306,7 @@
 (ert-deftest dynamic-collect-test-complex-empty-buffer ()
   "Test collecting from empty buffer."
   (with-temp-buffer
-    (let ((result (altodo--collect-dynamic-values "person" (current-buffer))))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "person" (current-buffer))))
       (should (equal (length result) 0)))))
 
 (ert-deftest dynamic-collect-test-complex-no-matching-values ()
@@ -314,7 +314,7 @@
   (with-temp-buffer
     (insert "[x] Task A\n")
     (insert "[x] Task B\n")
-    (let ((result (altodo--collect-dynamic-values "person" (current-buffer))))
+    (let ((result (altodo--collect-dynamic-values-with-exclude "person" (current-buffer))))
       (should (equal (length result) 0)))))
 
 (ert-deftest dynamic-collect-test-complex-nested-filter ()

@@ -78,13 +78,6 @@
     (should (= (altodo--normalize-indent 0) 0)))
   (cleanup-test-buffer))
 
-(ert-deftest test-get-priority-level-no-priority ()
-  (setup-test-buffer)
-  (with-current-buffer test-buffer
-    (altodo-mode)
-    (goto-char (point-min))
-    (should (null (altodo--get-priority-level))))
-  (cleanup-test-buffer))
 
 (ert-deftest test-has-star-flag-p-with-star ()
   (setup-test-buffer)
@@ -93,13 +86,6 @@
     (should (altodo--has-star-flag-p "+ Task")))
   (cleanup-test-buffer))
 
-(ert-deftest test-remove-priority-from-string ()
-  (setup-test-buffer)
-  (with-current-buffer test-buffer
-    (altodo-mode)
-    (let ((result (altodo--remove-priority-from-string "! Task")))
-      (should (string= result "Task"))))
-  (cleanup-test-buffer))
 
 (provide 'command-test)
 ;;; command-test.el ends here

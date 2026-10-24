@@ -62,7 +62,7 @@ altodo.el functions as a custom extension of __Emacs Markdown Mode__ https://git
 #### Comment and Tag Related
 
 - `altodo-comment-marker`: `"///"` - Comment marker
-- `altodo-special-tag-names`: `'("id" "group-start" "group-due" "done")` - Special tag name list
+- `altodo-special-tag-names`: `'("id" "group-start" "group-due" "done" "seq-tasks")` - Special tag name list
   - Note: `"dep"` is processed separately by `altodo--dep-tag-matcher`
 
 
@@ -218,12 +218,18 @@ The keys fall into four groups by the kind of line where they are active. On any
 | `C-c C-i`             | `altodo-insert-id`                  | Insert `#id`                        |
 | `C-c C-j`             | `altodo-goto-dependency`            | Jump to the dependency task         |
 
+`altodo-add-task` adds a task with the same indentation after the subtree of the current line (its multi-line comment, `///` lines and descendant tasks; `altodo--subtree-end`). `altodo-add-subtask` adds it as the last child, one level deeper. `RET` calls `altodo-add-task` on a task line or `///` line. On an empty task line it removes the marker; on a multi-line comment line it continues on the next line with the same indentation.
+
+`altodo-set-priority-1`, `-2` and `-3` remove the priority on a line that already has that priority (the star stays).
+
 
 #### Task Lines, Single-line Comment Lines and Multi-line Comment Lines
 
 | Key                     | Function                                           | Description              |
 | ----------------------- | -------------------------------------------------- | ------------------------ |
 | `M-<right>`, `M-<left>` | `altodo-indent-increase`, `altodo-indent-decrease` | Increase/decrease indent |
+
+On a task line or `///` line, `altodo-indent-increase` and `altodo-indent-decrease` move the multi-line comment of the line by the same width. Child tasks do not move.
 
 `altodo-toggle-comment` (toggle between task and comment) has no key binding. Run it with `M-x`.
 
@@ -421,8 +427,8 @@ Detection is performed line by line, using regular expressions and the state of 
 | ------------------- | --------------------------------- |
 | `#id:value`         | Unique identifier                 |
 | `#dep:value`        | Dependency (specify reference ID) |
-| `#group-start:date` | Group task start date             |
-| `#group-due:date`   | Group task due date               |
+| `#group-start:date` | Group start date (color only)     |
+| `#group-due:date`   | Group due date (color only)       |
 | `#done:timestamp`   | Task completion/cancellation time |
 | `#seq-tasks`        | Subtasks run from top to bottom   |
 
@@ -459,10 +465,21 @@ A date that does not exist, such as `2026-02-30`, is not treated as a date. `alt
 
 #### Date-based Coloring
 
-- Start date exceeded: Gray
-- Due date exceeded: Red bold
-- Due date today: Red
-- Due date urgent: Bold
+The difference from today decides the face of the date and of the task text. `altodo--determine-due-date-face` and `altodo--determine-start-date-face` decide the date face; `altodo--due-overdue-severe-text-matcher` and `altodo--start-not-yet-text-matcher` decide the text face. Days are calendar days in the local time zone.
+
+| Condition                    | Date face                       | Task text face                          |
+| ---------------------------- | ------------------------------- | --------------------------------------- |
+| Due 3 or more days ago       | `altodo-date-due-overdue-face`  | `altodo-due-overdue-severe-text-face`   |
+| Due 1 or 2 days ago          | `altodo-date-due-overdue-face`  | unchanged                               |
+| Due today                    | `altodo-date-due-today-face`    | unchanged                               |
+| Due in 1 to 3 days           | `altodo-date-due-soon-face`     | unchanged                               |
+| Due in 4 or more days        | `altodo-date-face`              | unchanged                               |
+| Start date today or earlier  | `altodo-date-start-active-face` | unchanged                               |
+| Start date tomorrow or later | `altodo-date-face`              | `altodo-start-not-yet-text-face` (gray) |
+| A date that does not exist   | `altodo-date-face`              | unchanged                               |
+| Done or cancelled task       | same face as the text (strike)  | done or cancelled face                  |
+
+When both the due date and the start date match a condition, each date is colored by its own condition. The text faces are stacked.
 
 
 ### 5.6 Dependency Management
@@ -575,12 +592,11 @@ Layer 2: Base (entire text)
   ├── Waiting task text
   └── In-progress task text
   ↓
-Layer 3: (Empty - tags moved to Layer 4)
-  ↓
-Layer 4: Emphasis (date-based text, flag text, tags, dates)
+Layer 3: Emphasis (date-based text, flag text, tags, dates)
   ├── Date-based text (change entire text color)
   ├── Priority flags (3 levels)
   ├── Star flag
+  ├── Flags of `///` lines
   ├── General tags (with/without value)
   ├── @person tags
   ├── Special tags
@@ -589,7 +605,7 @@ Layer 4: Emphasis (date-based text, flag text, tags, dates)
   ├── Start date
   └── Due date
   ↓
-Layer 5: Priority (entire comments, strikethrough)
+Layer 4: Priority (entire comments, strikethrough)
   ├── Multi-line comments
   ├── Multi-line comment lists
   ├── Single-line comments
@@ -603,13 +619,12 @@ Layer 5: Priority (entire comments, strikethrough)
 | ----- | ----------------------- | ------------- | ----------------------------------------------------- |
 | 1     | Bracket/state character | `t`           | Finalize bracket and state character faces            |
 | 2     | Entire text             | `append`      | Prioritize markdown-mode faces, add altodo-mode faces |
-| 3     | (Empty)                 | -             | Tags moved to Layer 4                                 |
-| 4     | Date-based text         | `prepend`     | Stack multiple faces                                  |
-| 4     | Flag (symbol part)      | `t`           | Finalize flag symbol face                             |
-| 4     | Flag (text part)        | `prepend`     | Stack multiple faces                                  |
-| 4     | Tags/dates              | `t`           | Finalize tag and date faces                           |
-| 5     | Comments                | `prepend`     | Stack multiple faces                                  |
-| 5     | Strikethrough           | `t`           | Finalize strikethrough face                           |
+| 3     | Date-based text         | `prepend`     | Stack multiple faces                                  |
+| 3     | Flag (symbol part)      | `t`           | Finalize flag symbol face                             |
+| 3     | Flag (text part)        | `prepend`     | Stack multiple faces                                  |
+| 3     | Tags/dates              | `t`           | Finalize tag and date faces                           |
+| 4     | Comments                | `prepend`     | Stack multiple faces                                  |
+| 4     | Strikethrough           | `t`           | Finalize strikethrough face                           |
 
 
 ### 6.4 seq-tasks Implementation

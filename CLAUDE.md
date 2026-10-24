@@ -14,7 +14,7 @@ Emacs の major mode（`altodo.el`）と、altodo フォーマット（Markdown 
 - `.claude/memo/`: メモ（旧い計画のアーカイブは `.claude/memo/etc/project-altodo-archive-20261018.altodo`）。`.claude/backup/`: バックアップ
 - `scripts/`: 開発用スクリプト（`setup-emacs.sh`: Emacs 29.3、markdown-mode、package-lint の導入。Ubuntu 24.04）
 - `LICENSE`: GPL v3（`altodo.el`）。仕様の MIT は `doc/LICENSE-MIT`
-- 動作環境: Emacs 29.1 以上、markdown-mode（2.6 で確認）
+- 動作環境: Emacs 29.1 以上、markdown-mode 2.6 以上
 
 
 ## 仕様書
