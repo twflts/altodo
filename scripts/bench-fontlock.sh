@@ -4,7 +4,8 @@
 # 環境変数: EMACS（既定 emacs）
 # 終了コード: 0: 測定完了、1: --max を超えたケースがある、2: 引数の誤り
 # 時間が行数に比例して増えることを確認する。edit-ms は、1 行を編集した後の再色付けの
-# 平均時間（ミリ秒）である。測定の内容は
+# 平均時間（ミリ秒）である。sample は、sections（48 タスクごとに空行がある）と、
+# contiguous（空行が少なく、/// 行が連続する。markdown-mode のテキストブロックが長くなる）。測定の内容は
 # scripts/bench-fontlock.el を参照する。CI には含めない。
 
 readonly EMACS_CMD="${EMACS:-emacs}"

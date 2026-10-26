@@ -154,6 +154,17 @@ Generated from the special tag names.")
   :type 'integer
   :group 'altodo)
 
+(defcustom altodo-inline-code-cache t
+  "When non-nil, keep the inline code spans while fontifying.
+The italic and bold matchers of `markdown-mode' search the code spans again
+from the start of the text block for each candidate.  A file of tasks has few
+blank lines, so a block has hundreds of lines and the fontification of a
+file gets very slow.  With non-nil, the spans of a block are searched once,
+and the faces are the same as with nil.  Set it to nil if the faces differ
+with your version of `markdown-mode'."
+  :type 'boolean
+  :group 'altodo)
+
 (defcustom altodo-enable-markdown-in-multiline-comments t
   "When non-nil, enable Markdown formatting in multiline comments.
 This includes inline elements (italic, bold, code), lists, and code blocks.
@@ -643,18 +654,54 @@ Returns a string in the format specified by `altodo-insert-id-format':
     (message "Not on a task or comment line")))
 
 ;; Dependency checking functions
+
+(defvar-local altodo--id-index nil
+  "The table of the #id tags of the buffer, as (KEY . TABLE), or nil.
+KEY says which state of the buffer TABLE is made for, see
+`altodo--id-index'.")
+
+(defun altodo--id-key (id)
+  "Return the key of ID in the table of `altodo--id-index'.
+The search for a tag follows `case-fold-search', so does the key."
+  (if case-fold-search (downcase id) id))
+
+(defun altodo--id-index ()
+  "Return the table from the key of an #id value to the end of its first tag.
+Searching the whole buffer for each #dep value made the fontification of a
+file with many dependencies slow.  The table is made again only when the
+text of the buffer changes: a change of text properties, which the
+fontification makes, does not change it."
+  (let ((key (list (buffer-chars-modified-tick) (point-min) (point-max)
+                   case-fold-search)))
+    (unless (equal (car altodo--id-index) key)
+      (let ((table (make-hash-table :test 'equal)))
+        (save-excursion
+          (goto-char (point-min))
+          ;; A tag ends with a space, a tab or the end of the line.  A tag
+          ;; inside another one (`#id:a#id:b ') is found by the next search.
+          (while (re-search-forward
+                  "#id:\\([^[:space:]]+\\)\\(?:[ \t]\\|$\\)" nil t)
+            (let ((id-key (altodo--id-key (match-string-no-properties 1))))
+              (unless (gethash id-key table)
+                (puthash id-key (match-end 0) table)))
+            (goto-char (1+ (match-beginning 0)))))
+        (setq altodo--id-index (cons key table))))
+    (cdr altodo--id-index)))
+
+(defun altodo--id-position (id)
+  "Return the end of the first tag #id:ID in the buffer, or nil."
+  (gethash (altodo--id-key id) (altodo--id-index)))
+
 (defun altodo--find-task-by-id (id)
   "Find task with #id:ID and return its state.
 Returns nil if not found, or state character (x, @, w, ~, or space) if found."
-  (save-excursion
-    (goto-char (point-min))
-    (when (re-search-forward (format "#id:%s\\(?:[ \t]\\|$\\)"
-                                     (regexp-quote id))
-                             nil t)
-      (beginning-of-line)
-      (when (looking-at altodo-task-regex)
-        (let ((state (altodo--normalize-state (match-string 2))))
-          state)))))
+  (let ((pos (altodo--id-position id)))
+    (when pos
+      (save-excursion
+        (goto-char pos)
+        (beginning-of-line)
+        (when (looking-at altodo-task-regex)
+          (altodo--normalize-state (match-string 2)))))))
 
 (defun altodo--task-is-completed (state)
   "Check if task STATE is completed (x or ~).
@@ -691,15 +738,11 @@ Call it inside (catch \\='circular ...): when a circle is found it throws
   (let ((id-clean (substring-no-properties id)))
     (when (cl-some (lambda (v) (string= id-clean (substring-no-properties v))) visited)
       (throw 'circular 'circular))
-    (let ((new-visited (cons id-clean visited)))
-      (save-excursion
-        (goto-char (point-min))
-        (when (re-search-forward (format "#id:%s\\(?:[ \t]\\|$\\)"
-                                         (regexp-quote id-clean))
-                                 nil t)
-          (let ((deps (altodo--get-task-deps (point))))
-            (dolist (dep deps)
-              (altodo--check-circular-dependency dep new-visited))))))))
+    (let ((new-visited (cons id-clean visited))
+          (pos (altodo--id-position id-clean)))
+      (when pos
+        (dolist (dep (altodo--get-task-deps pos))
+          (altodo--check-circular-dependency dep new-visited))))))
 
 (defun altodo--check-all-deps-completed (deps)
   "Check if all dependencies in DEPS list are completed.
@@ -976,94 +1019,75 @@ Does NOT match bare \\='->\\=' without dates."
 
 
 (defun altodo--tag-matcher (limit)
-  "Match tags on task/comment/multiline-comment lines only up to LIMIT."
-  (catch 'found
-    (let ((max-iterations 1000)
-          (iterations 0))
-      (while (and (< (point) limit) (not (eobp)) (< iterations max-iterations))
-        (setq iterations (1+ iterations))
-        (if (re-search-forward "\\(?:^\\|[ \t]\\)\\(#[a-zA-Z0-9_-]+\\)\\b" limit t)
-            (let* ((tag-start (match-beginning 1))
-                   (on-valid-line
-                    (save-match-data
+  "Match tags on task/comment/multiline-comment lines only up to LIMIT.
+A candidate on a line that cannot have tags is skipped.  The number of the
+skipped candidates is not limited: each search moves point forward."
+  (let ((found nil))
+    (while (and (not found)
+                (< (point) limit)
+                (re-search-forward
+                 "\\(?:^\\|[ \t]\\)\\(#[a-zA-Z0-9_-]+\\)\\b" limit t))
+      (let ((tag-start (match-beginning 1)))
+        (setq found (save-match-data
                       (and (altodo--inline-line-p t)
-                           (not (altodo--in-inline-code-p tag-start))))))
-              (if on-valid-line
-                  (throw 'found t)
-                ;; Not on valid line, continue searching
-                nil))
-          ;; No more matches
-          (goto-char limit)
-          (throw 'found nil)))
-      (when (>= iterations max-iterations)
-        (goto-char limit)))
-    nil))
+                           (not (altodo--in-inline-code-p tag-start))
+                           t)))))
+    found))
 
 (defun altodo--tag-with-value-matcher (limit)
-  "Match tags with values on task/comment/multiline-comment lines only up to LIMIT."
-  (catch 'found
-    (let ((max-iterations 1000)
-          (iterations 0))
-      (while (and (< (point) limit) (not (eobp)) (< iterations max-iterations))
-        (setq iterations (1+ iterations))
-        (if (re-search-forward "\\(?:^\\|[ \t]\\)\\(#[a-zA-Z0-9_-]+\\):\\([^[:space:]]+\\)" limit t)
-            (let* ((tag-start (match-beginning 1))
-                   (on-valid-line
-                    (save-match-data
+  "Match tags with values on task/comment/multiline-comment lines up to LIMIT.
+A candidate on a line that cannot have tags is skipped, without a limit on
+their number."
+  (let ((found nil))
+    (while (and (not found)
+                (< (point) limit)
+                (re-search-forward
+                 "\\(?:^\\|[ \t]\\)\\(#[a-zA-Z0-9_-]+\\):\\([^[:space:]]+\\)" limit t))
+      (let ((tag-start (match-beginning 1)))
+        (setq found (save-match-data
                       (and (altodo--inline-line-p t)
-                           (not (altodo--in-inline-code-p tag-start))))))
-              (if on-valid-line
-                  (throw 'found t)
-                ;; Not on valid line, continue searching
-                nil))
-          ;; No more matches
-          (goto-char limit)
-          (throw 'found nil)))
-      (when (>= iterations max-iterations)
-        (goto-char limit)))
-    nil))
+                           (not (altodo--in-inline-code-p tag-start))
+                           t)))))
+    found))
 
 (defun altodo--dep-tag-matcher (limit)
   "Match #dep: tags and determine their state (blocked/ready/error) up to LIMIT.
 Applies face to the tag name (#dep:) and value separately."
-  (catch 'found
-    (let ((max-iterations 1000)
-          (iterations 0))
-      (while (and (< (point) limit) (not (eobp)) (< iterations max-iterations))
-        (setq iterations (1+ iterations))
-        (when (re-search-forward "\\(?:^\\|[ \t]\\)#dep:\\([^[:space:]]+\\)" limit t)
-          (let* ((value-start (match-beginning 1))
-                 (value-end (match-end 1))
-                 (line-start (save-excursion (beginning-of-line) (point)))
-                 (deps (altodo--get-task-deps line-start))
-                 (status (altodo--check-all-deps-completed deps)))
-            ;; Set match data for the value part only
-            (set-match-data (list value-start value-end value-start value-end))
-            (put-text-property value-start value-end 'altodo-dep-status status)
-            (throw 'found t))))
-      (when (>= iterations max-iterations)
-        (goto-char limit)))
-    nil))
+  ;; One search is enough: font-lock calls the matcher again after a match.
+  ;; A loop that repeated a failed search made the fontification of a region
+  ;; without #dep: 1000 times slower.
+  (when (and (< (point) limit)
+             (re-search-forward "\\(?:^\\|[ \t]\\)#dep:\\([^[:space:]]+\\)" limit t))
+    (let* ((value-start (match-beginning 1))
+           (value-end (match-end 1))
+           (line-start (save-excursion (beginning-of-line) (point)))
+           (deps (altodo--get-task-deps line-start))
+           (status (altodo--check-all-deps-completed deps)))
+      ;; Set match data for the value part only
+      (set-match-data (list value-start value-end value-start value-end))
+      (put-text-property value-start value-end 'altodo-dep-status status)
+      t)))
 
 (defun altodo--dep-blocked-text-matcher (limit)
   "Match task text with blocked dependencies up to LIMIT."
   (catch 'found
-    (let ((max-iterations 1000)
-          (iterations 0))
-      (while (and (< (point) limit) (not (eobp)) (< iterations max-iterations))
-        (setq iterations (1+ iterations))
-        (when (re-search-forward "^[ ]*\\[.\\][ ]*\\(.*\\)$" limit t)
-          (let* ((text-start (match-beginning 1))
-                 (text-end (match-end 1))
-                 (line-start (save-excursion (beginning-of-line) (point)))
-                 (deps (altodo--get-task-deps line-start)))
-            (if (and deps (eq (altodo--check-all-deps-completed deps) 'blocked))
-                (progn
-                  (set-match-data (list text-start text-end text-start text-end))
-                  (throw 'found t))
-              (goto-char (1+ text-end))))))
-      (when (>= iterations max-iterations)
-        (goto-char limit)))
+    (let ((start (point)))
+      ;; Search the #dep tags, not every task line: most lines have none.
+      (while (re-search-forward "\\(?:^\\|[ \t]\\)#dep:" limit t)
+        (let ((line-start (line-beginning-position)))
+          (goto-char line-start)
+          (when (and (>= line-start start)
+                     (looking-at "^[ ]*\\[.\\][ ]*\\(.*\\)$")
+                     (<= (match-end 0) limit))
+            (let ((text-start (match-beginning 1))
+                  (text-end (match-end 1))
+                  (deps (altodo--get-task-deps line-start)))
+              (when (eq (altodo--check-all-deps-completed deps) 'blocked)
+                (set-match-data (list text-start text-end text-start text-end))
+                (goto-char text-end)
+                (throw 'found t))))
+          ;; This line is judged: go to the next one.
+          (forward-line 1))))
     nil))
 
 (defun altodo--special-tag-matcher (limit)
@@ -1094,28 +1118,21 @@ Returns t if:
 (defun altodo--person-tag-matcher (limit)
   "Match @person tags up to LIMIT.
 Only matches @ when preceded by whitespace or at beginning of line.
-Skips @ in URLs (where markdown-url-face or markdown-plain-url-face is applied)."
-  (catch 'found
-    (let ((max-iterations 1000)
-          (iterations 0)
-          (regex (altodo--person-tag-regex)))
-      (while (and (< (point) limit) (< iterations max-iterations))
-        (setq iterations (1+ iterations))
-        (if (re-search-forward regex limit t)
-            (let ((match-start (match-beginning 0))
-                  (match-end (match-end 0)))
-              (if (and (altodo--is-valid-person-tag-position match-start)
-                       (save-match-data (altodo--inline-line-p))
-                       (not (altodo--in-inline-code-p match-start)))
-                  (progn
-                    (set-match-data (list match-start match-end match-start match-end))
-                    (throw 'found t))))
-          (goto-char limit)
-          (throw 'found nil)))
-      (when (>= iterations max-iterations)
-        (goto-char limit)
-        nil))))
-
+Skips @ in URLs (where markdown-url-face or markdown-plain-url-face is applied).
+The number of the skipped candidates is not limited."
+  (let ((regex (altodo--person-tag-regex))
+        (found nil))
+    (while (and (not found)
+                (< (point) limit)
+                (re-search-forward regex limit t))
+      (let ((match-start (match-beginning 0))
+            (match-end (match-end 0)))
+        (when (and (altodo--is-valid-person-tag-position match-start)
+                   (save-match-data (altodo--inline-line-p))
+                   (not (altodo--in-inline-code-p match-start)))
+          (set-match-data (list match-start match-end match-start match-end))
+          (setq found t))))
+    found))
 
 (defun altodo--due-overdue-severe-text-matcher (limit)
   "Match task lines with severely overdue due dates (3+ days) up to LIMIT."
@@ -1162,6 +1179,141 @@ Skips @ in URLs (where markdown-url-face or markdown-plain-url-face is applied).
 ;;; ============================================================================
 ;;; End of Date-based face functions
 ;;; ============================================================================
+
+;;; Cache of the inline code spans
+
+;; `markdown-inline-code-at-pos' searches the code spans from the start of the
+;; text block (the lines up to a blank line) to the candidate, for each
+;; candidate of the italic and bold matchers.  A file of tasks has few blank
+;; lines, so the time of the fontification grows with the square of the length
+;; of a block (T20261026-3).  While the text does not change, the spans of a
+;; block are searched once, and the search goes on from where it stopped.
+
+(cl-defstruct (altodo--code-scan (:constructor altodo--make-code-scan)
+                                 (:copier nil))
+  "Search of the inline code spans of a text block.
+TICK is `buffer-chars-modified-tick' when the search began.  START and END
+are the bounds of the block.  SPANS are the spans found so far, the last one
+first, each as (BEGIN END . MATCH-DATA).  RESUME is where `markdown-match-code'
+goes on, and MATCH-DATA the match data it left.  DONE is non-nil after the
+last span."
+  tick start end spans resume match-data done)
+
+(defvar-local altodo--inline-code-scan nil
+  "The `altodo--code-scan' of the last text block searched, or nil.")
+
+(defvar altodo--inline-code-original nil
+  "The `markdown-inline-code-at-pos' that the cache replaces, or nil.
+It is non-nil while `altodo--call-with-inline-code-cache' is running.")
+
+(defun altodo--inline-code-block-usable-p (start end)
+  "Return non-nil if the code spans of the block START to END can be kept.
+The search depends on the comments and the fenced code blocks, which are text
+properties.  So a block with a comment or a fence is left to `markdown-mode',
+and so is a block that is not propertized yet: the properties are being
+made."
+  (and (boundp 'syntax-propertize--done)
+       (>= syntax-propertize--done end)
+       (save-excursion
+         (goto-char start)
+         (not (re-search-forward "<!--\\|```\\|~~~" end t)))))
+
+(defun altodo--inline-code-scan-for (pos)
+  "Return the `altodo--code-scan' of the text block of POS, or nil.
+Return nil if the block cannot be kept, see
+`altodo--inline-code-block-usable-p'."
+  (let ((tick (buffer-chars-modified-tick))
+        (scan altodo--inline-code-scan))
+    (unless (and scan
+                 (eql (altodo--code-scan-tick scan) tick)
+                 (< (altodo--code-scan-start scan) pos)
+                 (< pos (altodo--code-scan-end scan)))
+      ;; The same movements as `markdown-inline-code-at-pos'.
+      (setq scan
+            (save-excursion
+              (goto-char pos)
+              (let* ((end (progn (markdown-end-of-text-block) (point)))
+                     (start (progn (markdown-beginning-of-text-block) (point))))
+                (cond
+                 ((and scan
+                       (eql (altodo--code-scan-tick scan) tick)
+                       (eql (altodo--code-scan-start scan) start)
+                       (eql (altodo--code-scan-end scan) end))
+                  scan)
+                 ((altodo--inline-code-block-usable-p start end)
+                  (altodo--make-code-scan :tick tick :start start :end end
+                                          :resume start))))))
+      (setq altodo--inline-code-scan scan))
+    scan))
+
+(defun altodo--inline-code-span-begin (match-data)
+  "Return where the code span of MATCH-DATA begins.
+That is the start of the backquotes, or of the code itself if the match
+begins with something else, as `markdown-inline-code-at-pos' decides."
+  (if (eq (char-after (nth 0 match-data)) ?`)
+      (nth 0 match-data)
+    (nth 2 match-data)))
+
+(defun altodo--inline-code-span-at (scan pos)
+  "Return the span of SCAN that decides the code at POS, or nil.
+It is the first span that ends at POS or after it, as (BEGIN END .
+MATCH-DATA).  If there is none, but there were spans, it is the last match of
+`markdown-match-code' that was rejected, as in `markdown-mode'.  The search
+of SCAN goes on as far as it needs."
+  (let ((spans (altodo--code-scan-spans scan))
+        (found nil))
+    ;; The last span is first: go back to the oldest one that ends at POS or
+    ;; after it.
+    (while (and spans (>= (cadr (car spans)) pos))
+      (setq found (car spans)
+            spans (cdr spans)))
+    (unless (or found (altodo--code-scan-done scan))
+      (save-excursion
+        (save-match-data
+          (goto-char (altodo--code-scan-resume scan))
+          (while (and (not found) (not (altodo--code-scan-done scan)))
+            (set-match-data (altodo--code-scan-match-data scan))
+            (if (markdown-match-code (altodo--code-scan-end scan))
+                (let ((span (cons (altodo--inline-code-span-begin (match-data t))
+                                  (cons (match-end 0) (match-data t)))))
+                  (push span (altodo--code-scan-spans scan))
+                  (setf (altodo--code-scan-resume scan) (point))
+                  (when (>= (cadr span) pos)
+                    (setq found span)))
+              (setf (altodo--code-scan-done scan) t))
+            (setf (altodo--code-scan-match-data scan) (match-data t))))))
+    (or found
+        ;; No span ends after POS: `markdown-mode' tests the match data that
+        ;; the last search left, even if it was rejected.
+        (let ((match-data (altodo--code-scan-match-data scan)))
+          (when (and (altodo--code-scan-spans scan) match-data)
+            (cons (altodo--inline-code-span-begin match-data)
+                  (cons (nth 1 match-data) match-data)))))))
+
+(defun altodo--inline-code-at-pos (pos &rest args)
+  "Return non-nil if there is an inline code span at POS.
+This replaces `markdown-inline-code-at-pos' (called with POS and ARGS when
+the block cannot be kept) while altodo fontifies, and gives the same result
+and match data, without searching the block again."
+  (let ((scan (altodo--inline-code-scan-for pos)))
+    (if (not scan)
+        (apply altodo--inline-code-original pos args)
+      (let ((span (altodo--inline-code-span-at scan pos)))
+        (when (and span (<= (car span) pos) (> (cadr span) pos))
+          (set-match-data (cddr span))
+          t)))))
+
+(defun altodo--call-with-inline-code-cache (function)
+  "Call FUNCTION with the cache of the inline code spans, if it is enabled.
+The cache replaces `markdown-inline-code-at-pos' only during the call, so
+loading this file does not change `markdown-mode' for other buffers."
+  (if (or (not altodo-inline-code-cache) altodo--inline-code-original)
+      (funcall function)
+    (let ((altodo--inline-code-original
+           (symbol-function 'markdown-inline-code-at-pos)))
+      (cl-letf (((symbol-function 'markdown-inline-code-at-pos)
+                 #'altodo--inline-code-at-pos))
+        (funcall function)))))
 
 (defun altodo--restore-code-block-faces (beg end)
   "Restore markdown faces in fenced code blocks between BEG and END.
@@ -1424,8 +1576,15 @@ tags, and dates.
   (let ((orig-fn font-lock-fontify-region-function))
     (setq-local font-lock-fontify-region-function
                 (lambda (beg end &optional loudly)
-                  (funcall orig-fn beg end loudly)
-                  (altodo--restore-code-block-faces beg end))))
+                  (let* ((result (altodo--call-with-inline-code-cache
+                                  (lambda () (funcall orig-fn beg end loudly))))
+                         ;; The region that was fontified, which may be more
+                         ;; than BEG to END.  `jit-lock' needs it too.
+                         (bounds (if (eq (car-safe result) 'jit-lock-bounds)
+                                     (cdr result)
+                                   (cons beg end))))
+                    (altodo--restore-code-block-faces (car bounds) (cdr bounds))
+                    result))))
 
   ;; Restart font-lock-mode to ensure keywords are applied immediately
   ;; This is the standard pattern for derived modes that add font-lock keywords
@@ -1645,8 +1804,34 @@ Supports both markdown headers and altodo tasks/comments/multiline-comments."
 Indented code blocks of Markdown are not counted: altodo uses indentation
 for nesting and multi-line comments, so an indented line is never a code
 block, even right after a blank line."
-  (save-match-data
-    (and (markdown-get-enclosing-fenced-block-construct) t)))
+  (and (altodo--fence-marker-in-buffer-p)
+       (save-match-data
+         (and (markdown-get-enclosing-fenced-block-construct) t))))
+
+(defvar-local altodo--fence-marker-cache nil
+  "Whether the buffer may have a fenced block, as (KEY . BOOLEAN), or nil.
+KEY is as for `altodo--id-index'.")
+
+(defun altodo--fence-marker-in-buffer-p ()
+  "Return non-nil if the buffer may have a fenced block of `markdown-mode'.
+Such a block is fenced with ``` or ~~~, or is YAML metadata between lines of
+--- (or ..., with `markdown-use-pandoc-style-yaml-metadata').  Without
+that text no line is in one, and the search of `markdown-mode', which makes
+the fontification slower, is not needed."
+  (let ((key (list (buffer-chars-modified-tick) (point-min) (point-max)
+                   markdown-use-pandoc-style-yaml-metadata)))
+    (unless (equal (car altodo--fence-marker-cache) key)
+      (setq altodo--fence-marker-cache
+            (cons key
+                  (save-excursion
+                    (goto-char (point-min))
+                    (and (re-search-forward
+                          (if markdown-use-pandoc-style-yaml-metadata
+                              "```\\|~~~\\|---\\|\\.\\.\\."
+                            "```\\|~~~\\|---")
+                          nil t)
+                         t)))))
+    (cdr altodo--fence-marker-cache)))
 
 (defun altodo--leading-spaces ()
   "Return the number of leading spaces of the current line."
@@ -5935,32 +6120,56 @@ A child of a task with the tag #seq-tasks is blocked while the sibling
 right above it is neither done nor cancelled.  The first child is never
 blocked.  A task without indentation has no parent, so it is not checked;
 searching for its parent would scan up to the beginning of the buffer."
-  (when (and (altodo--task-p)
-             (> (altodo--get-current-indent) 0))
-    (let ((indent (altodo--get-current-indent))
-          (previous-sibling-open nil)
-          (previous-sibling-seen nil)
-          (parent-is-seq-tasks nil)
-          (done nil))
+  (when (and (> (altodo--get-current-indent) 0)
+             (altodo--seq-tasks-above-p)
+             (altodo--task-p))
+    (let* ((indent (altodo--get-current-indent))
+           ;; Only the task lines with this indentation or less: the search
+           ;; skips the lines of the descendants of the siblings.
+           (task-regex (format "^\\( \\{0,%d\\}\\)\\[\\([%s ]?\\)\\]"
+                               indent (regexp-quote altodo-task-state-chars)))
+           (previous-sibling-open nil)
+           (previous-sibling-seen nil)
+           (parent-is-seq-tasks nil)
+           (done nil))
       (save-excursion
         (beginning-of-line)
-        (while (and (not done) (zerop (forward-line -1)))
-          (when (looking-at altodo-task-regex)
-            ;; `altodo--get-current-indent' changes the match data.
-            (let ((state (match-string 2))
-                  (line-indent (altodo--get-current-indent)))
-              (cond
-               ((and (= line-indent indent) (not previous-sibling-seen))
-                (setq previous-sibling-seen t
-                      previous-sibling-open
-                      (not (altodo--task-is-completed
-                            (altodo--normalize-state state)))))
-               ((< line-indent indent)
-                (setq done t
-                      parent-is-seq-tasks
-                      (and (= line-indent (- indent altodo-indent-size))
-                           (altodo--has-seq-tasks-tag)))))))))
+        (while (and (not done) (re-search-backward task-regex nil t))
+          (let ((state (match-string 2))
+                (line-indent (- (match-end 1) (match-beginning 1))))
+            (cond
+             ((and (= line-indent indent) (not previous-sibling-seen))
+              (setq previous-sibling-seen t
+                    previous-sibling-open
+                    (not (altodo--task-is-completed
+                          (altodo--normalize-state state)))))
+             ((< line-indent indent)
+              (setq done t
+                    parent-is-seq-tasks
+                    (and (= line-indent (- indent altodo-indent-size))
+                         (altodo--has-seq-tasks-tag))))))))
       (and parent-is-seq-tasks previous-sibling-open))))
+
+(defvar-local altodo--first-seq-tasks-line nil
+  "The start of the first line with #seq-tasks, as (KEY . POSITION), or nil.
+POSITION is nil if the buffer has no such line.  KEY is as for
+`altodo--id-index'.")
+
+(defun altodo--seq-tasks-above-p ()
+  "Return non-nil if a line with #seq-tasks may be above the current line.
+Most files have no such line, so the fontification does not look for a
+parent that cannot exist."
+  (let ((key (list (buffer-chars-modified-tick) (point-min) (point-max))))
+    (unless (equal (car altodo--first-seq-tasks-line) key)
+      (setq altodo--first-seq-tasks-line
+            (cons key
+                  (save-excursion
+                    (goto-char (point-min))
+                    (when (re-search-forward
+                           "\\(?:^\\|[ \t]\\)#seq-tasks\\(?:[ \t]\\|$\\)" nil t)
+                      (line-beginning-position))))))
+    (let ((first (cdr altodo--first-seq-tasks-line)))
+      (and first (< first (line-beginning-position))))))
 
 ;;; Helper: face of text
 

@@ -104,12 +104,17 @@ This file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 - The done file is written through a temporary file and replaced. For a read-only buffer or a done file that cannot be written, nothing is moved and an error is signaled
 - If a filter predicate signals an error, the filter is cleared
 - `altodo-auto-move-interval` accepts only a positive number
-- `scripts/bench-fontlock.sh` also measures the time to refontify after editing one line (edit-ms)
+- `scripts/bench-fontlock.sh` also measures the time to refontify after editing one line (edit-ms). The samples now include `contiguous`: few blank lines and many `///` lines
+- The option `altodo-inline-code-cache` (default `t`). With `nil`, the search of the inline code spans while fontifying is left to markdown-mode
 - The difference between dates is counted in calendar days. A day at the switch of summer time still counts as one day
 
 
 ### Fixed
 
+- With more than 1000 candidates starting with `#` on lines that are not task lines and so on, the tags and persons after them were not colored (the limit on the number of repetitions of `altodo--tag-matcher`, `altodo--tag-with-value-matcher` and `altodo--person-tag-matcher` was removed)
+- The result of a partial fontification (scrolling, editing) could differ from that of the whole buffer, and the colors of fenced code blocks were not restored. The fontified region is now returned to jit-lock, and the colors are restored in that region. For 2500 random documents, the share of partial fontifications that equal the whole fontification went from 44% to 91%
+- In a buffer without fence marks (```, `~~~`) and YAML borders (`---`), the fenced block test took about 20% of the fontification time. The query to markdown-mode is now skipped
+- The fontification of a region without `#dep:` repeated a failed search up to 1000 times, so Emacs froze for seconds when scrolling a large file. For a 2600-line buffer without any `#dep:`, the fontification of the whole buffer went from 2.1 seconds to 0.18 seconds (`altodo--dep-tag-matcher`)
 - `:display-context all` also displayed the line after a multi-line comment (a line that does not match)
 - A click on a `search-lambda` entry did not end a multiple selection. `:display-context` is applied too
 - After `altodo-filter-by-pattern` or `altodo-filter-show-*`, the selection (color) of the sidebar did not match the actual filter. They now clear the selection of the sidebar and draw it again

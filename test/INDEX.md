@@ -4,7 +4,7 @@
 
 ## 使い方
 
-- 全体: 115 ファイル、1151 テスト
+- 全体: 116 ファイル、1173 テスト
 - 実行: `scripts/run-tests.sh [test/NAME.el]`。ベースラインとの差分だけを報告する
 - 関数に対応するテストを探す: `grep -l 'altodo--関数名' test/*.el`
 - 共通の道具: `test/altodo-test-helper.el`（`altodo-test-with-buffer`、`-with-temp-dir`、`-with-locals`、`-with-today`、`altodo-test-file`）
@@ -114,6 +114,7 @@
 | `helper-id-test` | 4 | Tests for ID helper functions | `altodo--generate-id`、`altodo--find-task-by-id`、`altodo--get-task-id` |  |
 | `id-generation-test` | 6 | Tests for ID generation functions | `altodo--integer-to-base62`、`altodo--generate-tiny-id-sortable`、`altodo--generate-id` |  |
 | `id-test` | 2 | Tests for ID generation functions | `altodo--find-task-by-id`、`altodo--generate-id` |  |
+| `perf-cache-test` | 22 | Caches that speed up the fontification | `altodo--find-task-by-id`、`altodo-inline-code-cache`、`altodo--in-fenced-code-block-p` |  |
 | `seq-tasks-tag-test` | 5 | Tests for the #seq-tasks tag detection | `altodo--is-seq-tasks-child-blocked-p`、`altodo--has-seq-tasks-tag`、`altodo-set-task-done` |  |
 | `seq-tasks-test` | 11 | Tests for seq-tasks | `altodo--has-seq-tasks-tag`、`altodo--is-seq-tasks-child-blocked-p` |  |
 | `user-command-advanced-test` | 2 | Tests for advanced user commands | `altodo-insert-id`、`altodo-add-subtask` |  |

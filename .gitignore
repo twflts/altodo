@@ -17,3 +17,11 @@
 
 # done ファイル（C-c C-t d で生成される）
 /testfiles/*_done.altodo
+
+# ローカル専用（作業用のディレクトリ、メモ、TODO。ユーザが管理する）
+/.claude/
+debug/
+old/
+project.altodo
+tmp/
+too_old_past_materials/

@@ -53,6 +53,7 @@ Emacs の major mode（`altodo.el`）と、altodo フォーマット（Markdown 
     - 失敗や警告を減らしたら、`--update-baseline` でベースラインを更新する
     - ドキュメントの名前: `scripts/check-doc-symbols.sh`。バッククォートで書かれた `altodo-*`、`sidebar-*` が `altodo.el` に定義されているか確認する。意図的に未定義の名前は `scripts/doc-symbols-ignore.txt` に書く
     - 性能: `scripts/bench-filter.sh [--sizes "5000 10000"] [--repeat N] [--max SECONDS]`。フィルタの処理時間を測定する。CI には含めない。処理速度は速いほどよい（5000 行で 1 秒は設計時の目安であり、上限ではない）
+    - 性能（色付け）: `scripts/bench-fontlock.sh [--sizes "2000 8000"] [--max SECONDS]`。全体の色付けと、1 行を編集した後の再色付けの時間を、`sections`（48 タスクごとに空行がある）と `contiguous`（空行が少なく `///` 行が連続する）の標本で測定する。CI には含めない
 - テストの一覧: `test/INDEX.md`（`scripts/gen-test-map.py` が生成。テストを探す・追加する前に読む。`scripts/ci.sh` が最新かを確認する）
 - テストの書き方
     - 共通の道具は `test/altodo-test-helper.el`（バッファ、一時ディレクトリ、サンプルの設定ファイル、今日の日付の固定）

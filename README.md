@@ -357,12 +357,13 @@ M-x altodo-stop-auto-move-timer
 
 #### 基本設定
 
-| 変数名                                         | 説明                                             | デフォルト値 |
-| ---------------------------------------------- | ------------------------------------------------ | ------------ |
-| `altodo-indent-size`                           | インデントサイズ（スペース数）                   | `4`          |
-| `altodo-enable-markdown-in-multiline-comments` | 複数行コメント内で Markdown フォーマットを有効化 | `t`          |
-| `altodo-auto-save`                             | タスク状態変更時にファイルを自動保存             | `nil`        |
-| `altodo-skk-wrap-newline`                      | SKK 入力メソッドとの互換性のため改行をラップ     | `t`          |
+| 変数名                                         | 説明                                                                                  | デフォルト値 |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------- | ------------ |
+| `altodo-indent-size`                           | インデントサイズ（スペース数）                                                        | `4`          |
+| `altodo-enable-markdown-in-multiline-comments` | 複数行コメント内で Markdown フォーマットを有効化                                      | `t`          |
+| `altodo-auto-save`                             | タスク状態変更時にファイルを自動保存                                                  | `nil`        |
+| `altodo-skk-wrap-newline`                      | SKK 入力メソッドとの互換性のため改行をラップ                                          | `t`          |
+| `altodo-inline-code-cache`                     | 色付けでインラインコードの探索結果を再利用する（`nil` で markdown-mode の探索のまま） | `t`          |
 
 
 #### サイドバー設定

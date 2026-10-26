@@ -92,6 +92,7 @@ altodo.el は  __Emacs Markdown Mode__ https://github.com/jrblevin/markdown-mode
 | `altodo-enable-markdown-in-multiline-comments` | `t`            | 複数行コメント内で Markdown 書式を有効化           |
 | `altodo-auto-save`                             | `nil`          | タスク状態の変更時にファイルを自動保存             |
 | `altodo-skk-wrap-newline`                      | `t`            | SKK 入力メソッドとの互換のため改行をラップ         |
+| `altodo-inline-code-cache`                     | `t`            | 色付けでインラインコードの探索結果を再利用する     |
 | `altodo-done-tag-datetime-format`              | `nil`          | `#done` の時刻書式（`nil` は ISO 8601 の時差付き） |
 | `altodo-use-local-timezone`                    | `t`            | `#done` の時刻にローカルタイムゾーンを使用         |
 | `altodo-insert-id-format`                      | `'tiny-random` | `#id` の ID 形式                                   |
@@ -559,7 +560,7 @@ alist 形式で複数の変数を指定可能：
 
 ### 6.1 markdown-mode との共存
 
-altodo-mode は markdown-mode の派生モードである。色付けのとき、markdown-mode の次の 2 つの処理を調整する。
+altodo-mode は markdown-mode の派生モードである。色付けのとき、markdown-mode の次の 3 つの処理を調整する。
 
 
 #### インデント付きコードブロックの除外
@@ -574,8 +575,18 @@ altodo-mode は markdown-mode の派生モードである。色付けのとき�
 #### フェンス付きコードブロックの色の復元
 
 - フェンス付きコードブロック（` ``` ` と `~~~`）の内側にも、altodo の face が付く
-- `altodo--restore-code-block-faces` が、色付けした領域のうち、フェンス付きコードブロックの行の face を `markdown-pre-face` と `markdown-code-face` に置き換える。`font-lock-fontify-region-function` を包み、元の関数の実行後に呼ぶ
+- `altodo--restore-code-block-faces` が、色付けした領域のうち、フェンス付きコードブロックの行の face を `markdown-pre-face` と `markdown-code-face` に置き換える。`font-lock-fontify-region-function` を包み、元の関数の実行後に呼ぶ。元の関数が返す `(jit-lock-bounds BEG . END)`（行単位などに広げた、実際に色付けした範囲）をそのまま返し、色の復元もその範囲で行う
 - 対象の行は、text property `markdown-gfm-code`（バッククォートのフェンス）または `markdown-fenced-code`（チルダのフェンス）を持つ行である。インデント付きの複数行コメントの行は、この text property を持たないため対象外である
+
+
+#### インラインコードの探索結果の再利用
+
+- markdown-mode の斜体・太字のマッチャは、候補ごとに `markdown-inline-code-at-pos` を呼ぶ。この関数は、空行で区切られたテキストブロックの先頭から候補まで、コードスパンを毎回探し直す。タスクの一覧は空行が少なく、ブロックが数百行になるため、色付けの時間がブロックの長さの 2 乗で増える
+- `altodo-inline-code-cache` が非 `nil` のとき、`font-lock-fontify-region-function` を包む関数（`altodo--call-with-inline-code-cache`）が、呼び出しの間だけ `markdown-inline-code-at-pos` を `altodo--inline-code-at-pos` に差し替える。ファイルを読み込むだけでは、markdown-mode の関数を変えない
+- 差し替えた関数は、ブロックのコードスパンを 1 回だけ探し（`markdown-match-code`）、前回の続きから探索を進める。結果は `buffer-chars-modified-tick` をキーにし、文字が変わるまで保つ。同じブロック内の位置では、ブロックの境界も再利用する。探索の結果と、候補が棄却されたときに残る match data は、markdown-mode の関数と同じである
+- 次のブロックは、markdown-mode の関数に任せる。コメントとフェンスは text property が結果を左右し、その property が確定していないと結果を保てないため
+    - `<!--`、` ``` `、`~~~` を含むブロック
+    - `syntax-propertize` が、ブロックの終端まで終わっていないとき
 
 
 ### 6.2 処理順序（Layer 構造）
@@ -644,6 +655,17 @@ Layer 4: 最優先（コメント全体、斜線）
 
 - `altodo--has-seq-tasks-tag()`: 現在行が seq-tasks タグを持つかチェック
 - `altodo--is-seq-tasks-child-blocked-p()`: 現在行が、`#seq-tasks` を持つ親の子で、すぐ上の兄弟が未完了かチェック（インデントのない行は親がないため調べない）
+
+
+### 6.5 色付けの速度
+
+色付けの時間が行数の 2 乗で増えないように、次の 3 つを保つ。測定は `scripts/bench-fontlock.sh` で行う。標本は、48 タスクごとに空行がある `sections` と、空行が少なく `///` 行が連続する `contiguous` である。
+
+- インラインコードの探索結果（6.1 節）
+- `#id:` の索引: `altodo--id-index` が、各 ID の最初のタグの位置をハッシュ表に保つ。キーは `buffer-chars-modified-tick`、`point-min`、`point-max`、`case-fold-search` で、text property の変更（色付け）では作り直さない。`altodo--find-task-by-id` と `altodo--check-circular-dependency` が引く
+- フェンス内の判定: `altodo--in-fenced-code-block-p` は、バッファに ```、`~~~`、`---`（`markdown-use-pandoc-style-yaml-metadata` が非 `nil` のときは `...` も）がなければ、`markdown-get-enclosing-fenced-block-construct` を呼ばない（`altodo--fence-marker-in-buffer-p`）。markdown-mode はフェンスのほかに、先頭の YAML メタデータも囲みとして返すため、`---` も条件に入れる。結果はキー（`buffer-chars-modified-tick`、`point-min`、`point-max`）で保つ
+- マッチャの繰り返し: `altodo--tag-matcher`、`altodo--tag-with-value-matcher`、`altodo--person-tag-matcher` は、タスク行などではない行の候補を、個数の上限なしで読み飛ばす。`altodo--dep-tag-matcher` は、検索を 1 回だけ行う（失敗した検索を繰り返さない）
+- `#seq-tasks` の親の探索: `altodo--is-seq-tasks-child-blocked-p` は、バッファに `#seq-tasks` が現在行より上になければ探索しない（`altodo--seq-tasks-above-p`）。探索は、現在行以下のインデントのタスク行だけを `re-search-backward` で調べ、兄弟の子孫の行を飛ばす。`altodo--dep-blocked-text-matcher` は、全タスク行ではなく `#dep:` を含む行だけを調べる
 
 
 ## 7. 参考資料

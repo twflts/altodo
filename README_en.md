@@ -354,12 +354,13 @@ M-x altodo-stop-auto-move-timer
 
 #### Basic Settings
 
-| Variable                                       | Description                                       | Default |
-| ---------------------------------------------- | ------------------------------------------------- | ------- |
-| `altodo-indent-size`                           | Indent size (spaces)                              | `4`     |
-| `altodo-enable-markdown-in-multiline-comments` | Enable Markdown formatting in multi-line comments | `t`     |
-| `altodo-auto-save`                             | Auto-save file on task state change               | `nil`   |
-| `altodo-skk-wrap-newline`                      | Wrap newline for SKK input method compatibility   | `t`     |
+| Variable                                       | Description                                                                            | Default |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------- | ------- |
+| `altodo-indent-size`                           | Indent size (spaces)                                                                   | `4`     |
+| `altodo-enable-markdown-in-multiline-comments` | Enable Markdown formatting in multi-line comments                                      | `t`     |
+| `altodo-auto-save`                             | Auto-save file on task state change                                                    | `nil`   |
+| `altodo-skk-wrap-newline`                      | Wrap newline for SKK input method compatibility                                        | `t`     |
+| `altodo-inline-code-cache`                     | Keep the inline code spans while fontifying (`nil` leaves the search to markdown-mode) | `t`     |
 
 
 #### Sidebar Settings

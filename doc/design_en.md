@@ -92,6 +92,7 @@ The date regular expression is not a constant. `altodo--date-regex-info` generat
 | `altodo-enable-markdown-in-multiline-comments` | `t`            | Enable Markdown formatting in multi-line comments         |
 | `altodo-auto-save`                             | `nil`          | Save the file automatically when a task state changes     |
 | `altodo-skk-wrap-newline`                      | `t`            | Wrap newline commands for SKK input method compatibility  |
+| `altodo-inline-code-cache`                     | `t`            | Keep the inline code spans while fontifying               |
 | `altodo-done-tag-datetime-format`              | `nil`          | Time format of `#done` (`nil` is ISO 8601 with time zone) |
 | `altodo-use-local-timezone`                    | `t`            | Use the local time zone for the `#done` time              |
 | `altodo-insert-id-format`                      | `'tiny-random` | ID format of `#id`                                        |
@@ -559,7 +560,7 @@ The specifications of sidebar entries, DSL patterns, dynamic filters, the calend
 
 ### 6.1 Coexistence with markdown-mode
 
-altodo-mode is derived from markdown-mode. When fontifying, it adjusts two behaviors of markdown-mode.
+altodo-mode is derived from markdown-mode. When fontifying, it adjusts three behaviors of markdown-mode.
 
 
 #### Excluding Indented Code Blocks
@@ -574,8 +575,18 @@ The detection of task lines, single-line comment lines and multi-line comment li
 #### Restoring Faces in Fenced Code Blocks
 
 - altodo faces are also applied inside fenced code blocks (` ``` ` and `~~~`)
-- `altodo--restore-code-block-faces` replaces the faces of the lines in fenced code blocks, within the fontified region, with `markdown-pre-face` and `markdown-code-face`. It wraps `font-lock-fontify-region-function` and runs after the original function
+- `altodo--restore-code-block-faces` replaces the faces of the lines in fenced code blocks, within the fontified region, with `markdown-pre-face` and `markdown-code-face`. It wraps `font-lock-fontify-region-function` and runs after the original function. The wrapper returns the `(jit-lock-bounds BEG . END)` of the original function (the region that was fontified, widened to whole lines and so on) and restores the faces in that region
 - The target lines are those with the text property `markdown-gfm-code` (backtick fences) or `markdown-fenced-code` (tilde fences). Indented multi-line comment lines do not have this property and are not affected
+
+
+#### Keeping the Inline Code Spans
+
+- The italic and bold matchers of markdown-mode call `markdown-inline-code-at-pos` for each candidate. That function searches the code spans again from the start of the text block (the lines up to a blank line) to the candidate. A list of tasks has few blank lines, so a block has hundreds of lines, and the fontification time grows with the square of its length
+- When `altodo-inline-code-cache` is non-`nil`, the function that wraps `font-lock-fontify-region-function` (`altodo--call-with-inline-code-cache`) replaces `markdown-inline-code-at-pos` with `altodo--inline-code-at-pos` during the call only. Loading the file does not change the function of markdown-mode
+- The replacement searches the code spans of a block once (`markdown-match-code`) and goes on from where it stopped. The result is kept with `buffer-chars-modified-tick` as the key, until a character changes. For a position inside the same block, the bounds of the block are kept too. The result, and the match data left when a candidate is rejected, are the same as those of the function of markdown-mode
+- The following blocks are left to the function of markdown-mode, because text properties of comments and fences decide the result, and the result cannot be kept while they are not final
+    - A block with `<!--`, ` ``` ` or `~~~`
+    - A block that `syntax-propertize` has not finished up to its end
 
 
 ### 6.2 Processing Order (Layer Structure)
@@ -642,6 +653,17 @@ A child of a task with `#seq-tasks` is blocked while the sibling right above it 
 
 - `altodo--has-seq-tasks-tag()`: Check if current line has seq-tasks tag
 - `altodo--is-seq-tasks-child-blocked-p()`: Check if the current line is a child of a task with `#seq-tasks` whose sibling right above it is not done (a line without indentation has no parent and is not checked)
+
+
+### 6.5 Fontification Speed
+
+The following three are kept so that the fontification time does not grow with the square of the number of lines. Measure it with `scripts/bench-fontlock.sh`. The samples are `sections` (a blank line after every 48 tasks) and `contiguous` (few blank lines, many `///` lines).
+
+- The inline code spans (section 6.1)
+- Index of `#id:`: `altodo--id-index` keeps the position of the first tag of each ID in a hash table. The key is `buffer-chars-modified-tick`, `point-min`, `point-max` and `case-fold-search`. A change of text properties (fontification) does not rebuild it. `altodo--find-task-by-id` and `altodo--check-circular-dependency` use it
+- Fenced block test: `altodo--in-fenced-code-block-p` does not call `markdown-get-enclosing-fenced-block-construct` if the buffer has no ```, `~~~` or `---` (nor `...` if `markdown-use-pandoc-style-yaml-metadata` is non-`nil`) (`altodo--fence-marker-in-buffer-p`). markdown-mode returns the YAML metadata at the top as an enclosing block, besides the fences, so `---` is a condition too. The result is kept with the key (`buffer-chars-modified-tick`, `point-min` and `point-max`)
+- Loops of the matchers: `altodo--tag-matcher`, `altodo--tag-with-value-matcher` and `altodo--person-tag-matcher` skip the candidates on lines that are not task lines and so on, without a limit on their number. `altodo--dep-tag-matcher` searches once (it does not repeat a failed search)
+- Search for the parent of a `#seq-tasks` child: `altodo--is-seq-tasks-child-blocked-p` does not search if the buffer has no `#seq-tasks` above the current line (`altodo--seq-tasks-above-p`). The search looks only at task lines with the indentation of the current line or less, with `re-search-backward`, so it skips the lines of the descendants of siblings. `altodo--dep-blocked-text-matcher` looks only at lines with `#dep:`, not at every task line
 
 
 ## 7. References
